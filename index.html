@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TraLa - Traefik Landing Page</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; transition: background-color 0.3s ease, color 0.3s ease; }
+        #api-loading-bar { position: fixed; top: 0; left: 0; width: 100%; height: 3px; background-color: #f59e0b; transform: scaleX(0); transform-origin: left; transition: transform 0.3s ease-out, opacity 0.3s ease-out; z-index: 9999; opacity: 0; }
+        #api-loading-bar.loading { transform: scaleX(1); opacity: 1; }
+        #refresh-progress-bar-container { position: fixed; top: 0; left: 0; width: 100%; height: 3px; background-color: rgba(107, 114, 128, 0.2); z-index: 9998; }
+        #refresh-progress-bar { width: 0%; height: 100%; background-color: #3b82f6; transition: width linear; }
+        .fallback-icon { display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 1.5rem; color: white; }
+        #service-grid > a { transition: opacity 0.3s ease, transform 0.3s ease; }
+        .sort-btn { transition: background-color 0.2s, color 0.2s; }
+        .sort-btn.active { background-color: #3b82f6; color: white; }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 antialiased">
+    <div id="api-loading-bar"></div>
+    <div id="refresh-progress-bar-container"><div id="refresh-progress-bar"></div></div>
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="mb-8 text-center">
+            <h1 class="text-4xl font-bold mb-2">TraLa</h1>
+            <p class="text-gray-500 dark:text-gray-400">A dynamic landing page for your Traefik services.</p>
+        </header>
+        <div class="mb-4">
+            <form id="search-form" class="flex-grow">
+                <input type="search" id="search-input" placeholder="Search by name or URL..." class="w-full p-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition">
+            </form>
+        </div>
+        <div id="sort-controls" class="flex justify-center gap-2 mb-8">
+            <button data-sort="api" class="sort-btn active px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">Default</button>
+            <button data-sort="name" class="sort-btn px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">Name</button>
+            <button data-sort="url" class="sort-btn px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">URL</button>
+            <button data-sort="priority" class="sort-btn px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">Priority</button>
+        </div>
+        <main id="service-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6"></main>
+        <div id="error-page" class="hidden text-center py-16">
+            <svg class="mx-auto h-12 w-12 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+            <h2 class="mt-4 text-2xl font-bold">Oops, something went wrong.</h2>
+            <p id="error-message" class="mt-2 text-gray-500 dark:text-gray-400">Could not fetch services.</p>
+        </div>
+    </div>
+    <script type="module">
+        const TRAEFIK_API_URL = '/api/http/routers';
+        const SEARCH_ENGINE_URL = '%%SEARCH_ENGINE_URL%%';
+        const REFRESH_INTERVAL_SECONDS = parseInt('%%REFRESH_INTERVAL_SECONDS%%', 10);
+
+        const serviceGrid = document.getElementById('service-grid');
+        const searchInput = document.getElementById('search-input');
+        const sortControls = document.getElementById('sort-controls');
+        const searchForm = document.getElementById('search-form');
+        const apiLoadingBar = document.getElementById('api-loading-bar');
+        const refreshProgressBar = document.getElementById('refresh-progress-bar');
+        const errorPage = document.getElementById('error-page');
+        const errorMessage = document.getElementById('error-message');
+        
+        let allServices = [];
+        let refreshIntervalId = null;
+        let currentSort = 'api';
+        const colors = ['bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-yellow-500', 'bg-lime-500', 'bg-green-500', 'bg-emerald-500', 'bg-teal-500', 'bg-cyan-500', 'bg-sky-500', 'bg-blue-500', 'bg-indigo-500', 'bg-violet-500', 'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500', 'bg-rose-500'];
+        
+        const getColorFromString = (str) => { let hash = 0; for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); } return colors[Math.abs(hash % colors.length)]; };
+        const setApiLoading = (isLoading) => { apiLoadingBar.classList.toggle('loading', isLoading); };
+        const showErrorPage = (message) => { serviceGrid.classList.add('hidden'); sortControls.classList.add('hidden'); errorPage.classList.remove('hidden'); errorMessage.textContent = message; };
+        const hideErrorPage = () => { serviceGrid.classList.remove('hidden'); sortControls.classList.remove('hidden'); errorPage.classList.add('hidden'); };
+        const reconstructUrl = (rule) => { const hostMatch = rule.match(/Host\(`([^`]+)`\)/); if (!hostMatch) return null; const hostname = hostMatch[1]; let path = ''; const pathMatch = rule.match(/PathPrefix\(`([^`]+)`\)/); if (pathMatch) { path = pathMatch[1]; } if (path.endsWith('/')) { path = path.slice(0, -1); } return `https://${hostname}${path}`; };
+
+        const startRefreshBarAnimation = () => {
+            refreshProgressBar.style.transition = 'none';
+            refreshProgressBar.style.width = '0%';
+            setTimeout(() => {
+                refreshProgressBar.style.transition = `width ${REFRESH_INTERVAL_SECONDS}s linear`;
+                refreshProgressBar.style.width = '100%';
+            }, 50);
+        };
+
+        const getIconUrl = async (service) => {
+            const routerName = service.routerName;
+            const baseUrl = new URL(service.url).origin;
+
+            // Priority 1: User override via config file
+            try {
+                const overrideProxyUrl = `/proxy/icon-override?routerName=${encodeURIComponent(routerName)}`;
+                const response = await fetch(overrideProxyUrl);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.iconName) return `https://cdn.jsdelivr.net/gh/selfhst/icons/png/${data.iconName}`;
+                }
+            } catch (e) { /* continue */ }
+
+            // Priority 2: selfh.st fuzzy search via our proxy
+            try {
+                const selfhstProxyUrl = `/proxy/selfhst-icons?routerName=${encodeURIComponent(routerName)}`;
+                const response = await fetch(selfhstProxyUrl);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.iconName) return `https://cdn.jsdelivr.net/gh/selfhst/icons/png/${data.iconName}`;
+                }
+            } catch (e) { /* continue */ }
+
+            // Priority 3: /favicon.ico via our proxy
+            try {
+                const faviconProxyUrl = `/proxy/favicon?url=${encodeURIComponent(baseUrl)}`;
+                const response = await fetch(faviconProxyUrl);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.iconUrl) return data.iconUrl;
+                }
+            } catch (e) { /* continue */ }
+
+            // Priority 4: HTML parsing via our proxy
+            try {
+                const htmlProxyUrl = `/proxy/icon?url=${encodeURIComponent(service.url)}`;
+                const response = await fetch(htmlProxyUrl);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.iconUrl) return data.iconUrl;
+                }
+            } catch (e) { /* continue */ }
+
+            return 'invalid-icon';
+        };
+
+        const renderServices = (servicesToRender) => {
+            serviceGrid.innerHTML = '';
+            if (servicesToRender.length === 0 && searchInput.value) { serviceGrid.innerHTML = `<p class="col-span-full text-center text-gray-500 dark:text-gray-400">No services found for "${searchInput.value}".</p>`; return; }
+            servicesToRender.forEach(service => {
+                const card = document.createElement('a');
+                card.href = service.url;
+                card.target = '_blank';
+                card.rel = 'noopener noreferrer';
+                card.className = 'block p-4 rounded-lg bg-white dark:bg-gray-800 shadow-md hover:shadow-lg hover:-translate-y-1 transition-all duration-300';
+                const firstLetter = service.routerName.charAt(0).toUpperCase();
+                const bgColor = getColorFromString(service.routerName);
+                card.innerHTML = `<div class="flex flex-col items-center text-center"><div class="w-16 h-16 mb-4 flex items-center justify-center rounded-lg overflow-hidden"><img class="w-full h-full object-contain icon-img" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Icon for ${service.routerName}" style="display: none;" /><div class="fallback-icon w-full h-full ${bgColor}">${firstLetter}</div></div><p class="font-semibold truncate w-full" title="${service.routerName}">${service.routerName}</p><p class="text-xs text-gray-500 dark:text-gray-400 truncate w-full" title="${service.url}">${service.url.replace('https://', '')}</p></div>`;
+                serviceGrid.appendChild(card);
+                const img = card.querySelector('.icon-img');
+                const fallback = card.querySelector('.fallback-icon');
+                getIconUrl(service).then(iconUrl => {
+                    if (iconUrl !== 'invalid-icon') {
+                        img.src = iconUrl;
+                        img.onload = () => { img.style.display = 'block'; fallback.style.display = 'none'; };
+                        img.onerror = () => { img.style.display = 'none'; fallback.style.display = 'flex'; };
+                    } else {
+                        img.style.display = 'none';
+                        fallback.style.display = 'flex';
+                    }
+                });
+            });
+        };
+
+        const applyFiltersAndSort = () => {
+            const searchTerm = searchInput.value.toLowerCase();
+            let filteredServices = allServices.filter(service => service.routerName.toLowerCase().includes(searchTerm) || service.url.toLowerCase().includes(searchTerm));
+            let sortedServices = [...filteredServices];
+            switch (currentSort) {
+                case 'name': sortedServices.sort((a, b) => a.routerName.localeCompare(b.routerName)); break;
+                case 'url': sortedServices.sort((a, b) => a.url.localeCompare(b.url)); break;
+                case 'priority': sortedServices.sort((a, b) => b.priority - a.priority); break;
+            }
+            renderServices(sortedServices);
+        };
+
+        const fetchAndProcessServices = async () => {
+            setApiLoading(true);
+            hideErrorPage();
+            try {
+                const response = await fetch(TRAEFIK_API_URL);
+                if (!response.ok) { throw new Error(`API request failed: ${response.status}`); }
+                const data = await response.json();
+                if (!Array.isArray(data)) { showErrorPage("Invalid data from API."); allServices = []; }
+                else { 
+                    allServices = data.map(router => ({ 
+                        routerName: router.name.split('@')[0],
+                        serviceName: router.service,
+                        rule: router.rule, 
+                        priority: router.priority, 
+                        url: reconstructUrl(router.rule) 
+                    })).filter(service => service.url !== null); 
+                }
+                applyFiltersAndSort();
+            } catch (error) {
+                console.error("Error fetching services:", error);
+                showErrorPage(`Could not fetch services. Check the Traefik API and proxy configuration.`);
+                allServices = [];
+            } finally {
+                setApiLoading(false);
+            }
+        };
+
+        const initialize = () => {
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
+            const applyTheme = (isDark) => { document.documentElement.classList.toggle('dark', isDark); };
+            applyTheme(prefersDark.matches);
+            prefersDark.addEventListener('change', (e) => applyTheme(e.matches));
+            
+            searchInput.addEventListener('input', applyFiltersAndSort);
+            
+            sortControls.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON') {
+                    currentSort = e.target.dataset.sort;
+                    document.querySelectorAll('.sort-btn').forEach(btn => btn.classList.remove('active'));
+                    e.target.classList.add('active');
+                    applyFiltersAndSort();
+                }
+            });
+            
+            searchForm.addEventListener('submit', (e) => { e.preventDefault(); if (searchInput.value) { window.open(`${SEARCH_ENGINE_URL}${encodeURIComponent(searchInput.value)}`, '_blank'); } });
+
+            const startApp = async () => {
+                await fetchAndProcessServices();
+                if (refreshIntervalId) clearInterval(refreshIntervalId);
+                if (!isNaN(REFRESH_INTERVAL_SECONDS) && REFRESH_INTERVAL_SECONDS > 0) {
+                    startRefreshBarAnimation();
+                    refreshIntervalId = setInterval(async () => {
+                        await fetchAndProcessServices();
+                        startRefreshBarAnimation();
+                    }, REFRESH_INTERVAL_SECONDS * 1000);
+                }
+            };
+            
+            startApp();
+        };
+
+        initialize();
+    </script>
+</body>
+</html>
