@@ -52,7 +52,7 @@ services:
       - TRAEFIK_API_HOST=http://traefik:8080 
       - REFRESH_INTERVAL_SECONDS=30
       # Optional: Change the search engine
-      - SEARCH_ENGINE_URL=[https://duckduckgo.com/?q=](https://duckduckgo.com/?q=)
+      - SEARCH_ENGINE_URL=https://duckduckgo.com/?q=
     labels:
       # --- Traefik Labels to expose TraLa itself ---
       - "traefik.enable=true"
@@ -80,7 +80,7 @@ docker run -d \
   -v /path/to/your/icon_overrides.yml:/config/icon_overrides.yml:ro \
   -e TRAEFIK_API_HOST="http://traefik:8080" \
   -e REFRESH_INTERVAL_SECONDS="30" \
-  -e SEARCH_ENGINE_URL="[https://www.google.com/search?q=](https://www.google.com/search?q=)" \
+  -e SEARCH_ENGINE_URL="https://www.google.com/search?q=" \
   ghcr.io/dannybouwers/trala:latest
 ```
 
@@ -148,7 +148,7 @@ If you want to build the image yourself:
 1. **Clone the repository:**
 
     ```bash
-    git clone [https://github.com/dannybouwers/trala.git](https://github.com/dannybouwers/trala.git)
+    git clone https://github.com/dannybouwers/trala.git
     cd trala
     ```
 
