@@ -47,7 +47,7 @@
         </div>
     </div>
     <script type="module">
-        const TRAEFIK_API_URL = '/api/http/routers';
+        const API_URL = '/api/services';
         const SEARCH_ENGINE_URL = '%%SEARCH_ENGINE_URL%%';
         const REFRESH_INTERVAL_SECONDS = parseInt('%%REFRESH_INTERVAL_SECONDS%%', 10);
 
@@ -61,6 +61,7 @@
         const errorMessage = document.getElementById('error-message');
         
         let allServices = [];
+        let originalOrder = [];
         let refreshIntervalId = null;
         let currentSort = 'api';
         const colors = ['bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-yellow-500', 'bg-lime-500', 'bg-green-500', 'bg-emerald-500', 'bg-teal-500', 'bg-cyan-500', 'bg-sky-500', 'bg-blue-500', 'bg-indigo-500', 'bg-violet-500', 'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500', 'bg-rose-500'];
@@ -69,7 +70,6 @@
         const setApiLoading = (isLoading) => { apiLoadingBar.classList.toggle('loading', isLoading); };
         const showErrorPage = (message) => { serviceGrid.classList.add('hidden'); sortControls.classList.add('hidden'); errorPage.classList.remove('hidden'); errorMessage.textContent = message; };
         const hideErrorPage = () => { serviceGrid.classList.remove('hidden'); sortControls.classList.remove('hidden'); errorPage.classList.add('hidden'); };
-        const reconstructUrl = (rule) => { const hostMatch = rule.match(/Host\(`([^`]+)`\)/); if (!hostMatch) return null; const hostname = hostMatch[1]; let path = ''; const pathMatch = rule.match(/PathPrefix\(`([^`]+)`\)/); if (pathMatch) { path = pathMatch[1]; } if (path.endsWith('/')) { path = path.slice(0, -1); } return `https://${hostname}${path}`; };
 
         const startRefreshBarAnimation = () => {
             refreshProgressBar.style.transition = 'none';
@@ -80,89 +80,57 @@
             }, 50);
         };
 
-        const getIconUrl = async (service) => {
-            const routerName = service.routerName;
-            const baseUrl = new URL(service.url).origin;
-
-            // Priority 1: User override via config file
-            try {
-                const overrideProxyUrl = `/proxy/icon-override?routerName=${encodeURIComponent(routerName)}`;
-                const response = await fetch(overrideProxyUrl);
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.iconName) return `https://cdn.jsdelivr.net/gh/selfhst/icons/png/${data.iconName}`;
-                }
-            } catch (e) { /* continue */ }
-
-            // Priority 2: selfh.st fuzzy search via our proxy
-            try {
-                const selfhstProxyUrl = `/proxy/selfhst-icons?routerName=${encodeURIComponent(routerName)}`;
-                const response = await fetch(selfhstProxyUrl);
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.iconName) return `https://cdn.jsdelivr.net/gh/selfhst/icons/png/${data.iconName}`;
-                }
-            } catch (e) { /* continue */ }
-
-            // Priority 3: /favicon.ico via our proxy
-            try {
-                const faviconProxyUrl = `/proxy/favicon?url=${encodeURIComponent(baseUrl)}`;
-                const response = await fetch(faviconProxyUrl);
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.iconUrl) return data.iconUrl;
-                }
-            } catch (e) { /* continue */ }
-
-            // Priority 4: HTML parsing via our proxy
-            try {
-                const htmlProxyUrl = `/proxy/icon?url=${encodeURIComponent(service.url)}`;
-                const response = await fetch(htmlProxyUrl);
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.iconUrl) return data.iconUrl;
-                }
-            } catch (e) { /* continue */ }
-
-            return 'invalid-icon';
-        };
-
         const renderServices = (servicesToRender) => {
             serviceGrid.innerHTML = '';
             if (servicesToRender.length === 0 && searchInput.value) { serviceGrid.innerHTML = `<p class="col-span-full text-center text-gray-500 dark:text-gray-400">No services found for "${searchInput.value}".</p>`; return; }
-            servicesToRender.forEach(service => {
+            
+            for (const service of servicesToRender) {
                 const card = document.createElement('a');
                 card.href = service.url;
                 card.target = '_blank';
                 card.rel = 'noopener noreferrer';
                 card.className = 'block p-4 rounded-lg bg-white dark:bg-gray-800 shadow-md hover:shadow-lg hover:-translate-y-1 transition-all duration-300';
+                
                 const firstLetter = service.routerName.charAt(0).toUpperCase();
                 const bgColor = getColorFromString(service.routerName);
-                card.innerHTML = `<div class="flex flex-col items-center text-center"><div class="w-16 h-16 mb-4 flex items-center justify-center rounded-lg overflow-hidden"><img class="w-full h-full object-contain icon-img" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Icon for ${service.routerName}" style="display: none;" /><div class="fallback-icon w-full h-full ${bgColor}">${firstLetter}</div></div><p class="font-semibold truncate w-full" title="${service.routerName}">${service.routerName}</p><p class="text-xs text-gray-500 dark:text-gray-400 truncate w-full" title="${service.url}">${service.url.replace('https://', '')}</p></div>`;
+                
+                card.innerHTML = `<div class="flex flex-col items-center text-center"><div class="w-16 h-16 mb-4 flex items-center justify-center rounded-lg overflow-hidden"><img class="w-full h-full object-contain icon-img" src="${service.icon}" alt="Icon for ${service.routerName}" style="display: block;" /><div class="fallback-icon w-full h-full ${bgColor}" style="display: none;">${firstLetter}</div></div><p class="font-semibold truncate w-full" title="${service.routerName}">${service.routerName}</p><p class="text-xs text-gray-500 dark:text-gray-400 truncate w-full" title="${service.url}">${service.url.replace('https://', '')}</p></div>`;
+                
                 serviceGrid.appendChild(card);
+
                 const img = card.querySelector('.icon-img');
                 const fallback = card.querySelector('.fallback-icon');
-                getIconUrl(service).then(iconUrl => {
-                    if (iconUrl !== 'invalid-icon') {
-                        img.src = iconUrl;
-                        img.onload = () => { img.style.display = 'block'; fallback.style.display = 'none'; };
-                        img.onerror = () => { img.style.display = 'none'; fallback.style.display = 'flex'; };
-                    } else {
+
+                if (service.icon) {
+                    img.onerror = () => {
                         img.style.display = 'none';
                         fallback.style.display = 'flex';
-                    }
-                });
-            });
+                    };
+                } else {
+                    img.style.display = 'none';
+                    fallback.style.display = 'flex';
+                }
+            }
         };
 
         const applyFiltersAndSort = () => {
             const searchTerm = searchInput.value.toLowerCase();
             let filteredServices = allServices.filter(service => service.routerName.toLowerCase().includes(searchTerm) || service.url.toLowerCase().includes(searchTerm));
+            
             let sortedServices = [...filteredServices];
             switch (currentSort) {
-                case 'name': sortedServices.sort((a, b) => a.routerName.localeCompare(b.routerName)); break;
-                case 'url': sortedServices.sort((a, b) => a.url.localeCompare(b.url)); break;
-                case 'priority': sortedServices.sort((a, b) => b.priority - a.priority); break;
+                case 'api':
+                    sortedServices.sort((a, b) => originalOrder.indexOf(a.routerName) - originalOrder.indexOf(b.routerName));
+                    break;
+                case 'name': 
+                    sortedServices.sort((a, b) => a.routerName.localeCompare(b.routerName)); 
+                    break;
+                case 'url': 
+                    sortedServices.sort((a, b) => a.url.localeCompare(b.url)); 
+                    break;
+                case 'priority': 
+                    sortedServices.sort((a, b) => b.priority - a.priority); 
+                    break;
             }
             renderServices(sortedServices);
         };
@@ -171,23 +139,28 @@
             setApiLoading(true);
             hideErrorPage();
             try {
-                const response = await fetch(TRAEFIK_API_URL);
-                if (!response.ok) { throw new Error(`API request failed: ${response.status}`); }
-                const data = await response.json();
-                if (!Array.isArray(data)) { showErrorPage("Invalid data from API."); allServices = []; }
-                else { 
-                    allServices = data.map(router => ({ 
-                        routerName: router.name.split('@')[0],
-                        serviceName: router.service,
-                        rule: router.rule, 
-                        priority: router.priority, 
-                        url: reconstructUrl(router.rule) 
-                    })).filter(service => service.url !== null); 
+                const response = await fetch(API_URL);
+                if (!response.ok) { 
+                    const errorText = await response.text();
+                    throw new Error(`API request failed: ${response.status} - ${errorText}`); 
+                }
+                let data = await response.json();
+                if (!Array.isArray(data)) { 
+                    showErrorPage("Invalid data from API."); 
+                    allServices = []; 
+                } else { 
+                    // **THIS IS THE FIX**: Filter out the service that points to the current page.
+                    const currentHref = window.location.href.replace(/\/$/, ""); // Remove trailing slash for comparison
+                    allServices = data.filter(service => {
+                        const serviceHref = service.url.replace(/\/$/, "");
+                        return serviceHref !== currentHref;
+                    });
+                    originalOrder = allServices.map(s => s.routerName);
                 }
                 applyFiltersAndSort();
             } catch (error) {
                 console.error("Error fetching services:", error);
-                showErrorPage(`Could not fetch services. Check the Traefik API and proxy configuration.`);
+                showErrorPage(error.message);
                 allServices = [];
             } finally {
                 setApiLoading(false);

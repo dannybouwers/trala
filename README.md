@@ -2,6 +2,8 @@
 
 A simple, modern, and dynamic dashboard for your Traefik services. This application automatically discovers services via the Traefik API and displays them in a clean, responsive grid. It's designed to be run as a lightweight, multi-arch Docker container.
 
+![Screenshot Placeholder](https://placehold.co/800x450/1f2937/9ca3af?text=TraLa%20Dashboard)
+
 ## ✨ Features
 
 - **Auto-Discovery:** Automatically fetches and displays all HTTP routers from your Traefik instance.
@@ -16,7 +18,7 @@ A simple, modern, and dynamic dashboard for your Traefik services. This applicat
 
 ## 🚀 Getting Started
 
-The easiest way to get started is by using the pre-built Docker image.
+The easiest way to get started is by using the pre-built Docker image from the GitHub Container Registry.
 
 ### `docker-compose.yml` (Recommended)
 
@@ -41,9 +43,6 @@ services:
     restart: unless-stopped
     networks:
       - traefik-net # Must be on the same network as Traefik
-    # No need to expose ports directly when using Traefik
-    # ports:
-    #   - "8080:8080"
     volumes:
       # Optional: Mount a local file to override icons. See "Icon Overrides" section below.
       - ./icon_overrides.yml:/config/icon_overrides.yml:ro
@@ -52,36 +51,22 @@ services:
       - TRAEFIK_API_HOST=http://traefik:8080 
       - REFRESH_INTERVAL_SECONDS=30
       # Optional: Change the search engine
-      - SEARCH_ENGINE_URL=https://duckduckgo.com/?q=
+      - SEARCH_ENGINE_URL=[https://duckduckgo.com/?q=](https://duckduckgo.com/?q=)
+      # Optional: Set to "debug" for verbose icon-finding logs
+      - LOG_LEVEL=info
     labels:
       # --- Traefik Labels to expose TraLa itself ---
       - "traefik.enable=true"
-      # Create a router named 'trala'
       - "traefik.http.routers.trala.rule=Host(`trala.your-domain.com`)"
-      # Use the 'websecure' entrypoint (assuming you have one for HTTPS)
       - "traefik.http.routers.trala.entrypoints=websecure"
-      # Enable TLS for the router
       - "traefik.http.routers.trala.tls=true"
-      # Define the service and its port
       - "traefik.http.services.trala.loadbalancer.server.port=8080"
+      - "traefik.http.services.trala.loadbalancer.server.scheme=http"
 
 
 networks:
   traefik-net:
     driver: bridge
-```
-
-### `docker run`
-
-```bash
-docker run -d \
-  -p 8080:8080 \
-  --name trala \
-  -v /path/to/your/icon_overrides.yml:/config/icon_overrides.yml:ro \
-  -e TRAEFIK_API_HOST="http://traefik:8080" \
-  -e REFRESH_INTERVAL_SECONDS="30" \
-  -e SEARCH_ENGINE_URL="https://www.google.com/search?q=" \
-  ghcr.io/dannybouwers/trala:latest
 ```
 
 ---
@@ -110,22 +95,9 @@ The application uses the **router name** from your Traefik configuration (the pa
 
     # Example 2: Your 'unifi-controller' router should use 'ubiquiti-unifi.png'.
     unifi-controller: ubiquiti-unifi.png
-
-    # Example 3: Your 'traefik-dashboard' router should use 'traefik.png'.
-    traefik-dashboard: traefik.png
     ```
 
-3. Mount this file into the container at `/config/icon_overrides.yml` using a volume, as shown in the `docker-compose.yml` and `docker run` examples above.
-
-### Icon Resolution Strategy
-
-TraLa uses the following priority order to find an icon for each service:
-
-1. **Override File:** Checks if the router name exists in `/config/icon_overrides.yml`.
-2. **Fuzzy Search:** Performs a fuzzy search on the router name against the cached list of `selfh.st` icons.
-3. **Favicon Proxy:** Looks for a `/favicon.ico` at the root of the service's URL.
-4. **HTML Parsing:** As a last resort, attempts to parse the service's HTML for a `<link rel="icon">`.
-5. **Fallback Letter:** If all else fails, displays a colored tile with the first letter of the router name.
+3. Mount this file into the container at `/config/icon_overrides.yml` using a volume, as shown in the `docker-compose.yml` example.
 
 ---
 
@@ -138,6 +110,7 @@ The application is configured using environment variables:
 | `TRAEFIK_API_HOST`         | The full base URL of your Traefik API. From within Docker, this is typically `http://traefik:8080`.        | `(none)`                               | **Yes** |
 | `REFRESH_INTERVAL_SECONDS` | The interval in seconds at which the service list automatically refreshes.                                | `30`                                   | No       |
 | `SEARCH_ENGINE_URL`        | The URL for the external search engine. The search query will be appended to this URL.                    | `https://www.google.com/search?q=`     | No       |
+| `LOG_LEVEL`                | Set to `debug` for verbose logging of the icon-finding process. Any other value is silent.              | `info`                                 | No       |
 
 ---
 
