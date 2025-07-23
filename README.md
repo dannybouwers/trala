@@ -2,8 +2,6 @@
 
 A simple, modern, and dynamic dashboard for your Traefik services. This application automatically discovers services via the Traefik API and displays them in a clean, responsive grid. It's designed to be run as a lightweight, multi-arch Docker container.
 
-![Screenshot Placeholder](https://placehold.co/800x450/1f2937/9ca3af?text=TraLa%20Dashboard)
-
 ## ✨ Features
 
 - **Auto-Discovery:** Automatically fetches and displays all HTTP routers from your Traefik instance.
@@ -51,7 +49,7 @@ services:
       - TRAEFIK_API_HOST=http://traefik:8080 
       - REFRESH_INTERVAL_SECONDS=30
       # Optional: Change the search engine
-      - SEARCH_ENGINE_URL=[https://duckduckgo.com/?q=](https://duckduckgo.com/?q=)
+      - SEARCH_ENGINE_URL="https://duckduckgo.com/?q="
       # Optional: Set to "debug" for verbose icon-finding logs
       - LOG_LEVEL=info
     labels:
