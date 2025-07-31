@@ -7,9 +7,10 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Slab:wght@700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; transition: background-color 0.3s ease, color 0.3s ease; }
+        .logo-font { font-family: 'Roboto Slab', serif; }
         #api-loading-bar { position: fixed; top: 0; left: 0; width: 100%; height: 3px; background-color: #f59e0b; transform: scaleX(0); transform-origin: left; transition: transform 0.3s ease-out, opacity 0.3s ease-out; z-index: 9999; opacity: 0; }
         #api-loading-bar.loading { transform: scaleX(1); opacity: 1; }
         #refresh-progress-bar-container { position: fixed; top: 0; left: 0; width: 100%; height: 3px; background-color: rgba(107, 114, 128, 0.2); z-index: 9998; }
@@ -23,10 +24,18 @@
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 antialiased">
     <div id="api-loading-bar"></div>
     <div id="refresh-progress-bar-container"><div id="refresh-progress-bar"></div></div>
+    
+    <div class="absolute top-0 left-0 p-4 md:p-8 flex items-center">
+        <img src="https://cdn.jsdelivr.net/gh/MariaLetta/free-gophers-pack/characters/svg/65.svg" alt="Logo" class="h-10 w-10 mr-3">
+        <span class="text-2xl font-bold logo-font">TraLa</span>
+    </div>
+
     <div class="container mx-auto p-4 md:p-8">
-        <header class="mb-8 text-center">
-            <h1 class="text-4xl font-bold mb-2">TraLa</h1>
-            <p class="text-gray-500 dark:text-gray-400">A dynamic landing page for your Traefik services.</p>
+        <header class="mb-8 text-center pt-16">
+            <h1 id="greeting" class="text-4xl font-bold mb-2">
+                <span id="greeting-text"></span>
+                <span id="clock" class="font-normal text-gray-400 dark:text-gray-500"></span>
+            </h1>
         </header>
         <div class="mb-4">
             <form id="search-form" class="flex-grow">
@@ -59,6 +68,8 @@
         const refreshProgressBar = document.getElementById('refresh-progress-bar');
         const errorPage = document.getElementById('error-page');
         const errorMessage = document.getElementById('error-message');
+        const greetingText = document.getElementById('greeting-text');
+        const clock = document.getElementById('clock');
         
         let allServices = [];
         let originalOrder = [];
@@ -70,6 +81,27 @@
         const setApiLoading = (isLoading) => { apiLoadingBar.classList.toggle('loading', isLoading); };
         const showErrorPage = (message) => { serviceGrid.classList.add('hidden'); sortControls.classList.add('hidden'); errorPage.classList.remove('hidden'); errorMessage.textContent = message; };
         const hideErrorPage = () => { serviceGrid.classList.remove('hidden'); sortControls.classList.remove('hidden'); errorPage.classList.add('hidden'); };
+
+        const updateGreeting = () => {
+            const hour = new Date().getHours();
+            let greeting;
+            if (hour < 6) {
+                greeting = "Good night";
+            } else if (hour < 12) {
+                greeting = "Good morning";
+            } else if (hour < 18) {
+                greeting = "Good afternoon";
+            } else {
+                greeting = "Good evening";
+            }
+            greetingText.textContent = greeting;
+        };
+
+        const updateClock = () => {
+            const now = new Date();
+            clock.textContent = now.toLocaleTimeString(navigator.language, { hour: 'numeric', minute: '2-digit' });
+        };
+
 
         const startRefreshBarAnimation = () => {
             refreshProgressBar.style.transition = 'none';
@@ -187,6 +219,10 @@
             searchForm.addEventListener('submit', (e) => { e.preventDefault(); if (searchInput.value) { window.open(`${SEARCH_ENGINE_URL}${encodeURIComponent(searchInput.value)}`, '_blank'); } });
 
             const startApp = async () => {
+                updateGreeting();
+                updateClock();
+                setInterval(updateClock, 1000);
+
                 await fetchAndProcessServices();
                 if (refreshIntervalId) clearInterval(refreshIntervalId);
                 if (!isNaN(REFRESH_INTERVAL_SECONDS) && REFRESH_INTERVAL_SECONDS > 0) {
