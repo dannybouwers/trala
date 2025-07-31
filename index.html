@@ -90,7 +90,7 @@
         const hideErrorPage = () => { serviceGrid.classList.remove('hidden'); sortControls.classList.remove('hidden'); errorPage.classList.add('hidden'); };
 
         const updateGreeting = () => {
-            const hour = new new Date().getHours();
+            const hour = new Date().getHours();
             let greeting;
             if (hour < 6) {
                 greeting = "Good night";
