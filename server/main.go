@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -344,6 +345,7 @@ func getSelfHstIconNames() ([]string, error) {
 
 	selfhstCacheMux.Lock()
 	defer selfhstCacheMux.Unlock()
+	// Double-check after acquiring the lock
 	if time.Since(selfhstCacheTime) < selfhstCacheTTL && len(selfhstIconNames) > 0 {
 		return selfhstIconNames, nil
 	}
@@ -369,6 +371,19 @@ func getSelfHstIconNames() ([]string, error) {
 			names = append(names, strings.TrimSuffix(entry.Path, ".png"))
 		}
 	}
+
+	// Sort the icon names using a multi-level approach for the best fuzzy search results.
+	// 1. Primary sort: by length (shortest first). This prioritizes base names over variants
+	//    (e.g., "proxmox" over "proxmox-helper-scripts").
+	// 2. Secondary sort: alphabetically. This provides a stable order for names of the same length.
+	sort.Slice(names, func(i, j int) bool {
+		lenI := len(names[i])
+		lenJ := len(names[j])
+		if lenI != lenJ {
+			return lenI < lenJ
+		}
+		return names[i] < names[j]
+	})
 
 	selfhstIconNames = names
 	selfhstCacheTime = time.Now()
