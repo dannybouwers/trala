@@ -45,11 +45,12 @@ services:
       # Optional: Mount a local file to override icons. See "Icon Overrides" section below.
       - ./icon_overrides.yml:/config/icon_overrides.yml:ro
     environment:
-      # The internal Docker network address for the Traefik API
-      - TRAEFIK_API_HOST=http://traefik:8080 
+      # Required: The internal Docker network address for the Traefik API
+      - TRAEFIK_API_HOST=http://traefik:8080
+      # Optional: Change refresh interval
       - REFRESH_INTERVAL_SECONDS=30
       # Optional: Change the search engine
-      - SEARCH_ENGINE_URL="https://duckduckgo.com/?q="
+      - SEARCH_ENGINE_URL=https://duckduckgo.com/?q=
       # Optional: Set to "debug" for verbose icon-finding logs
       - LOG_LEVEL=info
     labels:
@@ -119,7 +120,7 @@ If you want to build the image yourself:
 1. **Clone the repository:**
 
     ```bash
-    git clone https://github.com/dannybouwers/trala.git
+    git clone [https://github.com/dannybouwers/trala.git](https://github.com/dannybouwers/trala.git)
     cd trala
     ```
 
@@ -146,3 +147,7 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 ## 🙏 Acknowledgements
 
 This project was developed in close collaboration with Google's Gemini. I provided the architectural direction, feature requirements, and debugging, while Gemini handled the bulk of the code generation. This transparent, AI-assisted approach allowed for rapid development and iteration.
+
+Special thanks to:
+-   **[Maria Letta](https://github.com/MariaLetta/free-gophers-pack)** for the wonderful Gopher logo used in the application.
+-   **[selfh.st/icons](https://selfh.st/icons/)** for providing the extensive, high-quality icon database that powers the service icon discovery.
