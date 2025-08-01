@@ -2,6 +2,8 @@
 
 A simple, modern, and dynamic dashboard for your Traefik services. This application automatically discovers services via the Traefik API and displays them in a clean, responsive grid. It's designed to be run as a lightweight, multi-arch Docker container.
 
+![Example](.assets/trala-dashboard.png)
+
 ## ✨ Features
 
 - **Auto-Discovery:** Automatically fetches and displays all HTTP routers from your Traefik instance.
