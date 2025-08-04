@@ -24,10 +24,20 @@ import (
 
 // TraefikRouter represents the essential fields from the Traefik API response.
 type TraefikRouter struct {
-	Name     string `json:"name"`
-	Rule     string `json:"rule"`
-	Service  string `json:"service"`
-	Priority int    `json:"priority"`
+	Name     string   `json:"name"`
+	Rule     string   `json:"rule"`
+	Service  string   `json:"service"`
+	Priority int      `json:"priority"`
+	Using    []string `json:"using"` // Added to determine the entrypoint
+}
+
+// TraefikEntryPoint represents the essential fields from the Traefik Entrypoints API.
+type TraefikEntryPoint struct {
+	Name    string `json:"name"`
+	Address string `json:"address"`
+	HTTP    struct {
+		TLS json.RawMessage `json:"tls"` // Use RawMessage to check for the presence of TLS configuration
+	} `json:"http"`
 }
 
 // Service represents the final, processed data sent to the frontend.
@@ -141,7 +151,7 @@ func serveHTMLTemplate(w http.ResponseWriter, r *http.Request) {
 
 // servicesHandler is the main API endpoint. It fetches, processes, and returns all service data.
 func servicesHandler(w http.ResponseWriter, r *http.Request) {
-	// 1. Fetch routers from Traefik API.
+	// 1. Get Traefik API host from environment variables.
 	traefikAPIHost := os.Getenv("TRAEFIK_API_HOST")
 	if traefikAPIHost == "" {
 		http.Error(w, "TRAEFIK_API_HOST environment variable not set", http.StatusInternalServerError)
@@ -151,32 +161,64 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 		traefikAPIHost = "http://" + traefikAPIHost
 	}
 
-	traefikURL := fmt.Sprintf("%s/api/http/routers", traefikAPIHost)
-	debugf("Fetching routers from Traefik API: %s", traefikURL)
-
-	resp, err := httpClient.Get(traefikURL)
+	// 2. Fetch entrypoints from the Traefik API.
+	entryPointsURL := fmt.Sprintf("%s/api/entrypoints", traefikAPIHost)
+	debugf("Fetching entrypoints from Traefik API: %s", entryPointsURL)
+	resp, err := httpClient.Get(entryPointsURL)
 	if err != nil {
-		log.Printf("ERROR: Could not fetch from Traefik API: %v", err)
-		http.Error(w, "Could not connect to Traefik API", http.StatusBadGateway)
+		log.Printf("ERROR: Could not fetch entrypoints from Traefik API: %v", err)
+		http.Error(w, "Could not connect to Traefik API to get entrypoints", http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("ERROR: Traefik API returned non-200 status: %s", resp.Status)
-		http.Error(w, "Received non-200 status from Traefik API", http.StatusBadGateway)
+		log.Printf("ERROR: Traefik Entrypoints API returned non-200 status: %s", resp.Status)
+		http.Error(w, "Received non-200 status from Traefik Entrypoints API", http.StatusBadGateway)
+		return
+	}
+
+	var entryPoints []TraefikEntryPoint
+	if err := json.NewDecoder(resp.Body).Decode(&entryPoints); err != nil {
+		log.Printf("ERROR: Could not decode Traefik Entrypoints API response: %v", err)
+		http.Error(w, "Invalid JSON from Traefik Entrypoints API", http.StatusInternalServerError)
+		return
+	}
+	debugf("Successfully fetched %d entrypoints from Traefik.", len(entryPoints))
+
+	// Create a map for faster lookups.
+	entryPointsMap := make(map[string]TraefikEntryPoint, len(entryPoints))
+	for _, ep := range entryPoints {
+		entryPointsMap[ep.Name] = ep
+	}
+
+	// 3. Fetch routers from the Traefik API.
+	routersURL := fmt.Sprintf("%s/api/http/routers", traefikAPIHost)
+	debugf("Fetching routers from Traefik API: %s", routersURL)
+
+	resp, err = httpClient.Get(routersURL)
+	if err != nil {
+		log.Printf("ERROR: Could not fetch routers from Traefik API: %v", err)
+		http.Error(w, "Could not connect to Traefik API to get routers", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("ERROR: Traefik Routers API returned non-200 status: %s", resp.Status)
+		http.Error(w, "Received non-200 status from Traefik Routers API", http.StatusBadGateway)
 		return
 	}
 
 	var routers []TraefikRouter
 	if err := json.NewDecoder(resp.Body).Decode(&routers); err != nil {
-		log.Printf("ERROR: Could not decode Traefik API response: %v", err)
-		http.Error(w, "Invalid JSON from Traefik API", http.StatusInternalServerError)
+		log.Printf("ERROR: Could not decode Traefik Routers API response: %v", err)
+		http.Error(w, "Invalid JSON from Traefik Routers API", http.StatusInternalServerError)
 		return
 	}
 	debugf("Successfully fetched %d routers from Traefik.", len(routers))
 
-	// 2. Process all routers concurrently to find their icons.
+	// 4. Process all routers concurrently to find their icons.
 	var wg sync.WaitGroup
 	serviceChan := make(chan Service, len(routers))
 
@@ -184,14 +226,14 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func(r TraefikRouter) {
 			defer wg.Done()
-			processRouter(r, serviceChan)
+			processRouter(r, entryPointsMap, serviceChan)
 		}(router)
 	}
 
 	wg.Wait()
 	close(serviceChan)
 
-	// 3. Collect results and send as JSON.
+	// 5. Collect results and send as JSON.
 	finalServices := make([]Service, 0, len(routers))
 	for service := range serviceChan {
 		finalServices = append(finalServices, service)
@@ -204,16 +246,16 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 // --- Data Processing & Icon Finding ---
 
 // processRouter takes a raw Traefik router, finds its best icon, and sends the final Service object to a channel.
-func processRouter(router TraefikRouter, ch chan<- Service) {
+func processRouter(router TraefikRouter, entryPoints map[string]TraefikEntryPoint, ch chan<- Service) {
 	routerName := strings.Split(router.Name, "@")[0]
-	serviceURL := reconstructURL(router.Rule)
+	serviceURL := reconstructURL(router, entryPoints)
 
 	if serviceURL == "" {
 		debugf("Could not reconstruct URL for router %s from rule: %s", routerName, router.Rule)
 		return
 	}
 
-	debugf("Processing router: %s", routerName)
+	debugf("Processing router: %s, URL: %s", routerName, serviceURL)
 	iconURL := findBestIconURL(routerName, serviceURL)
 
 	ch <- Service{
@@ -391,10 +433,11 @@ func getSelfHstIconNames() ([]string, error) {
 	return selfhstIconNames, nil
 }
 
-// reconstructURL extracts the base URL from a Traefik rule using regular expressions.
-func reconstructURL(rule string) string {
+// reconstructURL extracts the base URL from a Traefik rule and determines the protocol and port
+// based on the router's entrypoint.
+func reconstructURL(router TraefikRouter, entryPoints map[string]TraefikEntryPoint) string {
 	// Find the hostname using regex. This is more reliable than splitting.
-	hostMatches := hostRegex.FindStringSubmatch(rule)
+	hostMatches := hostRegex.FindStringSubmatch(router.Rule)
 	if len(hostMatches) < 2 {
 		return "" // No Host(`...`) found, cannot proceed.
 	}
@@ -402,18 +445,44 @@ func reconstructURL(rule string) string {
 
 	// Find an optional PathPrefix.
 	path := ""
-	pathMatches := pathRegex.FindStringSubmatch(rule)
+	pathMatches := pathRegex.FindStringSubmatch(router.Rule)
 	if len(pathMatches) >= 2 {
 		path = pathMatches[1]
 	}
 
-	// Clean up the path to ensure it's well-formed.
+	// Clean up the path.
 	if path != "" && !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
 	path = strings.TrimSuffix(path, "/")
 
-	return fmt.Sprintf("https://%s%s", hostname, path)
+	// Determine protocol and port via the entrypoint.
+	if len(router.Using) == 0 {
+		debugf("[%s] Router has no 'using' entrypoints defined. Cannot determine URL.", router.Name)
+		return ""
+	}
+	entryPointName := router.Using[0] // Use the first specified entrypoint
+	entryPoint, ok := entryPoints[entryPointName]
+	if !ok {
+		debugf("[%s] Entrypoint '%s' not found in Traefik configuration.", router.Name, entryPointName)
+		return ""
+	}
+
+	protocol := "http"
+	// The presence of a non-null TLS object indicates HTTPS.
+	if entryPoint.HTTP.TLS != nil && string(entryPoint.HTTP.TLS) != "null" {
+		protocol = "https"
+	}
+
+	// Address is in the format ":port"
+	port := strings.TrimPrefix(entryPoint.Address, ":")
+
+	// Omit the port if it's the default for the protocol.
+	if (protocol == "http" && port == "80") || (protocol == "https" && port == "443") {
+		return fmt.Sprintf("%s://%s%s", protocol, hostname, path)
+	}
+
+	return fmt.Sprintf("%s://%s%s:%s", protocol, hostname, path, port)
 }
 
 func resolveURL(baseURL string, path string) (string, error) {
