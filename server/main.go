@@ -91,10 +91,10 @@ func debugf(format string, v ...interface{}) {
 // --- Config & Template Loading ---
 
 // loadHTMLTemplate reads the index.html file into memory once.
-func loadHTMLTemplate(staticPath string) {
+func loadHTMLTemplate(templatePath string) {
 	htmlOnce.Do(func() {
 		var err error
-		templatePath := filepath.Join(staticPath, "index.html")
+		templatePath := filepath.Join(templatePath, "index.html")
 		htmlTemplate, err = os.ReadFile(templatePath)
 		if err != nil {
 			log.Fatalf("FATAL: Could not read index.html template at %s: %v", templatePath, err)
@@ -504,11 +504,14 @@ func main() {
 	loadOverrides()
 	go getSelfHstIconNames() // Pre-warm the cache in the background.
 
+	const templatePath = "template"
+	loadHTMLTemplate(templatePath)
+
 	const staticPath = "static"
-	loadHTMLTemplate(staticPath)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/services", servicesHandler)
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticPath))))
 	mux.HandleFunc("/", serveHTMLTemplate)
 
 	log.Println("Starting server on :8080...")
