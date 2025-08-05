@@ -28,7 +28,10 @@ WORKDIR /app
 COPY --from=builder /server /app/server
 
 # Copy the static frontend files into a 'static' directory
-COPY index.html /app/static/index.html
+COPY static/* /app/static/
+
+# Copy the html template into a 'template' directory
+COPY index.html /app/template/index.html
 
 # Expose the port the Go server is listening on
 EXPOSE 8080
