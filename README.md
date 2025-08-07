@@ -122,7 +122,7 @@ If you want to build the image yourself:
 1. **Clone the repository:**
 
     ```bash
-    git clone [https://github.com/dannybouwers/trala.git](https://github.com/dannybouwers/trala.git)
+    git clone https://github.com/dannybouwers/trala.git
     cd trala
     ```
 
