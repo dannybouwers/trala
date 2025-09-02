@@ -89,6 +89,7 @@ The application uses the **router name** from your Traefik configuration (the pa
 **This override has the highest priority.** If a router name is found in this file, TraLa will use the specified icon and skip all other detection methods.
 
 When using a filename from the selfh.st icon repository, you can specify files with the following extensions:
+
 - `.png` (default if no extension specified)
 - `.svg`
 - `.webp`
@@ -199,5 +200,6 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 This project was developed in close collaboration with Google's Gemini. I provided the architectural direction, feature requirements, and debugging, while Gemini handled the bulk of the code generation. This transparent, AI-assisted approach allowed for rapid development and iteration.
 
 Special thanks to:
--   **[Maria Letta](https://github.com/MariaLetta/free-gophers-pack)** for the wonderful Gopher logo used in the application.
--   **[selfh.st/icons](https://selfh.st/icons/)** for providing the extensive, high-quality icon database that powers the service icon discovery.
+
+- **[Maria Letta](https://github.com/MariaLetta/free-gophers-pack)** for the wonderful Gopher logo used in the application.
+- **[selfh.st/icons](https://selfh.st/icons/)** for providing the extensive, high-quality icon database that powers the service icon discovery.
