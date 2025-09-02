@@ -1,5 +1,5 @@
 ### STAGE 1: Build Go Application ###
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 # Install build essentials for static compilation
 RUN apk add --no-cache build-base
