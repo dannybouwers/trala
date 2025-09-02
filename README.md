@@ -81,9 +81,20 @@ While TraLa does its best to find the right icon, fuzzy search isn't perfect. Fo
 
 ### How It Works
 
-The application uses the **router name** from your Traefik configuration (the part before the `@`) as the primary identifier for a service. You can map this router name directly to a specific icon file from the [selfh.st icon repository](https://github.com/selfhst/icons/tree/main/png).
+The application uses the **router name** from your Traefik configuration (the part before the `@`) as the primary identifier for a service. You can map this router name to either:
+
+1. A full URL to an icon (e.g., `https://selfh.st/content/images/2023/09/favicon-1.png`)
+2. A specific icon filename from the [selfh.st icon repository](https://selfh.st/icons/)
 
 **This override has the highest priority.** If a router name is found in this file, TraLa will use the specified icon and skip all other detection methods.
+
+When using a filename from the selfh.st icon repository, you can specify files with the following extensions:
+
+- `.png` (default if no extension specified)
+- `.svg`
+- `.webp`
+
+The application will automatically construct the appropriate URL based on the file extension
 
 ### Creating the `icon_overrides.yml`
 
@@ -92,13 +103,19 @@ The application uses the **router name** from your Traefik configuration (the pa
 
     ```yaml
     # icon_overrides.yml
-    # Format: <traefik_router_name>: <selfhst_icon_filename.png>
+    # Format: <traefik_router_name>: <icon_url_or_filename>
 
-    # Example 1: Your 'firefly-core' router should use the 'firefly-iii.png' icon.
-    firefly-core: firefly-iii.png
+    # Example 1: Using a full URL
+    firefly-core: https://selfh.st/content/images/2023/09/favicon-1.png
 
-    # Example 2: Your 'unifi-controller' router should use 'ubiquiti-unifi.png'.
+    # Example 2: Using a filename with .png extension
     unifi-controller: ubiquiti-unifi.png
+
+    # Example 3: Using a filename with .svg extension
+    home-assistant: home-assistant.svg
+
+    # Example 4: Using a filename with .webp extension
+    plex: plex.webp
     ```
 
 3. Mount this file into the container at `/config/icon_overrides.yml` using a volume, as shown in the `docker-compose.yml` example.
@@ -183,5 +200,6 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 This project was developed in close collaboration with Google's Gemini. I provided the architectural direction, feature requirements, and debugging, while Gemini handled the bulk of the code generation. This transparent, AI-assisted approach allowed for rapid development and iteration.
 
 Special thanks to:
--   **[Maria Letta](https://github.com/MariaLetta/free-gophers-pack)** for the wonderful Gopher logo used in the application.
--   **[selfh.st/icons](https://selfh.st/icons/)** for providing the extensive, high-quality icon database that powers the service icon discovery.
+
+- **[Maria Letta](https://github.com/MariaLetta/free-gophers-pack)** for the wonderful Gopher logo used in the application.
+- **[selfh.st/icons](https://selfh.st/icons/)** for providing the extensive, high-quality icon database that powers the service icon discovery.

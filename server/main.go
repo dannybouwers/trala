@@ -55,13 +55,18 @@ type ServiceExcludeConfig struct {
 	} `yaml:"service"`
 }
 
-// GithubTreeResponse and GithubTreeEntry are for parsing the GitHub API response.
-type GithubTreeResponse struct {
-	Tree []GithubTreeEntry `json:"tree"`
-}
-type GithubTreeEntry struct {
-	Path string `json:"path"`
-	Type string `json:"type"`
+// SelfHstIcon represents an entry in the selfh.st icons index.json.
+type SelfHstIcon struct {
+	Name      string `json:"Name"`
+	Reference string `json:"Reference"`
+	SVG       string `json:"SVG"`
+	PNG       string `json:"PNG"`
+	WebP      string `json:"WebP"`
+	Light     string `json:"Light"`
+	Dark      string `json:"Dark"`
+	Category  string `json:"Category"`
+	Tags      string `json:"Tags"`
+	CreatedAt string `json:"CreatedAt"`
 }
 
 // --- Global Variables & Constants ---
@@ -69,7 +74,7 @@ type GithubTreeEntry struct {
 var (
 	htmlTemplate      []byte
 	htmlOnce          sync.Once
-	selfhstIconNames  []string
+	selfhstIcons      []SelfHstIcon
 	selfhstCacheTime  time.Time
 	selfhstCacheMux   sync.RWMutex
 	overrideConfig    map[string]string
@@ -84,7 +89,7 @@ var (
 )
 
 const selfhstCacheTTL = 1 * time.Hour
-const selfhstAPIURL = "https://api.github.com/repos/selfhst/icons/git/trees/caffa4e885cb560daf8299889e8092b2c464edec"
+const selfhstAPIURL = "https://raw.githubusercontent.com/selfhst/icons/refs/heads/main/index.json"
 const overrideConfigPath = "/config/icon_overrides.yml"
 const defaultIcon = "" // Frontend will use a fallback if icon is empty.
 
@@ -313,17 +318,31 @@ func processRouter(router TraefikRouter, entryPoints map[string]TraefikEntryPoin
 // findBestIconURL tries all icon-finding methods in order of priority.
 func findBestIconURL(routerName, serviceURL string) string {
 	// Priority 1: Check user-defined overrides.
-	if iconName := checkOverrides(routerName); iconName != "" {
-		url := "https://cdn.jsdelivr.net/gh/selfhst/icons/png/" + iconName
-		debugf("[%s] Found icon via override: %s", routerName, url)
+	if iconValue := checkOverrides(routerName); iconValue != "" {
+		// Check if it's a full URL
+		if strings.HasPrefix(iconValue, "http://") || strings.HasPrefix(iconValue, "https://") {
+			debugf("[%s] Found icon via override (full URL): %s", routerName, iconValue)
+			return iconValue
+		}
+
+		// Check if it's a filename with valid extension
+		ext := filepath.Ext(iconValue)
+		if ext == ".png" || ext == ".svg" || ext == ".webp" {
+			url := "https://cdn.jsdelivr.net/gh/selfhst/icons/" + strings.TrimPrefix(ext, ".") + "/" + strings.ToLower(iconValue)
+			debugf("[%s] Found icon via override (filename): %s", routerName, url)
+			return url
+		}
+
+		// Fallback to default behavior if extension is not valid
+		url := "https://cdn.jsdelivr.net/gh/selfhst/icons/png/" + iconValue
+		debugf("[%s] Found icon via override (fallback): %s", routerName, url)
 		return url
 	}
 
 	// Priority 2: Fuzzy search against selfh.st icons.
-	if iconName := findSelfHstIcon(routerName); iconName != "" {
-		url := "https://cdn.jsdelivr.net/gh/selfhst/icons/png/" + iconName
-		debugf("[%s] Found icon via fuzzy search: %s", routerName, url)
-		return url
+	if iconURL := findSelfHstIcon(routerName); iconURL != "" {
+		debugf("[%s] Found icon via fuzzy search: %s", routerName, iconURL)
+		return iconURL
 	}
 
 	// Priority 3: Check for /favicon.ico.
@@ -374,9 +393,26 @@ func findSelfHstIcon(routerName string) string {
 		log.Printf("ERROR: Could not get selfh.st icon list for fuzzy search: %v", err)
 		return ""
 	}
-	matches := fuzzy.Find(routerName, icons)
+
+	// Extract reference names for fuzzy matching
+	references := make([]string, len(icons))
+	for i, icon := range icons {
+		references[i] = icon.Reference
+	}
+
+	matches := fuzzy.Find(routerName, references)
 	if len(matches) > 0 {
-		return matches[0] + ".png"
+		// Find the matching icon to determine the best extension
+		for _, icon := range icons {
+			if icon.Reference == matches[0] {
+				// Prefer SVG if available
+				if icon.SVG == "Yes" {
+					return fmt.Sprintf("https://cdn.jsdelivr.net/gh/selfhst/icons/svg/%s.svg", icon.Reference)
+				}
+				// Fallback to PNG
+				return fmt.Sprintf("https://cdn.jsdelivr.net/gh/selfhst/icons/png/%s.png", icon.Reference)
+			}
+		}
 	}
 	return ""
 }
@@ -433,23 +469,23 @@ func isValidImageURL(url string) bool {
 
 // --- Caching & Utility ---
 
-// getSelfHstIconNames fetches the list of icons from the GitHub API and caches it.
-func getSelfHstIconNames() ([]string, error) {
+// getSelfHstIconNames fetches the list of icons from the selfh.st index.json and caches it.
+func getSelfHstIconNames() ([]SelfHstIcon, error) {
 	selfhstCacheMux.RLock()
-	if time.Since(selfhstCacheTime) < selfhstCacheTTL && len(selfhstIconNames) > 0 {
+	if time.Since(selfhstCacheTime) < selfhstCacheTTL && len(selfhstIcons) > 0 {
 		selfhstCacheMux.RUnlock()
-		return selfhstIconNames, nil
+		return selfhstIcons, nil
 	}
 	selfhstCacheMux.RUnlock()
 
 	selfhstCacheMux.Lock()
 	defer selfhstCacheMux.Unlock()
 	// Double-check after acquiring the lock
-	if time.Since(selfhstCacheTime) < selfhstCacheTTL && len(selfhstIconNames) > 0 {
-		return selfhstIconNames, nil
+	if time.Since(selfhstCacheTime) < selfhstCacheTTL && len(selfhstIcons) > 0 {
+		return selfhstIcons, nil
 	}
 
-	log.Println("Refreshing selfh.st icon cache from GitHub API...")
+	log.Println("Refreshing selfh.st icon cache from index.json...")
 	req, _ := http.NewRequestWithContext(context.Background(), "GET", selfhstAPIURL, nil)
 	req.Header.Set("User-Agent", "TraLa-Dashboard-App")
 
@@ -459,35 +495,28 @@ func getSelfHstIconNames() ([]string, error) {
 	}
 	defer resp.Body.Close()
 
-	var treeResponse GithubTreeResponse
-	if err := json.NewDecoder(resp.Body).Decode(&treeResponse); err != nil {
+	var icons []SelfHstIcon
+	if err := json.NewDecoder(resp.Body).Decode(&icons); err != nil {
 		return nil, err
 	}
 
-	var names []string
-	for _, entry := range treeResponse.Tree {
-		if entry.Type == "blob" && strings.HasSuffix(entry.Path, ".png") && !strings.HasSuffix(entry.Path, "-dark.png") && !strings.HasSuffix(entry.Path, "-light.png") {
-			names = append(names, strings.TrimSuffix(entry.Path, ".png"))
-		}
-	}
-
-	// Sort the icon names using a multi-level approach for the best fuzzy search results.
+	// Sort the icons using a multi-level approach for the best fuzzy search results.
 	// 1. Primary sort: by length (shortest first). This prioritizes base names over variants
 	//    (e.g., "proxmox" over "proxmox-helper-scripts").
 	// 2. Secondary sort: alphabetically. This provides a stable order for names of the same length.
-	sort.Slice(names, func(i, j int) bool {
-		lenI := len(names[i])
-		lenJ := len(names[j])
+	sort.Slice(icons, func(i, j int) bool {
+		lenI := len(icons[i].Reference)
+		lenJ := len(icons[j].Reference)
 		if lenI != lenJ {
 			return lenI < lenJ
 		}
-		return names[i] < names[j]
+		return icons[i].Reference < icons[j].Reference
 	})
 
-	selfhstIconNames = names
+	selfhstIcons = icons
 	selfhstCacheTime = time.Now()
-	log.Printf("Successfully cached %d icon names.", len(selfhstIconNames))
-	return selfhstIconNames, nil
+	log.Printf("Successfully cached %d icons.", len(selfhstIcons))
+	return selfhstIcons, nil
 }
 
 // reconstructURL extracts the base URL from a Traefik rule and determines the protocol and port
