@@ -313,9 +313,24 @@ func processRouter(router TraefikRouter, entryPoints map[string]TraefikEntryPoin
 // findBestIconURL tries all icon-finding methods in order of priority.
 func findBestIconURL(routerName, serviceURL string) string {
 	// Priority 1: Check user-defined overrides.
-	if iconName := checkOverrides(routerName); iconName != "" {
-		url := "https://cdn.jsdelivr.net/gh/selfhst/icons/png/" + iconName
-		debugf("[%s] Found icon via override: %s", routerName, url)
+	if iconValue := checkOverrides(routerName); iconValue != "" {
+		// Check if it's a full URL
+		if strings.HasPrefix(iconValue, "http://") || strings.HasPrefix(iconValue, "https://") {
+			debugf("[%s] Found icon via override (full URL): %s", routerName, iconValue)
+			return iconValue
+		}
+
+		// Check if it's a filename with valid extension
+		ext := filepath.Ext(iconValue)
+		if ext == ".png" || ext == ".svg" || ext == ".webp" {
+			url := "https://cdn.jsdelivr.net/gh/selfhst/icons/" + strings.TrimPrefix(ext, ".") + "/" + strings.ToLower(iconValue)
+			debugf("[%s] Found icon via override (filename): %s", routerName, url)
+			return url
+		}
+
+		// Fallback to default behavior if extension is not valid
+		url := "https://cdn.jsdelivr.net/gh/selfhst/icons/png/" + iconValue
+		debugf("[%s] Found icon via override (fallback): %s", routerName, url)
 		return url
 	}
 
