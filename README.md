@@ -13,6 +13,7 @@ A simple, modern, and dynamic dashboard for your Traefik services. This applicat
 - **Live Search & Sort:** Instantly filter and sort your services by name, URL, or priority.
 - **External Search:** Use the search bar to quickly search the web with your configured search engine.
 - **Lightweight & Multi-Arch:** Built with Go and a minimal Alpine base, the Docker image is small and compatible with `amd64` and `arm64` architectures.
+- **Service Exclusion:** Hide specific services from the dashboard using router name exclusions.
 
 ---
 
@@ -46,6 +47,8 @@ services:
     volumes:
       # Optional: Mount a local file to override icons. See "Icon Overrides" section below.
       - ./icon_overrides.yml:/config/icon_overrides.yml:ro
+      # Optional: Mount a local file to exclude services. See "Service Exclusion" section below.
+      - ./services.yml:/config/services.yml:ro
     environment:
       # Required: The internal Docker network address for the Traefik API
       - TRAEFIK_API_HOST=http://traefik:8080
@@ -99,6 +102,35 @@ The application uses the **router name** from your Traefik configuration (the pa
     ```
 
 3. Mount this file into the container at `/config/icon_overrides.yml` using a volume, as shown in the `docker-compose.yml` example.
+
+---
+
+## 🚫 Service Exclusion (Advanced)
+
+You can hide specific services from appearing in the dashboard by specifying their router names in a `services.yml` configuration file. This is useful for hiding administrative interfaces or services you don't want to be easily accessible through the dashboard.
+
+### How It Works
+
+The application uses the **router name** from your Traefik configuration (the part before the `@`) to identify services. By adding router names to the exclusion list, those services will not be processed or displayed in the dashboard.
+
+### Creating the `services.yml`
+
+1. Create a file named `services.yml` on your Docker host.
+2. Use the following YAML format:
+
+    ```yaml
+    # services.yml
+    # Format: List router names to exclude from the dashboard
+    service:
+      exclude:
+        # Example 1: Exclude the Traefik API router
+        - traefik-api
+        
+        # Example 2: Exclude a private admin interface
+        - private-admin-panel
+    ```
+
+3. Mount this file into the container at `/config/services.yml` using a volume, as shown in the `docker-compose.yml` example.
 
 ---
 

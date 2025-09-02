@@ -48,6 +48,13 @@ type Service struct {
 	Icon       string `json:"icon"`
 }
 
+// ServiceExcludeConfig represents the structure of the services.yml file.
+type ServiceExcludeConfig struct {
+	Service struct {
+		Exclude []string `yaml:"exclude"`
+	} `yaml:"service"`
+}
+
 // GithubTreeResponse and GithubTreeEntry are for parsing the GitHub API response.
 type GithubTreeResponse struct {
 	Tree []GithubTreeEntry `json:"tree"`
@@ -69,6 +76,8 @@ var (
 	overrideConfigMux sync.RWMutex
 	httpClient        = &http.Client{Timeout: 5 * time.Second}
 	logLevel          string
+	excludeConfig     ServiceExcludeConfig
+	excludeConfigMux  sync.RWMutex
 	// Regex to reliably find Host and PathPrefix.
 	hostRegex = regexp.MustCompile(`Host\(\s*` + "`" + `([^` + "`" + `]+)` + "`" + `\s*\)`)
 	pathRegex = regexp.MustCompile(`PathPrefix\(\s*` + "`" + `([^` + "`" + `]+)` + "`" + `\s*\)`)
@@ -126,6 +135,34 @@ func loadOverrides() {
 
 	overrideConfig = config
 	log.Printf("Successfully loaded %d icon overrides from %s", len(overrideConfig), overrideConfigPath)
+}
+
+// loadExcludes reads and parses the optional services.yml file.
+func loadExcludes() {
+	excludeConfigMux.Lock()
+	defer excludeConfigMux.Unlock()
+
+	const excludeConfigPath = "/config/services.yml"
+	data, err := os.ReadFile(excludeConfigPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			log.Printf("Info: No exclude config file found at %s. Continuing without excludes.", excludeConfigPath)
+			// Initialize with empty exclude list
+			excludeConfig.Service.Exclude = []string{}
+		} else {
+			log.Printf("Warning: Could not read exclude config file at %s: %v", excludeConfigPath, err)
+		}
+		return
+	}
+
+	var config ServiceExcludeConfig
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		log.Printf("Warning: Could not parse exclude config file %s: %v", excludeConfigPath, err)
+		return
+	}
+
+	excludeConfig = config
+	log.Printf("Successfully loaded %d service excludes from %s", len(excludeConfig.Service.Exclude), excludeConfigPath)
 }
 
 // --- Main HTTP Handlers ---
@@ -248,6 +285,13 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 // processRouter takes a raw Traefik router, finds its best icon, and sends the final Service object to a channel.
 func processRouter(router TraefikRouter, entryPoints map[string]TraefikEntryPoint, ch chan<- Service) {
 	routerName := strings.Split(router.Name, "@")[0]
+
+	// Check if this router should be excluded
+	if isExcluded(routerName) {
+		debugf("Excluding router: %s", routerName)
+		return
+	}
+
 	serviceURL := reconstructURL(router, entryPoints)
 
 	if serviceURL == "" {
@@ -308,6 +352,19 @@ func checkOverrides(routerName string) string {
 		return iconName
 	}
 	return ""
+}
+
+// isExcluded checks if a router name is in the exclude list.
+func isExcluded(routerName string) bool {
+	excludeConfigMux.RLock()
+	defer excludeConfigMux.RUnlock()
+
+	for _, exclude := range excludeConfig.Service.Exclude {
+		if exclude == routerName {
+			return true
+		}
+	}
+	return false
 }
 
 // findSelfHstIcon performs a fuzzy search.
@@ -502,6 +559,7 @@ func main() {
 	logLevel = os.Getenv("LOG_LEVEL")
 
 	loadOverrides()
+	loadExcludes()
 	go getSelfHstIconNames() // Pre-warm the cache in the background.
 
 	const templatePath = "template"
