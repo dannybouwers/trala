@@ -400,7 +400,7 @@ func findSelfHstIcon(routerName string) string {
 		references[i] = icon.Reference
 	}
 
-	matches := fuzzy.Find(routerName, references)
+	matches := fuzzy.FindFold(routerName, references)
 	if len(matches) > 0 {
 		// Find the matching icon to determine the best extension
 		for _, icon := range icons {
