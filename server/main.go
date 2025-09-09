@@ -339,26 +339,20 @@ func findBestIconURL(routerName, serviceURL string) string {
 		return url
 	}
 
-	// Priority 2: Fuzzy search against selfh.st icons.
-	if iconURL := findSelfHstIcon(routerName); iconURL != "" {
-		debugf("[%s] Found icon via fuzzy search: %s", routerName, iconURL)
-		return iconURL
-	}
-
-	// Priority 3: Fuzzy search against selfh.st icons with whitespaces replaced
+	// Priority 2: Fuzzy search against selfh.st icons
 	routerNameReplaced = strings.ReplaceAll(routerName, " ", "-")
 	if iconURL := findSelfHstIcon(routerNameReplaced); iconURL != "" {
-		debugf("[%s] Found icon via fuzzy search with whitespace replacement: %s", routerNameReplaced, iconURL)
+		debugf("[%s] Found icon via fuzzy search: %s", routerNameReplaced, iconURL)
 		return iconURL
 	}
 
-	// Priority 4: Check for /favicon.ico.
+	// Priority 3: Check for /favicon.ico.
 	if iconURL := findFavicon(serviceURL); iconURL != "" {
 		debugf("[%s] Found icon via /favicon.ico: %s", routerName, iconURL)
 		return iconURL
 	}
 
-	// Priority 5: Parse service's HTML for a <link> tag.
+	// Priority 4: Parse service's HTML for a <link> tag.
 	if iconURL := findHTMLIcon(serviceURL); iconURL != "" {
 		debugf("[%s] Found icon via HTML parsing: %s", routerName, iconURL)
 		return iconURL
