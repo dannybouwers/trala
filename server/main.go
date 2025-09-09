@@ -569,6 +569,11 @@ func reconstructURL(router TraefikRouter, entryPoints map[string]TraefikEntryPoi
 		return fmt.Sprintf("%s://%s%s", protocol, hostname, path)
 	}
 
+	// Edgecase where protocol is http and port 443 due to http-to-https redirect
+	if protocol == "http" && port == "443" {
+		return fmt.Sprintf("https://%s%s", hostname, path)
+	}
+
 	return fmt.Sprintf("%s://%s%s:%s", protocol, hostname, path, port)
 }
 
