@@ -619,6 +619,16 @@ func loadConfiguration() {
 	log.Printf("Loaded %d icon overrides from %s", len(config.IconOverrides), configurationFilePath)
 
 	configuration = config
+
+	if config.LogLevel == "debug" {
+		debugf("Using effective configuration:")
+		out, err := yaml.Marshal(config)
+		if err != nil {
+			fmt.Printf("Failed to marshal configuration: %v\n", err)
+			return
+		}
+		fmt.Println(string(out))
+	}
 }
 
 // --- Main Application Setup ---
