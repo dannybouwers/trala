@@ -339,9 +339,10 @@ func findBestIconURL(routerName, serviceURL string) string {
 		return url
 	}
 
-	// Priority 2: Fuzzy search against selfh.st icons.
-	if iconURL := findSelfHstIcon(routerName); iconURL != "" {
-		debugf("[%s] Found icon via fuzzy search: %s", routerName, iconURL)
+	// Priority 2: Fuzzy search against selfh.st icons
+	routerNameReplaced = strings.ReplaceAll(routerName, " ", "-")
+	if iconURL := findSelfHstIcon(routerNameReplaced); iconURL != "" {
+		debugf("[%s] Found icon via fuzzy search: %s", routerNameReplaced, iconURL)
 		return iconURL
 	}
 
