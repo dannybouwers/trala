@@ -292,17 +292,30 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 func processRouter(router TraefikRouter, entryPoints map[string]TraefikEntryPoint, ch chan<- Service) {
 	routerName := strings.Split(router.Name, "@")[0]
 
+	serviceURL := reconstructURL(router, entryPoints)
+
+	if serviceURL == "" {
+		debugf("Could not reconstruct URL for router %s from rule: %s", routerName, router.Rule)
+		return
+	}
+
 	// Check if this router should be excluded
 	if isExcluded(routerName) {
 		debugf("Excluding router: %s", routerName)
 		return
 	}
 
-	serviceURL := reconstructURL(router, entryPoints)
-
-	if serviceURL == "" {
-		debugf("Could not reconstruct URL for router %s from rule: %s", routerName, router.Rule)
-		return
+	// Check if this is the Traefik API service and exclude it
+	traefikAPIHost := os.Getenv("TRAEFIK_API_HOST")
+	if traefikAPIHost != "" {
+		if !strings.HasPrefix(traefikAPIHost, "http") {
+			traefikAPIHost = "http://" + traefikAPIHost
+		}
+		apiURL := traefikAPIHost + "/api"
+		if serviceURL == apiURL {
+			debugf("Excluding router %s because it's the Traefik API service", routerName)
+			return
+		}
 	}
 
 	debugf("Processing router: %s, URL: %s", routerName, serviceURL)
