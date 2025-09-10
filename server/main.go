@@ -24,11 +24,12 @@ import (
 
 // TraefikRouter represents the essential fields from the Traefik API response.
 type TraefikRouter struct {
-	Name     string   `json:"name"`
-	Rule     string   `json:"rule"`
-	Service  string   `json:"service"`
-	Priority int      `json:"priority"`
-	Using    []string `json:"using"` // Added to determine the entrypoint
+	Name     string           `json:"name"`
+	Rule     string           `json:"rule"`
+	Service  string           `json:"service"`
+	Priority int              `json:"priority"`
+	Using    []string         `json:"using"`         // Added to determine the entrypoint
+	TLS      *json.RawMessage `json:"tls,omitempty"` // Added to capture TLS configuration
 }
 
 // TraefikEntryPoint represents the essential fields from the Traefik Entrypoints API.
@@ -533,6 +534,33 @@ func getSelfHstIconNames() ([]SelfHstIcon, error) {
 	return selfhstIcons, nil
 }
 
+// determineProtocol determines the correct protocol (http/https) for a service
+// based on TLS configuration in both router and entrypoint.
+func determineProtocol(router TraefikRouter, entryPoint TraefikEntryPoint) string {
+	// Primary method: Check router TLS configuration (highest priority)
+	// This is the most reliable indicator of whether a service should use HTTPS
+	if router.TLS != nil {
+		tlsStr := string(*router.TLS)
+		// Check for non-empty, non-null TLS configuration
+		if tlsStr != "null" && tlsStr != "{}" && tlsStr != "" {
+			return "https"
+		}
+	}
+
+	// Secondary method: Check entrypoint TLS configuration
+	// The TLS field is a json.RawMessage, so we need to check various possible values
+	if entryPoint.HTTP.TLS != nil {
+		tlsStr := string(entryPoint.HTTP.TLS)
+		// Check for non-empty, non-null TLS configuration
+		if tlsStr != "null" && tlsStr != "{}" && tlsStr != "" {
+			return "https"
+		}
+	}
+
+	// Default to HTTP
+	return "http"
+}
+
 // reconstructURL extracts the base URL from a Traefik rule and determines the protocol and port
 // based on the router's entrypoint.
 func reconstructURL(router TraefikRouter, entryPoints map[string]TraefikEntryPoint) string {
@@ -568,11 +596,8 @@ func reconstructURL(router TraefikRouter, entryPoints map[string]TraefikEntryPoi
 		return ""
 	}
 
-	protocol := "http"
-	// The presence of a non-null TLS object indicates HTTPS.
-	if entryPoint.HTTP.TLS != nil && string(entryPoint.HTTP.TLS) != "null" {
-		protocol = "https"
-	}
+	// Use the enhanced protocol detection logic
+	protocol := determineProtocol(router, entryPoint)
 
 	// Address is in the format ":port"
 	port := strings.TrimPrefix(entryPoint.Address, ":")
