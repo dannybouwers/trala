@@ -80,35 +80,30 @@ The application can be configured with a configuration file and with environment
 A sample configuration file is shown below:
 
 ```yaml
-selfhstIconUrl: https://cdn.jsdelivr.net/gh/selfhst/icons/
-searchUrl: https://www.google.com/search?q=
-refreshIntervalSeconds: 30
-traefikAPIHost: http://traefik:8080
-logLevel: info # info or debug
+# TraLa Configuration File
+# Version 1.0
 
-overrides:
-  # Format: <traefik_router_name>: <icon_url_or_filename>
+version: 1.0
 
-  # Example 1: Using a full URL
-  firefly-core: https://selfh.st/content/images/2023/09/favicon-1.png
+environment:
+  selfhstIconUrl: https://cdn.jsdelivr.net/gh/selfhst/icons/
+  searchUrl: https://duckduckgo.com/?q=
+  refreshIntervalSeconds: 30
+  logLevel: info
+  traefik:
+    apiHost: http://traefik:8080
 
-  # Example 2: Using a filename with .png extension
-  unifi-controller: ubiquiti-unifi.png
+icons:
+  overrides:
+    - service: "TrueNAS SCALE"
+      icon: https://cdn.jsdelivr.net/gh/selfhst/icons/png/truenas-scale.png
+    - service: "Home Assistant"  
+      icon: https://cdn.jsdelivr.net/gh/selfhst/icons/png/home-assistant.png
 
-  # Example 3: Using a filename with .svg extension
-  home-assistant: home-assistant.svg
-
-  # Example 4: Using a filename with .webp extension
-  plex: plex.webp
-
-exclusions:
-  # Format: List router names to exclude from the dashboard
-
-  # Example 1: Exclude the Traefik API router
-  - traefik-api
-  
-  # Example 2: Exclude a private admin interface
-  - private-admin-panel
+services:
+  exclude:
+    - traefik-api
+    - Authelia
 ```
 
 Supported environment variables are shown below.
