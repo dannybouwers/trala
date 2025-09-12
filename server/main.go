@@ -75,8 +75,15 @@ type ConfigStatus struct {
 	WarningMessage         string `json:"warningMessage,omitempty"`
 }
 
+type TraefikBasicAuth struct {
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+}
+
 type TraefikConfig struct {
-	APIHost string `yaml:"api_host"`
+	APIHost         string           `yaml:"api_host"`
+	EnableBasicAuth bool             `yaml:"enable_basic_auth"`
+	BasicAuth       TraefikBasicAuth `yaml:"basic_auth"`
 }
 
 type ServiceOverride struct {
@@ -208,7 +215,21 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 	// Fetch entrypoints from the Traefik API.
 	entryPointsURL := fmt.Sprintf("%s/api/entrypoints", configuration.Environment.Traefik.APIHost)
 	debugf("Fetching entrypoints from Traefik API: %s", entryPointsURL)
-	resp, err := httpClient.Get(entryPointsURL)
+	req, err := http.NewRequest("GET", entryPointsURL, nil)
+	if err != nil {
+		log.Printf("ERROR: Could not create request: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Set basic auth option
+	if configuration.Environment.Traefik.EnableBasicAuth {
+		debugf("Setting basic auth")
+		req.SetBasicAuth(configuration.Environment.Traefik.BasicAuth.Username, configuration.Environment.Traefik.BasicAuth.Password)
+	}
+
+	// Send request
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		log.Printf("ERROR: Could not fetch entrypoints from Traefik API: %v", err)
 		http.Error(w, "Could not connect to Traefik API to get entrypoints", http.StatusBadGateway)
@@ -240,7 +261,20 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 	routersURL := fmt.Sprintf("%s/api/http/routers", configuration.Environment.Traefik.APIHost)
 	debugf("Fetching routers from Traefik API: %s", routersURL)
 
-	resp, err = httpClient.Get(routersURL)
+	req, err = http.NewRequest("GET", routersURL, nil)
+	if err != nil {
+		log.Printf("ERROR: Could not fetch routers from Traefik API: %v", err)
+		http.Error(w, "Could not connect to Traefik API to get routers", http.StatusBadGateway)
+		return
+	}
+
+	// Set basic auth option
+	if configuration.Environment.Traefik.EnableBasicAuth {
+		req.SetBasicAuth(configuration.Environment.Traefik.BasicAuth.Username, configuration.Environment.Traefik.BasicAuth.Password)
+	}
+
+	// Send request
+	resp, err = httpClient.Do(req)
 	if err != nil {
 		log.Printf("ERROR: Could not fetch routers from Traefik API: %v", err)
 		http.Error(w, "Could not connect to Traefik API to get routers", http.StatusBadGateway)
@@ -1024,7 +1058,12 @@ func loadConfiguration() {
 			RefreshIntervalSeconds: 30,
 			LogLevel:               "info",
 			Traefik: TraefikConfig{
-				APIHost: "",
+				APIHost:         "",
+				EnableBasicAuth: false,
+				BasicAuth: TraefikBasicAuth{
+					Username: "",
+					Password: "",
+				},
 			},
 		},
 		Services: ServiceConfiguration{

@@ -97,6 +97,10 @@ environment:
   log_level: info
   traefik:
     api_host: http://traefik:8080
+    enable_basic_auth: true
+    basic_auth:
+      username: user
+      password: pass  
 
 # Service configuration
 services:
