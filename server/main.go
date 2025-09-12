@@ -643,6 +643,9 @@ func loadConfiguration() {
 	if !strings.HasPrefix(config.Environment.Traefik.APIHost, "http://") && !strings.HasPrefix(config.Environment.Traefik.APIHost, "https://") {
 		config.Environment.Traefik.APIHost = "http://" + config.Environment.Traefik.APIHost
 	}
+	if !strings.HasSuffix(config.Environment.SelfhstIconURL, "/") {
+		config.Environment.SelfhstIconURL += "/"
+	}
 
 	// Build map that maps a router name to a IconOverride for fast lookups
 	iconOverrideMap = make(map[string]IconOverride, len(config.Icons.Overrides))
