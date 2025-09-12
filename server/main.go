@@ -262,7 +262,7 @@ func processRouter(router TraefikRouter, entryPoints map[string]TraefikEntryPoin
 	}
 
 	// Check if this is the Traefik API service and exclude it
-	traefikAPIHost := os.Getenv("TRAEFIK_API_HOST")
+	traefikAPIHost := configuration.Environment.Traefik.APIHost
 	if traefikAPIHost != "" {
 		if !strings.HasPrefix(traefikAPIHost, "http") {
 			traefikAPIHost = "http://" + traefikAPIHost
@@ -721,23 +721,23 @@ func loadConfiguration() {
 	}
 
 	// Step 3: environment overrides
-	if v := os.Getenv("selfhst_icon_url"); v != "" {
+	if v := os.Getenv("SELFHST_ICON_URL"); v != "" {
 		config.Environment.SelfhstIconURL = v
 	}
-	if v := os.Getenv("search_engine_url"); v != "" {
+	if v := os.Getenv("SEARCH_ENGINE_URL"); v != "" {
 		config.Environment.SearchEngineURL = v
 	}
-	if v := os.Getenv("refresh_interval_seconds"); v != "" {
+	if v := os.Getenv("REFRESH_INTERVAL_SECONDS"); v != "" {
 		if num, err := strconv.Atoi(v); err == nil && num > 0 {
 			config.Environment.RefreshIntervalSeconds = num
 		} else {
-			log.Printf("Warning: Invalid refresh_interval_seconds '%s', using %d", v, config.Environment.RefreshIntervalSeconds)
+			log.Printf("Warning: Invalid REFRESH_INTERVAL_SECONDS '%s', using %d", v, config.Environment.RefreshIntervalSeconds)
 		}
 	}
-	if v := os.Getenv("traefik_api_host"); v != "" {
+	if v := os.Getenv("TRAEFIK_API_HOST"); v != "" {
 		config.Environment.Traefik.APIHost = v
 	}
-	if v := os.Getenv("log_level"); v != "" {
+	if v := os.Getenv("LOG_LEVEL"); v != "" {
 		config.Environment.LogLevel = v
 	}
 
