@@ -39,5 +39,8 @@ EXPOSE 8080
 # Create a directory for optional user-provided configuration
 VOLUME /config
 
+# Create a directory for optional user-provided icons
+VOLUME /icons
+
 # The command to run the application.
 CMD ["/app/server"]
