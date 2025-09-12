@@ -49,13 +49,13 @@ services:
       - ./configuration.yml:/config/configuration.yml:ro
     environment:
       # Required: The internal Docker network address for the Traefik API
-      - traefik_api_host=http://traefik:8080
+      - TRAEFIK_API_HOST=http://traefik:8080
       # Optional: Change refresh interval
-      - refresh_interval_seconds=30
+      - REFRESH_INTERVAL_SECONDS=30
       # Optional: Change the search engine
-      - search_engine_url=https://duckduckgo.com/?q=
+      - SEARCH_ENGINE_URL=https://duckduckgo.com/?q=
       # Optional: Set to "debug" for verbose icon-finding logs
-      - log_level=info
+      - LOG_LEVEL=info
     labels:
       # --- Traefik Labels to expose TraLa itself ---
       - "traefik.enable=true"
@@ -128,11 +128,11 @@ Supported environment variables are shown below.
 
 | Variable                   | Description                                                                                             | Default                                | Required |
 | -------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------- | -------- |
-| `traefik_api_host`         | The full base URL of your Traefik API. From within Docker, this is typically `http://traefik:8080`.        | `(none)`                               | **Yes** |
-| `selfhst_icon_url`         | Base URL of the Selfhst icon endpoint. Customize if you are hosting your own local instance. | `https://cdn.jsdelivr.net/gh/selfhst/icons/`                               | No |
-| `refresh_interval_seconds` | The interval in seconds at which the service list automatically refreshes.                                | `30`                                   | No       |
-| `search_engine_url`        | The URL for the external search engine. The search query will be appended to this URL.                    | `https://www.google.com/search?q=`     | No       |
-| `log_level`                | Set to `debug` for verbose logging of the icon-finding process. Any other value is silent.              | `info`                                 | No       |
+| `TRAEFIK_API_HOST`         | The full base URL of your Traefik API. From within Docker, this is typically `http://traefik:8080`.        | `(none)`                               | **Yes** |
+| `SELFHST_ICON_URL`         | Base URL of the Selfhst icon endpoint. Customize if you are hosting your own local instance. | `https://cdn.jsdelivr.net/gh/selfhst/icons/`                               | No |
+| `REFRESH_INTERVAL_SECONDS` | The interval in seconds at which the service list automatically refreshes.                                | `30`                                   | No       |
+| `SEARCH_ENGINE_URL`        | The URL for the external search engine. The search query will be appended to this URL.                    | `https://www.google.com/search?q=`     | No       |
+| `LOG_LEVEL`                | Set to `debug` for verbose logging of the icon-finding process. Any other value is silent.              | `info`                                 | No       |
 
 ### Icon Overrides
 
