@@ -85,6 +85,7 @@ A sample configuration file is shown below:
 
 version: 1.0
 
+# Environment settings (optional, environment variables take precedence)
 environment:
   selfhst_icon_url: https://cdn.jsdelivr.net/gh/selfhst/icons/
   search_engine_url: https://duckduckgo.com/?q=
@@ -92,22 +93,35 @@ environment:
   log_level: info
   traefik:
     api_host: http://traefik:8080
-    enable_basic_auth: true
-    basic_auth:
-      username: user
-      password: pass  
 
+# Icon customization
 icons:
+  # Override icons for specific services
   overrides:
-    - service: "TrueNAS SCALE"
-      icon: https://cdn.jsdelivr.net/gh/selfhst/icons/png/truenas-scale.png
-    - service: "Home Assistant"  
-      icon: https://cdn.jsdelivr.net/gh/selfhst/icons/png/home-assistant.png
+    # Using full URL
+    - service: "firefly-core"
+      icon: "https://selfh.st/content/images/2023/09/favicon-1.png"
+    
+    # Using selfh.st filename with extension
+    - service: "unifi-controller"
+      icon: "ubiquiti-unifi.png"
+    - service: "home-assistant"
+      icon: "home-assistant.svg"
+    - service: "plex"
+      icon: "plex.webp"
+    
+    # Using simple name (resolves to selfh.st)
+    - service: "nextcloud"
+      icon: "nextcloud"
+    - service: "portainer"
+      icon: "portainer"
 
+# Service configuration
 services:
+  # Services to exclude from the dashboard
   exclude:
-    - traefik-api
-    - Authelia
+    - "traefik-api"  # Hide the Traefik API itself
+    - "admin-panel"  # Hide internal admin interface
 ```
 
 Supported environment variables are shown below.
@@ -151,6 +165,44 @@ The application uses the **router name** from your Traefik configuration (the pa
 
 ---
 
+# 🔒 Secure Traefik API Access (Advanced)
+
+Instead of using `--api.insecure=true` in your Traefik configuration, you can create a dedicated router for the API. This approach is more secure as it allows fine-grained control over API access.
+
+### How It Works
+
+If TraLa is deployed in the same Docker network as Traefik, the router should also work within the network. This can be accomplished by adding the internal Traefik hostname as a host in the router of Traefik.
+
+### Example Configuration
+
+```yaml
+version: '3.8'
+services:
+  traefik:
+    image: "traefik:v3.0"
+    hostname: traefik # <-- specify the hostname for this container
+    # ... your existing traefik configuration ...
+    command:
+      # ...
+      - --api # Secure API
+      - --entrypoints.web.address=:80
+      # - ...
+    labels:
+      # ...
+      # Dashboard & API
+      - traefik.http.routers.traefik-api.entrypoints=web
+      - traefik.http.routers.traefik-api.rule=Host(`traefik`) && PathPrefix(`/api`) # <-- use the container hostname in the router rule
+      - traefik.http.routers.traefik-api.service=api@internal
+
+  trala:
+    # ... your existing traefik configuration ...
+    environment:
+      - TRAEFIK_API_HOST=http://traefik # <-- specify the hostname of the traefik container and the port of the entrypoint (if not protocol default)
+```
+With this configuration, you can remove the `--api.insecure=true` flag from your Traefik configuration, making your setup more secure. TraLa will automatically ignore the service created for connecting to Traefik's API.
+
+ ---
+
 ## 🛠️ Building Locally
 
 If you want to build the image yourself:
@@ -184,7 +236,7 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 
 ## 🙏 Acknowledgements
 
-This project was developed in close collaboration with Google's Gemini. I provided the architectural direction, feature requirements, and debugging, while Gemini handled the bulk of the code generation. This transparent, AI-assisted approach allowed for rapid development and iteration.
+This project was initially developed in close collaboration with Google's Gemini. I provided the architectural direction, feature requirements, and debugging, while Gemini handled the bulk of the code generation. This transparent, AI-assisted approach allowed for rapid development and iteration.
 
 Special thanks to:
 
