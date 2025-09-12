@@ -45,19 +45,17 @@ services:
     networks:
       - traefik-net # Must be on the same network as Traefik
     volumes:
-      # Optional: Mount a local file to override icons. See "Icon Overrides" section below.
-      - ./icon_overrides.yml:/config/icon_overrides.yml:ro
-      # Optional: Mount a local file to exclude services. See "Service Exclusion" section below.
-      - ./services.yml:/config/services.yml:ro
+      # Optional: Mount a configuration file. See "Configuration" section below.
+      - ./configuration.yml:/config/configuration.yml:ro
     environment:
       # Required: The internal Docker network address for the Traefik API
-      - TRAEFIK_API_HOST=http://traefik:8080
+      - traefik_api_host=http://traefik:8080
       # Optional: Change refresh interval
-      - REFRESH_INTERVAL_SECONDS=30
+      - refresh_interval_seconds=30
       # Optional: Change the search engine
-      - SEARCH_ENGINE_URL=https://duckduckgo.com/?q=
+      - search_engine_url=https://duckduckgo.com/?q=
       # Optional: Set to "debug" for verbose icon-finding logs
-      - LOG_LEVEL=info
+      - log_level=info
     labels:
       # --- Traefik Labels to expose TraLa itself ---
       - "traefik.enable=true"
@@ -75,11 +73,58 @@ networks:
 
 ---
 
-## ⚙️ Icon Overrides (Advanced)
+## 🔧 Configuration
 
-While TraLa does its best to find the right icon, fuzzy search isn't perfect. For ultimate control, you can provide an `icon_overrides.yml` file. This is the most powerful feature for customizing your dashboard.
+The application can be configured with a configuration file and with environment variables. Environment overwrite settings from the configuration file. To view the effective configuration after startup, enable debug logging.
 
-### How It Works
+A sample configuration file is shown below:
+
+```yaml
+# TraLa Configuration File
+# Version 1.0
+
+version: 1.0
+
+environment:
+  selfhst_icon_url: https://cdn.jsdelivr.net/gh/selfhst/icons/
+  search_engine_url: https://duckduckgo.com/?q=
+  refresh_interval_seconds: 30
+  log_level: info
+  traefik:
+    api_host: http://traefik:8080
+    enable_basic_auth: true
+    basic_auth:
+      username: user
+      password: pass  
+
+icons:
+  overrides:
+    - service: "TrueNAS SCALE"
+      icon: https://cdn.jsdelivr.net/gh/selfhst/icons/png/truenas-scale.png
+    - service: "Home Assistant"  
+      icon: https://cdn.jsdelivr.net/gh/selfhst/icons/png/home-assistant.png
+
+services:
+  exclude:
+    - traefik-api
+    - Authelia
+```
+
+Supported environment variables are shown below.
+
+| Variable                   | Description                                                                                             | Default                                | Required |
+| -------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------- | -------- |
+| `traefik_api_host`         | The full base URL of your Traefik API. From within Docker, this is typically `http://traefik:8080`.        | `(none)`                               | **Yes** |
+| `selfhst_icon_url`         | Base URL of the Selfhst icon endpoint. Customize if you are hosting your own local instance. | `https://cdn.jsdelivr.net/gh/selfhst/icons/`                               | No |
+| `refresh_interval_seconds` | The interval in seconds at which the service list automatically refreshes.                                | `30`                                   | No       |
+| `search_engine_url`        | The URL for the external search engine. The search query will be appended to this URL.                    | `https://www.google.com/search?q=`     | No       |
+| `log_level`                | Set to `debug` for verbose logging of the icon-finding process. Any other value is silent.              | `info`                                 | No       |
+
+### Icon Overrides
+
+While TraLa does its best to find the right icon, fuzzy search isn't perfect. For ultimate control, you can provide ovverides in the `configuration.yml` file with the `overrides` key. This is the most powerful feature for customizing your dashboard.
+
+#### How It Works
 
 The application uses the **router name** from your Traefik configuration (the part before the `@`) as the primary identifier for a service. You can map this router name to either:
 
@@ -96,111 +141,13 @@ When using a filename from the selfh.st icon repository, you can specify files w
 
 The application will automatically construct the appropriate URL based on the file extension
 
-### Creating the `icon_overrides.yml`
+### Service Exclusion
 
-1. Create a file named `icon_overrides.yml` on your Docker host.
-2. Use the following simple YAML format:
+You can hide specific services from appearing in the dashboard by specifying their router names in the `configuration.yml` file with the `exclusions` key. This is useful for hiding administrative interfaces or services you don't want to be easily accessible through the dashboard.
 
-    ```yaml
-    # icon_overrides.yml
-    # Format: <traefik_router_name>: <icon_url_or_filename>
-
-    # Example 1: Using a full URL
-    firefly-core: https://selfh.st/content/images/2023/09/favicon-1.png
-
-    # Example 2: Using a filename with .png extension
-    unifi-controller: ubiquiti-unifi.png
-
-    # Example 3: Using a filename with .svg extension
-    home-assistant: home-assistant.svg
-
-    # Example 4: Using a filename with .webp extension
-    plex: plex.webp
-    ```
-
-3. Mount this file into the container at `/config/icon_overrides.yml` using a volume, as shown in the `docker-compose.yml` example.
-
----
-
-## 🚫 Service Exclusion (Advanced)
-
-You can hide specific services from appearing in the dashboard by specifying their router names in a `services.yml` configuration file. This is useful for hiding administrative interfaces or services you don't want to be easily accessible through the dashboard.
-
-### How It Works
+#### How It Works
 
 The application uses the **router name** from your Traefik configuration (the part before the `@`) to identify services. By adding router names to the exclusion list, those services will not be processed or displayed in the dashboard.
-
-### Creating the `services.yml`
-
-1. Create a file named `services.yml` on your Docker host.
-2. Use the following YAML format:
-
-    ```yaml
-    # services.yml
-    # Format: List router names to exclude from the dashboard
-    service:
-      exclude:
-        # Example 1: Exclude the Traefik API router
-        - traefik-api
-        
-        # Example 2: Exclude a private admin interface
-        - private-admin-panel
-    ```
-
-3. Mount this file into the container at `/config/services.yml` using a volume, as shown in the `docker-compose.yml` example.
-
----
-
-## 🔒 Secure Traefik API Access (Advanced)
-
-Instead of using `--api.insecure=true` in your Traefik configuration, you can create a dedicated router for the API. This approach is more secure as it allows fine-grained control over API access.
-
-### How It Works
-
-If TraLa is deployed in the same Docker network as Traefik, the router should also work within the network. This can be accomplished by adding the internal Traefik hostname as a host in the router of Traefik.
-
-### Example Configuration
-
-```yaml
-version: '3.8'
-
-services:
-  traefik:
-    image: "traefik:v3.0"
-    hostname: traefik # <-- specify the hostname for this container
-    # ... your existing traefik configuration ...
-    command:
-      # ...
-      - --api # Secure API
-      - --entrypoints.web.address=:80
-      # - ...
-    labels:
-      # ...
-      # Dashboard & API
-      - traefik.http.routers.traefik-api.entrypoints=web
-      - traefik.http.routers.traefik-api.rule=Host(`traefik`) && PathPrefix(`/api`) # <-- use the container hostname in the router rule
-      - traefik.http.routers.traefik-api.service=api@internal
-
-  trala:
-    # ... your existing traefik configuration ...
-    environment:
-      - TRAEFIK_API_HOST=http://traefik # <-- specify the hostname of the traefik container and the port of the entrypoint (if not protocol default)
-```
-
-With this configuration, you can remove the `--api.insecure=true` flag from your Traefik configuration, making your setup more secure. TraLa will automatically ignore the service created for connecting to Traefik's API.
-
----
-
-## 🔧 Configuration
-
-The application is configured using environment variables:
-
-| Variable                   | Description                                                                                             | Default                                | Required |
-| -------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------- | -------- |
-| `TRAEFIK_API_HOST`         | The full base URL of your Traefik API. From within Docker, this is typically `http://traefik:8080`.        | `(none)`                               | **Yes** |
-| `REFRESH_INTERVAL_SECONDS` | The interval in seconds at which the service list automatically refreshes.                                | `30`                                   | No       |
-| `SEARCH_ENGINE_URL`        | The URL for the external search engine. The search query will be appended to this URL.                    | `https://www.google.com/search?q=`     | No       |
-| `LOG_LEVEL`                | Set to `debug` for verbose logging of the icon-finding process. Any other value is silent.              | `info`                                 | No       |
 
 ---
 

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -49,11 +50,36 @@ type Service struct {
 	Icon       string `json:"icon"`
 }
 
-// ServiceExcludeConfig represents the structure of the services.yml file.
-type ServiceExcludeConfig struct {
-	Service struct {
-		Exclude []string `yaml:"exclude"`
-	} `yaml:"service"`
+type TraefikConfig struct {
+	APIHost string `yaml:"api_host"`
+}
+
+type IconOverride struct {
+	Service string `yaml:"service"`
+	Icon    string `yaml:"icon"`
+}
+
+type IconConfiguration struct {
+	Overrides []IconOverride `yaml:"overrides"`
+}
+
+type ServiceConfiguration struct {
+	Exclude []string `yaml:"exclude"`
+}
+
+type EnvironmentConfiguration struct {
+	SelfhstIconURL         string        `yaml:"selfhst_icon_url"`
+	SearchEngineURL        string        `yaml:"search_engine_url"`
+	RefreshIntervalSeconds int           `yaml:"refresh_interval_seconds"`
+	LogLevel               string        `yaml:"log_level"`
+	Traefik                TraefikConfig `yaml:"traefik"`
+}
+
+type TralaConfiguration struct {
+	Version     string                   `yaml:"version"`
+	Environment EnvironmentConfiguration `yaml:"environment"`
+	Icons       IconConfiguration        `yaml:"icons"`
+	Services    ServiceConfiguration     `yaml:"services"`
 }
 
 // SelfHstIcon represents an entry in the selfh.st icons index.json.
@@ -73,17 +99,16 @@ type SelfHstIcon struct {
 // --- Global Variables & Constants ---
 
 var (
-	htmlTemplate      []byte
-	htmlOnce          sync.Once
-	selfhstIcons      []SelfHstIcon
-	selfhstCacheTime  time.Time
-	selfhstCacheMux   sync.RWMutex
-	overrideConfig    map[string]string
-	overrideConfigMux sync.RWMutex
-	httpClient        = &http.Client{Timeout: 5 * time.Second}
-	logLevel          string
-	excludeConfig     ServiceExcludeConfig
-	excludeConfigMux  sync.RWMutex
+	htmlTemplate     []byte
+	htmlOnce         sync.Once
+	selfhstIcons     []SelfHstIcon
+	selfhstCacheTime time.Time
+	selfhstCacheMux  sync.RWMutex
+	configuration    TralaConfiguration
+	// Map used to quickly map a router name to a given icon override
+	iconOverrideMap  map[string]IconOverride
+	configurationMux sync.RWMutex
+	httpClient       = &http.Client{Timeout: 5 * time.Second}
 	// Regex to reliably find Host and PathPrefix.
 	hostRegex = regexp.MustCompile(`Host\(\s*` + "`" + `([^` + "`" + `]+)` + "`" + `\s*\)`)
 	pathRegex = regexp.MustCompile(`PathPrefix\(\s*` + "`" + `([^` + "`" + `]+)` + "`" + `\s*\)`)
@@ -91,14 +116,14 @@ var (
 
 const selfhstCacheTTL = 1 * time.Hour
 const selfhstAPIURL = "https://raw.githubusercontent.com/selfhst/icons/refs/heads/main/index.json"
-const overrideConfigPath = "/config/icon_overrides.yml"
+const configurationFilePath = "/config/configuration.yml"
 const defaultIcon = "" // Frontend will use a fallback if icon is empty.
 
 // --- Logging ---
 
 // debugf logs a message only if LOG_LEVEL is set to "debug".
 func debugf(format string, v ...interface{}) {
-	if logLevel == "debug" {
+	if configuration.Environment.LogLevel == "debug" {
 		log.Printf("DEBUG: "+format, v...)
 	}
 }
@@ -117,75 +142,13 @@ func loadHTMLTemplate(templatePath string) {
 	})
 }
 
-// loadOverrides reads and parses the optional icon_overrides.yml file.
-func loadOverrides() {
-	overrideConfigMux.Lock()
-	defer overrideConfigMux.Unlock()
-
-	data, err := os.ReadFile(overrideConfigPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			log.Printf("Info: No override config file found at %s. Continuing without overrides.", overrideConfigPath)
-			overrideConfig = make(map[string]string) // Initialize empty map
-		} else {
-			log.Printf("Warning: Could not read override config file at %s: %v", overrideConfigPath, err)
-		}
-		return
-	}
-
-	var config map[string]string
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		log.Printf("Warning: Could not parse override config file %s: %v", overrideConfigPath, err)
-		return
-	}
-
-	overrideConfig = config
-	log.Printf("Successfully loaded %d icon overrides from %s", len(overrideConfig), overrideConfigPath)
-}
-
-// loadExcludes reads and parses the optional services.yml file.
-func loadExcludes() {
-	excludeConfigMux.Lock()
-	defer excludeConfigMux.Unlock()
-
-	const excludeConfigPath = "/config/services.yml"
-	data, err := os.ReadFile(excludeConfigPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			log.Printf("Info: No exclude config file found at %s. Continuing without excludes.", excludeConfigPath)
-			// Initialize with empty exclude list
-			excludeConfig.Service.Exclude = []string{}
-		} else {
-			log.Printf("Warning: Could not read exclude config file at %s: %v", excludeConfigPath, err)
-		}
-		return
-	}
-
-	var config ServiceExcludeConfig
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		log.Printf("Warning: Could not parse exclude config file %s: %v", excludeConfigPath, err)
-		return
-	}
-
-	excludeConfig = config
-	log.Printf("Successfully loaded %d service excludes from %s", len(excludeConfig.Service.Exclude), excludeConfigPath)
-}
-
 // --- Main HTTP Handlers ---
 
 // serveHTMLTemplate serves the static index.html file, injecting environment variables.
 func serveHTMLTemplate(w http.ResponseWriter, r *http.Request) {
-	searchURL := os.Getenv("SEARCH_ENGINE_URL")
-	if searchURL == "" {
-		searchURL = "https://www.google.com/search?q="
-	}
-	refreshInterval := os.Getenv("REFRESH_INTERVAL_SECONDS")
-	if refreshInterval == "" {
-		refreshInterval = "30"
-	}
 	replacer := strings.NewReplacer(
-		"%%SEARCH_ENGINE_URL%%", searchURL,
-		"%%REFRESH_INTERVAL_SECONDS%%", refreshInterval,
+		"%%SEARCH_ENGINE_URL%%", configuration.Environment.SearchEngineURL,
+		"%%REFRESH_INTERVAL_SECONDS%%", strconv.Itoa(configuration.Environment.RefreshIntervalSeconds),
 	)
 	replacedHTML := replacer.Replace(string(htmlTemplate))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -194,18 +157,8 @@ func serveHTMLTemplate(w http.ResponseWriter, r *http.Request) {
 
 // servicesHandler is the main API endpoint. It fetches, processes, and returns all service data.
 func servicesHandler(w http.ResponseWriter, r *http.Request) {
-	// 1. Get Traefik API host from environment variables.
-	traefikAPIHost := os.Getenv("TRAEFIK_API_HOST")
-	if traefikAPIHost == "" {
-		http.Error(w, "TRAEFIK_API_HOST environment variable not set", http.StatusInternalServerError)
-		return
-	}
-	if !strings.HasPrefix(traefikAPIHost, "http") {
-		traefikAPIHost = "http://" + traefikAPIHost
-	}
-
-	// 2. Fetch entrypoints from the Traefik API.
-	entryPointsURL := fmt.Sprintf("%s/api/entrypoints", traefikAPIHost)
+	// Fetch entrypoints from the Traefik API.
+	entryPointsURL := fmt.Sprintf("%s/api/entrypoints", configuration.Environment.Traefik.APIHost)
 	debugf("Fetching entrypoints from Traefik API: %s", entryPointsURL)
 	resp, err := httpClient.Get(entryPointsURL)
 	if err != nil {
@@ -236,7 +189,7 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 3. Fetch routers from the Traefik API.
-	routersURL := fmt.Sprintf("%s/api/http/routers", traefikAPIHost)
+	routersURL := fmt.Sprintf("%s/api/http/routers", configuration.Environment.Traefik.APIHost)
 	debugf("Fetching routers from Traefik API: %s", routersURL)
 
 	resp, err = httpClient.Get(routersURL)
@@ -342,13 +295,13 @@ func findBestIconURL(routerName, serviceURL string) string {
 		// Check if it's a filename with valid extension
 		ext := filepath.Ext(iconValue)
 		if ext == ".png" || ext == ".svg" || ext == ".webp" {
-			url := "https://cdn.jsdelivr.net/gh/selfhst/icons/" + strings.TrimPrefix(ext, ".") + "/" + strings.ToLower(iconValue)
+			url := configuration.Environment.SelfhstIconURL + strings.TrimPrefix(ext, ".") + "/" + strings.ToLower(iconValue)
 			debugf("[%s] Found icon via override (filename): %s", routerName, url)
 			return url
 		}
 
 		// Fallback to default behavior if extension is not valid
-		url := "https://cdn.jsdelivr.net/gh/selfhst/icons/png/" + iconValue
+		url := configuration.Environment.SelfhstIconURL + "png/" + iconValue
 		debugf("[%s] Found icon via override (fallback): %s", routerName, url)
 		return url
 	}
@@ -380,20 +333,21 @@ func findBestIconURL(routerName, serviceURL string) string {
 
 // checkOverrides looks for a router name in the loaded config file.
 func checkOverrides(routerName string) string {
-	overrideConfigMux.RLock()
-	defer overrideConfigMux.RUnlock()
-	if iconName, ok := overrideConfig[routerName]; ok {
-		return iconName
+	configurationMux.RLock()
+	defer configurationMux.RUnlock()
+
+	if override, ok := iconOverrideMap[routerName]; ok {
+		return override.Icon
 	}
 	return ""
 }
 
 // isExcluded checks if a router name is in the exclude list.
 func isExcluded(routerName string) bool {
-	excludeConfigMux.RLock()
-	defer excludeConfigMux.RUnlock()
+	configurationMux.RLock()
+	defer configurationMux.RUnlock()
 
-	for _, exclude := range excludeConfig.Service.Exclude {
+	for _, exclude := range configuration.Services.Exclude {
 		if exclude == routerName {
 			return true
 		}
@@ -422,10 +376,10 @@ func findSelfHstIcon(routerName string) string {
 			if icon.Reference == matches[0] {
 				// Prefer SVG if available
 				if icon.SVG == "Yes" {
-					return fmt.Sprintf("https://cdn.jsdelivr.net/gh/selfhst/icons/svg/%s.svg", icon.Reference)
+					return fmt.Sprintf(configuration.Environment.SelfhstIconURL+"svg/%s.svg", icon.Reference)
 				}
 				// Fallback to PNG
-				return fmt.Sprintf("https://cdn.jsdelivr.net/gh/selfhst/icons/png/%s.png", icon.Reference)
+				return fmt.Sprintf(configuration.Environment.SelfhstIconURL+"png/%s.png", icon.Reference)
 			}
 		}
 	}
@@ -622,12 +576,102 @@ func resolveURL(baseURL string, path string) (string, error) {
 	return base.ResolveReference(ref).String(), nil
 }
 
+func loadConfiguration() {
+	configurationMux.Lock()
+	defer configurationMux.Unlock()
+
+	// Step 1: defaults
+	config := TralaConfiguration{
+		Version: "1.0",
+		Environment: EnvironmentConfiguration{
+			SelfhstIconURL:         "https://cdn.jsdelivr.net/gh/selfhst/icons/",
+			SearchEngineURL:        "https://www.google.com/search?q=",
+			RefreshIntervalSeconds: 30,
+			LogLevel:               "info",
+			Traefik: TraefikConfig{
+				APIHost: "",
+			},
+		},
+		Icons: IconConfiguration{
+			Overrides: make([]IconOverride, 0),
+		},
+		Services: ServiceConfiguration{
+			Exclude: make([]string, 0),
+		},
+	}
+
+	// Step 2: configuration file
+	data, err := os.ReadFile(configurationFilePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			log.Printf("Info: No configuration file found at %s. Using defaults + env vars.", configurationFilePath)
+		} else {
+			log.Printf("Warning: Could not read configuration file at %s: %v", configurationFilePath, err)
+		}
+	} else {
+		if err := yaml.Unmarshal(data, &config); err != nil {
+			log.Printf("Warning: Could not parse configuration file %s: %v", configurationFilePath, err)
+		}
+	}
+
+	// Step 3: environment overrides
+	if v := os.Getenv("selfhst_icon_url"); v != "" {
+		config.Environment.SelfhstIconURL = v
+	}
+	if v := os.Getenv("search_engine_url"); v != "" {
+		config.Environment.SearchEngineURL = v
+	}
+	if v := os.Getenv("refresh_interval_seconds"); v != "" {
+		if num, err := strconv.Atoi(v); err == nil && num > 0 {
+			config.Environment.RefreshIntervalSeconds = num
+		} else {
+			log.Printf("Warning: Invalid refresh_interval_seconds '%s', using %d", v, config.Environment.RefreshIntervalSeconds)
+		}
+	}
+	if v := os.Getenv("traefik_api_host"); v != "" {
+		config.Environment.Traefik.APIHost = v
+	}
+	if v := os.Getenv("log_level"); v != "" {
+		config.Environment.LogLevel = v
+	}
+
+	// Step 4: post-processing / validation
+	if config.Environment.Traefik.APIHost == "" {
+		log.Printf("ERROR: Traefik API host is not set. Provide via env var or config file.")
+		os.Exit(1)
+	}
+	if !strings.HasPrefix(config.Environment.Traefik.APIHost, "http://") && !strings.HasPrefix(config.Environment.Traefik.APIHost, "https://") {
+		config.Environment.Traefik.APIHost = "http://" + config.Environment.Traefik.APIHost
+	}
+	if !strings.HasSuffix(config.Environment.SelfhstIconURL, "/") {
+		config.Environment.SelfhstIconURL += "/"
+	}
+
+	// Build map that maps a router name to a IconOverride for fast lookups
+	iconOverrideMap = make(map[string]IconOverride, len(config.Icons.Overrides))
+	for _, o := range config.Icons.Overrides {
+		iconOverrideMap[o.Service] = o
+	}
+
+	log.Printf("Loaded %d service excludes from %s", len(config.Services.Exclude), configurationFilePath)
+	log.Printf("Loaded %d icon overrides from %s", len(config.Icons.Overrides), configurationFilePath)
+
+	configuration = config
+
+	if config.Environment.LogLevel == "debug" {
+		debugf("Using effective configuration:")
+		out, err := yaml.Marshal(config)
+		if err != nil {
+			fmt.Printf("Failed to marshal configuration: %v\n", err)
+			return
+		}
+		fmt.Println(string(out))
+	}
+}
+
 // --- Main Application Setup ---
 func main() {
-	logLevel = os.Getenv("LOG_LEVEL")
-
-	loadOverrides()
-	loadExcludes()
+	loadConfiguration()
 	go getSelfHstIconNames() // Pre-warm the cache in the background.
 
 	const templatePath = "template"
