@@ -115,6 +115,9 @@ var (
 	// User icons
 	userIcons    map[string]string // Map of icon names to file paths
 	userIconsMux sync.RWMutex
+	// Sorted user icon names for fuzzy matching
+	sortedUserIconNames    []string
+	sortedUserIconNamesMux sync.RWMutex
 )
 
 const selfhstCacheTTL = 1 * time.Hour
@@ -507,6 +510,11 @@ func scanUserIcons() error {
 		return iconNames[i] < iconNames[j]
 	})
 
+	// Store the sorted icon names in our global variable for use in fuzzy matching
+	sortedUserIconNamesMux.Lock()
+	sortedUserIconNames = iconNames
+	sortedUserIconNamesMux.Unlock()
+
 	log.Printf("Successfully scanned user icons directory. Found %d icons.", len(userIcons))
 	return nil
 }
@@ -521,11 +529,10 @@ func findUserIcon(routerName string) string {
 		return ""
 	}
 
-	// Extract icon names for fuzzy matching
-	iconNames := make([]string, 0, len(userIcons))
-	for name := range userIcons {
-		iconNames = append(iconNames, name)
-	}
+	// Use precomputed sorted icon names for fuzzy matching
+	sortedUserIconNamesMux.RLock()
+	iconNames := sortedUserIconNames
+	sortedUserIconNamesMux.RUnlock()
 
 	// Perform fuzzy search
 	matches := fuzzy.FindFold(routerName, iconNames)
