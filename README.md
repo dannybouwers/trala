@@ -99,7 +99,6 @@ environment:
 
 # Icon customization
 icons:
-  # Path to directory with custom icons (optional)
   # Override icons for specific services
   overrides:
     # Using full URL
@@ -161,18 +160,16 @@ The application will automatically construct the appropriate URL based on the fi
 
 ### Custom Icon Directory
 
-For ultimate customization, you can mount a directory containing your own icons at `/icons`. TraLa will scan this directory and use fuzzy matching to find the best icon for each service. This feature has the highest priority, even above icon overrides.
+For ultimate customization, you can mount a directory containing your own icons at `/icons`. TraLa will scan this directory and use fuzzy matching to find the best icon for each service. This feature has priority over the Selfhst icon endpoint.
 
 #### How It Works
 
 1. Mount a directory containing your icon files to the `/icons` volume in the container
-2. TraLa will scan this directory at startup and create a map of icon names to file paths
-3. For each service, TraLa will perform a fuzzy search against the icon names to find the best match
-4. Supported icon formats are: `.png`, `.jpg`, `.jpeg`, `.svg`, `.webp`, and `.gif`
-5. The icon name is derived from the filename (without extension) and converted to lowercase
-6. Icons are served directly by the application at the `/icons/filename.ext` URL
+2. TraLa will perform a fuzzy search against the icon names to find the best match
+3. Supported icon formats are: `.png`, `.jpg`, `.jpeg`, `.svg`, `.webp`, and `.gif`
+4. The icon name is derived from the filename (without extension) and case-insensitive
 
-For example, if you have a file named `MyApp.png` in your icons directory, it will match services with names like "myapp", "my-app", etc. The icon will be served at `http://trala-hostname/icons/MyApp.png`.
+For example, if you have a file named `MyApp.png` in your icons directory, it will match services with names like "myapp", "my-app", etc.
 
 ### Service Exclusion
 

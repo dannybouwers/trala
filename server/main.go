@@ -287,15 +287,9 @@ func processRouter(router TraefikRouter, entryPoints map[string]TraefikEntryPoin
 
 // findBestIconURL tries all icon-finding methods in order of priority.
 func findBestIconURL(routerName, serviceURL string) string {
-	// Priority 1: Check user icons (highest priority)
 	routerNameReplaced := strings.ReplaceAll(routerName, " ", "-")
-	if iconPath := findUserIcon(routerNameReplaced); iconPath != "" {
-		// For user icons, we return the URL that can be served by the application
-		debugf("[%s] Found icon via user icons (fuzzy search): %s", routerNameReplaced, iconPath)
-		return iconPath
-	}
 
-	// Priority 2: Check user-defined overrides.
+	// Priority 1: Check user-defined overrides.
 	if iconValue := checkOverrides(routerName); iconValue != "" {
 		// Check if it's a full URL
 		if strings.HasPrefix(iconValue, "http://") || strings.HasPrefix(iconValue, "https://") {
@@ -315,6 +309,13 @@ func findBestIconURL(routerName, serviceURL string) string {
 		url := configuration.Environment.SelfhstIconURL + "png/" + iconValue
 		debugf("[%s] Found icon via override (fallback): %s", routerName, url)
 		return url
+	}
+
+	// Priority 2: Check user icons
+	if iconPath := findUserIcon(routerNameReplaced); iconPath != "" {
+		// For user icons, we return the URL that can be served by the application
+		debugf("[%s] Found icon via user icons (fuzzy search): %s", routerNameReplaced, iconPath)
+		return iconPath
 	}
 
 	// Priority 3: Fuzzy search against selfh.st icons
