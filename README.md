@@ -9,6 +9,7 @@ A simple, modern, and dynamic dashboard for your Traefik services. This applicat
 - **Auto-Discovery:** Automatically fetches and displays all HTTP routers from your Traefik instance.
 - **Advanced Icon Fetching:** Intelligently finds the best icon for each service using a robust, prioritized strategy.
 - **Icon Overrides:** Manually map router names to specific icons for perfect results every time.
+- **Custom Icon Directory:** Mount your own icon directory at `/icons` for ultimate customization with fuzzy matching.
 - **Modern UI:** Clean, responsive interface with automatic Light/Dark mode based on your OS settings.
 - **Live Search & Sort:** Instantly filter and sort your services by name, URL, or priority.
 - **External Search:** Use the search bar to quickly search the web with your configured search engine.
@@ -47,6 +48,8 @@ services:
     volumes:
       # Optional: Mount a configuration file. See "Configuration" section below.
       - ./configuration.yml:/config/configuration.yml:ro
+      # Optional: Mount a directory with custom icons. See "Configuration" section below.
+      - ./icons:/icons:ro
     environment:
       # Required: The internal Docker network address for the Traefik API
       - TRAEFIK_API_HOST=http://traefik:8080
@@ -154,6 +157,19 @@ When using a filename from the selfh.st icon repository, you can specify files w
 - `.webp`
 
 The application will automatically construct the appropriate URL based on the file extension
+
+### Custom Icon Directory
+
+For ultimate customization, you can mount a directory containing your own icons at `/icons`. TraLa will scan this directory and use fuzzy matching to find the best icon for each service. This feature has priority over the Selfhst icon endpoint.
+
+#### How It Works
+
+1. Mount a directory containing your icon files to the `/icons` volume in the container
+2. TraLa will perform a fuzzy search against the icon names to find the best match
+3. Supported icon formats are: `.png`, `.jpg`, `.jpeg`, `.svg`, `.webp`, and `.gif`
+4. The icon name is derived from the filename (without extension) and case-insensitive
+
+For example, if you have a file named `MyApp.png` in your icons directory, it will match services with names like "myapp", "my-app", etc.
 
 ### Service Exclusion
 

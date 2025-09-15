@@ -112,6 +112,12 @@ var (
 	// Regex to reliably find Host and PathPrefix.
 	hostRegex = regexp.MustCompile(`Host\(\s*` + "`" + `([^` + "`" + `]+)` + "`" + `\s*\)`)
 	pathRegex = regexp.MustCompile(`PathPrefix\(\s*` + "`" + `([^` + "`" + `]+)` + "`" + `\s*\)`)
+	// User icons
+	userIcons    map[string]string // Map of icon names to file paths
+	userIconsMux sync.RWMutex
+	// Sorted user icon names for fuzzy matching
+	sortedUserIconNames    []string
+	sortedUserIconNamesMux sync.RWMutex
 )
 
 const selfhstCacheTTL = 1 * time.Hour
@@ -284,6 +290,8 @@ func processRouter(router TraefikRouter, entryPoints map[string]TraefikEntryPoin
 
 // findBestIconURL tries all icon-finding methods in order of priority.
 func findBestIconURL(routerName, serviceURL string) string {
+	routerNameReplaced := strings.ReplaceAll(routerName, " ", "-")
+
 	// Priority 1: Check user-defined overrides.
 	if iconValue := checkOverrides(routerName); iconValue != "" {
 		// Check if it's a full URL
@@ -306,20 +314,26 @@ func findBestIconURL(routerName, serviceURL string) string {
 		return url
 	}
 
-	// Priority 2: Fuzzy search against selfh.st icons
-	routerNameReplaced := strings.ReplaceAll(routerName, " ", "-")
+	// Priority 2: Check user icons
+	if iconPath := findUserIcon(routerNameReplaced); iconPath != "" {
+		// For user icons, we return the URL that can be served by the application
+		debugf("[%s] Found icon via user icons (fuzzy search): %s", routerNameReplaced, iconPath)
+		return iconPath
+	}
+
+	// Priority 3: Fuzzy search against selfh.st icons
 	if iconURL := findSelfHstIcon(routerNameReplaced); iconURL != "" {
 		debugf("[%s] Found icon via fuzzy search: %s", routerNameReplaced, iconURL)
 		return iconURL
 	}
 
-	// Priority 3: Check for /favicon.ico.
+	// Priority 4: Check for /favicon.ico.
 	if iconURL := findFavicon(serviceURL); iconURL != "" {
 		debugf("[%s] Found icon via /favicon.ico: %s", routerName, iconURL)
 		return iconURL
 	}
 
-	// Priority 4: Parse service's HTML for a <link> tag.
+	// Priority 5: Parse service's HTML for a <link> tag.
 	if iconURL := findHTMLIcon(serviceURL); iconURL != "" {
 		debugf("[%s] Found icon via HTML parsing: %s", routerName, iconURL)
 		return iconURL
@@ -434,6 +448,106 @@ func isValidImageURL(url string) bool {
 	defer resp.Body.Close()
 	contentType := resp.Header.Get("Content-Type")
 	return resp.StatusCode == http.StatusOK && strings.HasPrefix(contentType, "image/")
+}
+
+// scanUserIcons scans the user icon directory and builds a map of icon names to file paths
+func scanUserIcons() error {
+	userIconsMux.Lock()
+	defer userIconsMux.Unlock()
+
+	// Initialize the map
+	userIcons = make(map[string]string)
+
+	// Check if the directory exists
+	if _, err := os.Stat("/icons"); os.IsNotExist(err) {
+		debugf("User icons directory does not exist: %s", "/icons")
+		return nil
+	}
+
+	log.Println("Scanning user icons directory...")
+
+	// Walk the directory to find all image files
+	err := filepath.Walk("/icons", func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip directories
+		if info.IsDir() {
+			return nil
+		}
+
+		// Check if it's an image file
+		ext := strings.ToLower(filepath.Ext(path))
+		if ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".svg" || ext == ".webp" || ext == ".gif" {
+			// Get the base name without extension as the icon name
+			iconName := strings.ToLower(strings.TrimSuffix(info.Name(), ext))
+			userIcons[iconName] = path
+			debugf("Found user icon: %s -> %s", iconName, path)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// Sort the icons using a multi-level approach for the best fuzzy search results.
+	// 1. Primary sort: by length (shortest first). This prioritizes base names over variants
+	//    (e.g., "proxmox" over "proxmox-helper-scripts").
+	// 2. Secondary sort: alphabetically. This provides a stable order for names of the same length.
+	iconNames := make([]string, 0, len(userIcons))
+	for name := range userIcons {
+		iconNames = append(iconNames, name)
+	}
+	sort.Slice(iconNames, func(i, j int) bool {
+		lenI := len(iconNames[i])
+		lenJ := len(iconNames[j])
+		if lenI != lenJ {
+			return lenI < lenJ
+		}
+		return iconNames[i] < iconNames[j]
+	})
+
+	// Store the sorted icon names in our global variable for use in fuzzy matching
+	sortedUserIconNamesMux.Lock()
+	sortedUserIconNames = iconNames
+	sortedUserIconNamesMux.Unlock()
+
+	log.Printf("Successfully scanned user icons directory. Found %d icons.", len(userIcons))
+	return nil
+}
+
+// findUserIcon performs a fuzzy search against user icons
+func findUserIcon(routerName string) string {
+	userIconsMux.RLock()
+	defer userIconsMux.RUnlock()
+
+	// If no user icons are loaded, return empty
+	if len(userIcons) == 0 {
+		return ""
+	}
+
+	// Use precomputed sorted icon names for fuzzy matching
+	sortedUserIconNamesMux.RLock()
+	iconNames := sortedUserIconNames
+	sortedUserIconNamesMux.RUnlock()
+
+	// Perform fuzzy search
+	matches := fuzzy.FindFold(routerName, iconNames)
+	if len(matches) > 0 {
+		// Return the path of the best match
+		if path, ok := userIcons[matches[0]]; ok {
+			// Convert file path to URL that can be served by the application
+			// The path will be something like "/icons/myicon.png"
+			// We want to serve it from "/icons/myicon.png"
+			debugf("[%s] Found user icon via fuzzy search: %s -> %s", routerName, matches[0], path)
+			return path
+		}
+	}
+
+	return ""
 }
 
 // --- Caching & Utility ---
@@ -672,16 +786,24 @@ func loadConfiguration() {
 // --- Main Application Setup ---
 func main() {
 	loadConfiguration()
-	go getSelfHstIconNames() // Pre-warm the cache in the background.
 
 	const templatePath = "template"
 	loadHTMLTemplate(templatePath)
 
 	const staticPath = "static"
 
+	// Pre-warm the caches in the background
+	go getSelfHstIconNames() // Pre-warm the selfh.st icon cache
+	go func() {
+		if err := scanUserIcons(); err != nil {
+			log.Printf("Warning: Could not scan user icons directory: %v", err)
+		}
+	}() // Pre-warm the user icons cache
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/services", servicesHandler)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticPath))))
+	mux.Handle("/icons/", http.StripPrefix("/icons/", http.FileServer(http.Dir("/icons"))))
 	mux.HandleFunc("/", serveHTMLTemplate)
 
 	log.Println("Starting server on :8080...")
