@@ -25,12 +25,12 @@ import (
 
 // TraefikRouter represents the essential fields from the Traefik API response.
 type TraefikRouter struct {
-	Name     string           `json:"name"`
-	Rule     string           `json:"rule"`
-	Service  string           `json:"service"`
-	Priority int              `json:"priority"`
-	Using    []string         `json:"using"`         // Added to determine the entrypoint
-	TLS      *json.RawMessage `json:"tls,omitempty"` // Added to capture TLS configuration
+	Name        string           `json:"name"`
+	Rule        string           `json:"rule"`
+	Service     string           `json:"service"`
+	Priority    int              `json:"priority"`
+	EntryPoints []string         `json:"entryPoints"`   // Added to determine the entrypoint
+	TLS         *json.RawMessage `json:"tls,omitempty"` // Added to capture TLS configuration
 }
 
 // TraefikEntryPoint represents the essential fields from the Traefik Entrypoints API.
@@ -653,11 +653,11 @@ func reconstructURL(router TraefikRouter, entryPoints map[string]TraefikEntryPoi
 	path = strings.TrimSuffix(path, "/")
 
 	// Determine protocol and port via the entrypoint.
-	if len(router.Using) == 0 {
-		debugf("[%s] Router has no 'using' entrypoints defined. Cannot determine URL.", router.Name)
+	if len(router.EntryPoints) == 0 {
+		debugf("[%s] Router has no entrypoints defined. Cannot determine URL.", router.Name)
 		return ""
 	}
-	entryPointName := router.Using[0] // Use the first specified entrypoint
+	entryPointName := router.EntryPoints[0] // Use the first specified entrypoint
 	entryPoint, ok := entryPoints[entryPointName]
 	if !ok {
 		debugf("[%s] Entrypoint '%s' not found in Traefik configuration.", router.Name, entryPointName)
