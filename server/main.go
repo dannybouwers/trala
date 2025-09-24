@@ -21,6 +21,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Version information set at build time
+var (
+	version   string
+	commit    string
+	buildTime string
+)
+
 // --- Structs ---
 
 // TraefikRouter represents the essential fields from the Traefik API response.
@@ -48,6 +55,13 @@ type Service struct {
 	URL        string `json:"url"`
 	Priority   int    `json:"priority"`
 	Icon       string `json:"icon"`
+}
+
+// VersionInfo represents the application version information
+type VersionInfo struct {
+	Version   string `json:"version"`
+	Commit    string `json:"commit"`
+	BuildTime string `json:"buildTime"`
 }
 
 type TraefikConfig struct {
@@ -243,6 +257,18 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(finalServices)
+}
+
+// versionHandler returns the application version information
+func versionHandler(w http.ResponseWriter, r *http.Request) {
+	versionInfo := VersionInfo{
+		Version:   version,
+		Commit:    commit,
+		BuildTime: buildTime,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(versionInfo)
 }
 
 // --- Data Processing & Icon Finding ---
@@ -802,6 +828,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/services", servicesHandler)
+	mux.HandleFunc("/api/version", versionHandler)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticPath))))
 	mux.Handle("/icons/", http.StripPrefix("/icons/", http.FileServer(http.Dir("/icons"))))
 	mux.HandleFunc("/", serveHTMLTemplate)

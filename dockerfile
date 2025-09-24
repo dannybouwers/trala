@@ -4,6 +4,11 @@ FROM golang:1.25-alpine AS builder
 # Install build essentials for static compilation
 RUN apk add --no-cache build-base
 
+# Accept version as build argument
+ARG VERSION=dev
+ARG COMMIT=unknown
+ARG BUILD_TIME=unknown
+
 WORKDIR /app
 
 # Copy Go module files and download dependencies
@@ -13,8 +18,8 @@ RUN go mod download
 # Copy the source code
 COPY server/main.go .
 
-# Build the application as a statically linked binary.
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /server .
+# Build the application as a statically linked binary with version info
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildTime=${BUILD_TIME}" -o /server .
 
 
 ### STAGE 2: Production ###
