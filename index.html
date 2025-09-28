@@ -69,8 +69,9 @@
 
     <script type="module">
         const API_URL = '/api/services';
-        const SEARCH_ENGINE_URL = '%%SEARCH_ENGINE_URL%%';
-        const REFRESH_INTERVAL_SECONDS = parseInt('%%REFRESH_INTERVAL_SECONDS%%', 10);
+        // Defaults. These will be overridden by frontend config fetch
+        let SEARCH_ENGINE_URL = 'https://www.google.com/search?q=';
+        let REFRESH_INTERVAL_SECONDS = 30;
 
         const serviceGrid = document.getElementById('service-grid');
         const searchInput = document.getElementById('search-input');
@@ -249,7 +250,24 @@
                 }
             };
 
+            // Fetch frontend configuration
+            const fetchFrontendConfig = async () => {
+                try {
+                    const response = await fetch('/api/frontend-config');
+                    if (response.ok) {
+                        const config = await response.json();
+                        SEARCH_ENGINE_URL = config.searchEngineURL;
+                        REFRESH_INTERVAL_SECONDS = config.refreshIntervalSeconds;
+                    }
+                } catch (error) {
+                    console.error('Error fetching frontend config:', error);
+                }
+            };
+
             const startApp = async () => {
+                // Fetch frontend configuration first
+                await fetchFrontendConfig();
+                
                 updateGreeting();
                 updateClock();
                 setInterval(updateClock, 6000);
