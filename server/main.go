@@ -96,6 +96,12 @@ type TralaConfiguration struct {
 	Services    ServiceConfiguration     `yaml:"services"`
 }
 
+// FrontendConfig represents the configuration data sent to the frontend
+type FrontendConfig struct {
+	SearchEngineURL        string `json:"searchEngineURL"`
+	RefreshIntervalSeconds int    `json:"refreshIntervalSeconds"`
+}
+
 // SelfHstIcon represents an entry in the selfh.st icons index.json.
 type SelfHstIcon struct {
 	Name      string `json:"Name"`
@@ -166,13 +172,8 @@ func loadHTMLTemplate(templatePath string) {
 
 // serveHTMLTemplate serves the static index.html file, injecting environment variables.
 func serveHTMLTemplate(w http.ResponseWriter, r *http.Request) {
-	replacer := strings.NewReplacer(
-		"%%SEARCH_ENGINE_URL%%", configuration.Environment.SearchEngineURL,
-		"%%REFRESH_INTERVAL_SECONDS%%", strconv.Itoa(configuration.Environment.RefreshIntervalSeconds),
-	)
-	replacedHTML := replacer.Replace(string(htmlTemplate))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(replacedHTML))
+	w.Write(htmlTemplate)
 }
 
 // servicesHandler is the main API endpoint. It fetches, processes, and returns all service data.
@@ -274,6 +275,19 @@ func versionHandler(w http.ResponseWriter, r *http.Request) {
 func IsValidUrl(str string) bool {
 	u, err := url.Parse(str)
 	return err == nil && u.Scheme != "" && u.Host != ""
+}
+
+// frontendConfigHandler returns the frontend configuration as JSON
+func frontendConfigHandler(w http.ResponseWriter, r *http.Request) {
+	configurationMux.RLock()
+	frontendConfig := FrontendConfig{
+		SearchEngineURL:        configuration.Environment.SearchEngineURL,
+		RefreshIntervalSeconds: configuration.Environment.RefreshIntervalSeconds,
+	}
+	configurationMux.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(frontendConfig)
 }
 
 // healthHandler performs health checks and returns the status
@@ -893,6 +907,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/services", servicesHandler)
 	mux.HandleFunc("/api/version", versionHandler)
+	mux.HandleFunc("/api/frontend-config", frontendConfigHandler)
 	mux.HandleFunc("/api/health", healthHandler)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticPath))))
 	mux.Handle("/icons/", http.StripPrefix("/icons/", http.FileServer(http.Dir("/icons"))))
