@@ -271,6 +271,70 @@ func versionHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(versionInfo)
 }
 
+func IsValidUrl(str string) bool {
+	u, err := url.Parse(str)
+	return err == nil && u.Scheme != "" && u.Host != ""
+}
+
+// healthHandler performs health checks and returns the status
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+
+	// Check if the most important configuration (Traefik API host) is valid
+	configurationMux.RLock()
+	traefikAPIHost := configuration.Environment.Traefik.APIHost
+	searchEngineURL := configuration.Environment.SearchEngineURL
+	selfhstIconURL := configuration.Environment.SelfhstIconURL
+	configurationMux.RUnlock()
+
+	if traefikAPIHost == "" {
+		http.Error(w, "Traefik API host is not set", http.StatusInternalServerError)
+		return
+	}
+
+	// Validate SearchEngineURL
+	if !IsValidUrl(searchEngineURL) {
+		http.Error(w, "Search Engine URL is invalid", http.StatusInternalServerError)
+		return
+	}
+
+	// Validate SelfhstIconURL
+	if !IsValidUrl(selfhstIconURL) {
+		http.Error(w, "Selfhst Icon URL is invalid", http.StatusInternalServerError)
+		return
+	}
+
+	// Check if Traefik is reachable
+	entryPointsURL := fmt.Sprintf("%s/api/entrypoints", traefikAPIHost)
+
+	// Create a context with timeout for the health check
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Create a request with context
+	req, err := http.NewRequestWithContext(ctx, "GET", entryPointsURL, nil)
+	if err != nil {
+		http.Error(w, "Traefik: Error creating request", http.StatusInternalServerError)
+		return
+	}
+
+	// Make the request
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		http.Error(w, "Traefik: Connection error", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		http.Error(w, "Traefik: Response "+http.StatusText(resp.StatusCode), http.StatusInternalServerError)
+		return
+	}
+
+	// If we reach here, all checks passed
+	fmt.Fprint(w, "OK")
+}
+
 // --- Data Processing & Icon Finding ---
 
 // processRouter takes a raw Traefik router, finds its best icon, and sends the final Service object to a channel.
@@ -829,6 +893,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/services", servicesHandler)
 	mux.HandleFunc("/api/version", versionHandler)
+	mux.HandleFunc("/api/health", healthHandler)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticPath))))
 	mux.Handle("/icons/", http.StripPrefix("/icons/", http.FileServer(http.Dir("/icons"))))
 	mux.HandleFunc("/", serveHTMLTemplate)

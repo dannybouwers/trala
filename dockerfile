@@ -47,5 +47,12 @@ VOLUME /config
 # Create a directory for optional user-provided icons
 VOLUME /icons
 
+# Install curl for healthcheck
+RUN apk add --no-cache curl
+
+# Add healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:8080/api/health || exit 1
+
 # The command to run the application.
 CMD ["/app/server"]
