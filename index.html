@@ -22,6 +22,7 @@
         #service-grid > a { transition: opacity 0.3s ease, transform 0.3s ease; }
         .sort-btn { transition: background-color 0.2s, color 0.2s; }
         .sort-btn.active { background-color: #3b82f6; color: white; }
+        .search-icon-greyscale { filter: grayscale(100%); }
     </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 antialiased">
@@ -42,7 +43,15 @@
         </header>
         <div class="mb-4">
             <form id="search-form" class="flex-grow">
-                <input type="search" id="search-input" placeholder="Search by name or URL..." class="w-full p-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition">
+                <div class="relative">
+                    <input type="search" id="search-input" placeholder="Filter services or search the web..." class="w-full p-3 pr-12 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition">
+                    <button type="submit" id="search-button" class="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 rounded-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                        <img id="search-icon" src="" alt="Search" class="w-5 h-5 opacity-70" style="display: none;">
+                        <svg id="search-icon-fallback" class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                    </button>
+                </div>
             </form>
         </div>
         <div id="sort-controls" class="flex justify-center gap-2 mb-8">
@@ -71,12 +80,16 @@
         const API_URL = '/api/services';
         // Defaults. These will be overridden by frontend config fetch
         let SEARCH_ENGINE_URL = 'https://www.google.com/search?q=';
+        let SEARCH_ENGINE_ICON_URL = '';
         let REFRESH_INTERVAL_SECONDS = 30;
 
         const serviceGrid = document.getElementById('service-grid');
         const searchInput = document.getElementById('search-input');
         const sortControls = document.getElementById('sort-controls');
         const searchForm = document.getElementById('search-form');
+        const searchButton = document.getElementById('search-button');
+        const searchIcon = document.getElementById('search-icon');
+        const searchIconFallback = document.getElementById('search-icon-fallback');
         const apiLoadingBar = document.getElementById('api-loading-bar');
         const refreshProgressBar = document.getElementById('refresh-progress-bar');
         const errorPage = document.getElementById('error-page');
@@ -257,7 +270,22 @@
                     if (response.ok) {
                         const config = await response.json();
                         SEARCH_ENGINE_URL = config.searchEngineURL;
+                        SEARCH_ENGINE_ICON_URL = config.searchEngineIconURL || '';
                         REFRESH_INTERVAL_SECONDS = config.refreshIntervalSeconds;
+                        
+                        // Update search icon if available
+                        if (SEARCH_ENGINE_ICON_URL) {
+                            searchIcon.src = SEARCH_ENGINE_ICON_URL;
+                            searchIcon.className = 'w-5 h-5 opacity-70 search-icon-greyscale';
+                            searchIcon.style.display = 'block';
+                            searchIconFallback.style.display = 'none';
+                            
+                            // Handle icon load error
+                            searchIcon.onerror = () => {
+                                searchIcon.style.display = 'none';
+                                searchIconFallback.style.display = 'block';
+                            };
+                        }
                     }
                 } catch (error) {
                     console.error('Error fetching frontend config:', error);
