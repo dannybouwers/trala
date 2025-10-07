@@ -21,16 +21,23 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Version information set at build time
+var (
+	version   string
+	commit    string
+	buildTime string
+)
+
 // --- Structs ---
 
 // TraefikRouter represents the essential fields from the Traefik API response.
 type TraefikRouter struct {
-	Name     string           `json:"name"`
-	Rule     string           `json:"rule"`
-	Service  string           `json:"service"`
-	Priority int              `json:"priority"`
-	Using    []string         `json:"using"`         // Added to determine the entrypoint
-	TLS      *json.RawMessage `json:"tls,omitempty"` // Added to capture TLS configuration
+	Name        string           `json:"name"`
+	Rule        string           `json:"rule"`
+	Service     string           `json:"service"`
+	Priority    int              `json:"priority"`
+	EntryPoints []string         `json:"entryPoints"`   // Added to determine the entrypoint
+	TLS         *json.RawMessage `json:"tls,omitempty"` // Added to capture TLS configuration
 }
 
 // TraefikEntryPoint represents the essential fields from the Traefik Entrypoints API.
@@ -48,6 +55,13 @@ type Service struct {
 	URL        string `json:"url"`
 	Priority   int    `json:"priority"`
 	Icon       string `json:"icon"`
+}
+
+// VersionInfo represents the application version information
+type VersionInfo struct {
+	Version   string `json:"version"`
+	Commit    string `json:"commit"`
+	BuildTime string `json:"buildTime"`
 }
 
 type TraefikConfig struct {
@@ -80,6 +94,12 @@ type TralaConfiguration struct {
 	Environment EnvironmentConfiguration `yaml:"environment"`
 	Icons       IconConfiguration        `yaml:"icons"`
 	Services    ServiceConfiguration     `yaml:"services"`
+}
+
+// FrontendConfig represents the configuration data sent to the frontend
+type FrontendConfig struct {
+	SearchEngineURL        string `json:"searchEngineURL"`
+	RefreshIntervalSeconds int    `json:"refreshIntervalSeconds"`
 }
 
 // SelfHstIcon represents an entry in the selfh.st icons index.json.
@@ -152,13 +172,8 @@ func loadHTMLTemplate(templatePath string) {
 
 // serveHTMLTemplate serves the static index.html file, injecting environment variables.
 func serveHTMLTemplate(w http.ResponseWriter, r *http.Request) {
-	replacer := strings.NewReplacer(
-		"%%SEARCH_ENGINE_URL%%", configuration.Environment.SearchEngineURL,
-		"%%REFRESH_INTERVAL_SECONDS%%", strconv.Itoa(configuration.Environment.RefreshIntervalSeconds),
-	)
-	replacedHTML := replacer.Replace(string(htmlTemplate))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(replacedHTML))
+	w.Write(htmlTemplate)
 }
 
 // servicesHandler is the main API endpoint. It fetches, processes, and returns all service data.
@@ -243,6 +258,95 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(finalServices)
+}
+
+// versionHandler returns the application version information
+func versionHandler(w http.ResponseWriter, r *http.Request) {
+	versionInfo := VersionInfo{
+		Version:   version,
+		Commit:    commit,
+		BuildTime: buildTime,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(versionInfo)
+}
+
+func IsValidUrl(str string) bool {
+	u, err := url.Parse(str)
+	return err == nil && u.Scheme != "" && u.Host != ""
+}
+
+// frontendConfigHandler returns the frontend configuration as JSON
+func frontendConfigHandler(w http.ResponseWriter, r *http.Request) {
+	configurationMux.RLock()
+	frontendConfig := FrontendConfig{
+		SearchEngineURL:        configuration.Environment.SearchEngineURL,
+		RefreshIntervalSeconds: configuration.Environment.RefreshIntervalSeconds,
+	}
+	configurationMux.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(frontendConfig)
+}
+
+// healthHandler performs health checks and returns the status
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+
+	// Check if the most important configuration (Traefik API host) is valid
+	configurationMux.RLock()
+	traefikAPIHost := configuration.Environment.Traefik.APIHost
+	searchEngineURL := configuration.Environment.SearchEngineURL
+	selfhstIconURL := configuration.Environment.SelfhstIconURL
+	configurationMux.RUnlock()
+
+	if traefikAPIHost == "" {
+		http.Error(w, "Traefik API host is not set", http.StatusInternalServerError)
+		return
+	}
+
+	// Validate SearchEngineURL
+	if !IsValidUrl(searchEngineURL) {
+		http.Error(w, "Search Engine URL is invalid", http.StatusInternalServerError)
+		return
+	}
+
+	// Validate SelfhstIconURL
+	if !IsValidUrl(selfhstIconURL) {
+		http.Error(w, "Selfhst Icon URL is invalid", http.StatusInternalServerError)
+		return
+	}
+
+	// Check if Traefik is reachable
+	entryPointsURL := fmt.Sprintf("%s/api/entrypoints", traefikAPIHost)
+
+	// Create a context with timeout for the health check
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Create a request with context
+	req, err := http.NewRequestWithContext(ctx, "GET", entryPointsURL, nil)
+	if err != nil {
+		http.Error(w, "Traefik: Error creating request", http.StatusInternalServerError)
+		return
+	}
+
+	// Make the request
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		http.Error(w, "Traefik: Connection error", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		http.Error(w, "Traefik: Response "+http.StatusText(resp.StatusCode), http.StatusInternalServerError)
+		return
+	}
+
+	// If we reach here, all checks passed
+	fmt.Fprint(w, "OK")
 }
 
 // --- Data Processing & Icon Finding ---
@@ -653,11 +757,11 @@ func reconstructURL(router TraefikRouter, entryPoints map[string]TraefikEntryPoi
 	path = strings.TrimSuffix(path, "/")
 
 	// Determine protocol and port via the entrypoint.
-	if len(router.Using) == 0 {
-		debugf("[%s] Router has no 'using' entrypoints defined. Cannot determine URL.", router.Name)
+	if len(router.EntryPoints) == 0 {
+		debugf("[%s] Router has no entrypoints defined. Cannot determine URL.", router.Name)
 		return ""
 	}
-	entryPointName := router.Using[0] // Use the first specified entrypoint
+	entryPointName := router.EntryPoints[0] // Use the first specified entrypoint
 	entryPoint, ok := entryPoints[entryPointName]
 	if !ok {
 		debugf("[%s] Entrypoint '%s' not found in Traefik configuration.", router.Name, entryPointName)
@@ -802,6 +906,9 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/services", servicesHandler)
+	mux.HandleFunc("/api/version", versionHandler)
+	mux.HandleFunc("/api/frontend-config", frontendConfigHandler)
+	mux.HandleFunc("/api/health", healthHandler)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticPath))))
 	mux.Handle("/icons/", http.StripPrefix("/icons/", http.FileServer(http.Dir("/icons"))))
 	mux.HandleFunc("/", serveHTMLTemplate)
