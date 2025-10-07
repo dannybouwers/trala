@@ -99,6 +99,7 @@ type TralaConfiguration struct {
 // FrontendConfig represents the configuration data sent to the frontend
 type FrontendConfig struct {
 	SearchEngineURL        string `json:"searchEngineURL"`
+	SearchEngineIconURL    string `json:"searchEngineIconURL"`
 	RefreshIntervalSeconds int    `json:"refreshIntervalSeconds"`
 }
 
@@ -280,11 +281,24 @@ func IsValidUrl(str string) bool {
 // frontendConfigHandler returns the frontend configuration as JSON
 func frontendConfigHandler(w http.ResponseWriter, r *http.Request) {
 	configurationMux.RLock()
-	frontendConfig := FrontendConfig{
-		SearchEngineURL:        configuration.Environment.SearchEngineURL,
-		RefreshIntervalSeconds: configuration.Environment.RefreshIntervalSeconds,
-	}
+	searchEngineURL := configuration.Environment.SearchEngineURL
+	refreshIntervalSeconds := configuration.Environment.RefreshIntervalSeconds
 	configurationMux.RUnlock()
+
+	// Extract service name from search engine URL and find its icon
+	searchEngineIconURL := ""
+	if searchEngineURL != "" {
+		serviceName := extractServiceNameFromURL(searchEngineURL)
+		if serviceName != "" {
+			searchEngineIconURL = findBestIconURL(serviceName, searchEngineURL)
+		}
+	}
+
+	frontendConfig := FrontendConfig{
+		SearchEngineURL:        searchEngineURL,
+		SearchEngineIconURL:    searchEngineIconURL,
+		RefreshIntervalSeconds: refreshIntervalSeconds,
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(frontendConfig)
@@ -792,6 +806,32 @@ func resolveURL(baseURL string, path string) (string, error) {
 		return "", err
 	}
 	return base.ResolveReference(ref).String(), nil
+}
+
+// extractServiceNameFromURL extracts the service name from a search engine URL
+func extractServiceNameFromURL(searchURL string) string {
+	parsedURL, err := url.Parse(searchURL)
+	if err != nil {
+		return ""
+	}
+
+	hostname := parsedURL.Hostname()
+	if hostname == "" {
+		return ""
+	}
+
+	// Remove common TLDs and extract the main domain name
+	parts := strings.Split(hostname, ".")
+	if len(parts) < 2 {
+		return hostname
+	}
+
+	// Use the second-level domain (e.g., "example" from "www.example.com")
+	if len(parts) >= 2 {
+		return parts[len(parts)-2]
+	}
+
+	return hostname
 }
 
 func loadConfiguration() {

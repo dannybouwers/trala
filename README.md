@@ -119,6 +119,12 @@ icons:
     - service: "portainer"
       icon: "portainer"
 
+    # Override for search engine icon
+    - service: "searxng-domain"
+      icon: "searxng.svg"
+    - service: "duckduckgo"
+      icon: "https://example.com/ddg-icon.png"
+
 # Service configuration
 services:
   # Services to exclude from the dashboard
@@ -170,6 +176,14 @@ For ultimate customization, you can mount a directory containing your own icons 
 4. The icon name is derived from the filename (without extension) and case-insensitive
 
 For example, if you have a file named `MyApp.png` in your icons directory, it will match services with names like "myapp", "my-app", etc.
+
+### Search Engine Icon
+
+The search bar displays a greyscale icon of your configured search engine. The icon is determined using the exact same logic as Traefik services, including support for icon overrides and custom icons.
+
+**How it works:**
+- The search engine is treated as a service using the second-level domain of the search URL. For example: `duckduckgo` from `https://duckduckgo.com/?q=` or `google` from `https://www.google.com/search?q=`
+- Icon overrides work the same way - you can override the search engine icon using the service name (e.g., `google`, `duckduckgo`)
 
 ### Service Exclusion
 
