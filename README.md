@@ -7,6 +7,7 @@ A simple, modern, and dynamic dashboard for your Traefik services. This applicat
 ## ✨ Features
 
 - **Auto-Discovery:** Automatically fetches and displays all HTTP routers from your Traefik instance.
+- **Manual Services:** Add custom services to your dashboard that aren't managed by Traefik (e.g., Reddit, GitHub, external websites).
 - **Advanced Icon Fetching:** Intelligently finds the best icon for each service using a robust, prioritized strategy.
 - **Icon Overrides:** Manually map router names to specific icons for perfect results every time.
 - **Custom Icon Directory:** Mount your own icon directory at `/icons` for ultimate customization with fuzzy matching.
@@ -134,6 +135,28 @@ services:
       icon: "searxng.svg"
     - service: "duckduckgo"
       icon: "https://example.com/ddg-icon.png"
+  
+  # Manually added services (not from Traefik)
+  manual:
+    # Basic manual service with just name and URL
+    - name: "Reddit"
+      url: "https://www.reddit.com"
+    
+    # Manual service with custom icon
+    - name: "GitHub"
+      url: "https://github.com"
+      icon: "github.svg"
+    
+    # Manual service with icon and priority
+    - name: "The Verge"
+      url: "https://www.theverge.com"
+      icon: "https://www.theverge.com/favicon.ico"
+      priority: 100
+    
+    # Manual service with just name, URL, and priority (icon will be auto-detected)
+    - name: "Hacker News"
+      url: "https://news.ycombinator.com"
+      priority: 90
 ```
 
 Supported environment variables are shown below.
@@ -203,6 +226,26 @@ The search bar displays a greyscale icon of your configured search engine. The i
 **How it works:**
 - The search engine is treated as a service using the second-level domain of the search URL. For example: `duckduckgo` from `https://duckduckgo.com/?q=` or `google` from `https://www.google.com/search?q=`
 - Icon overrides work the same way - you can override the search engine icon using the service name (e.g., `google`, `duckduckgo`)
+
+### Manual Services
+
+Sometimes you want to add services to your dashboard that aren't managed by Traefik - like external websites, cloud services, or resources hosted elsewhere. TraLa allows you to manually add these services through the configuration file.
+
+#### How It Works
+
+Manual services are defined in the `manual` section of your `configuration.yml` file. These services:
+
+1. Are merged with Traefik-discovered services and displayed together
+2. Use the same icon detection logic as Traefik services
+3. Support all icon options (auto-detection, custom icons, etc.)
+
+#### Configuration Options
+
+Each manual service can include:
+- `name`: The display name (required)
+- `url`: The URL of the service (required)
+- `icon`: Custom icon (optional - full URL or filename from selfh.st)
+- `priority`: Priority for sorting (optional - higher numbers appear first, default: 50)
 
 ---
 

@@ -75,9 +75,17 @@ type ServiceOverride struct {
 	Icon        string `yaml:"icon,omitempty"`
 }
 
+type ManualService struct {
+	Name     string `yaml:"name"`
+	URL      string `yaml:"url"`
+	Icon     string `yaml:"icon,omitempty"`
+	Priority int    `yaml:"priority,omitempty"`
+}
+
 type ServiceConfiguration struct {
 	Exclude   []string          `yaml:"exclude"`
 	Overrides []ServiceOverride `yaml:"overrides"`
+	Manual    []ManualService   `yaml:"manual"`
 }
 
 type EnvironmentConfiguration struct {
@@ -249,11 +257,22 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 	wg.Wait()
 	close(serviceChan)
 
-	// 5. Collect results and send as JSON.
-	finalServices := make([]Service, 0, len(routers))
+	// 5. Collect results from Traefik services.
+	traefikServices := make([]Service, 0, len(routers))
 	for service := range serviceChan {
-		finalServices = append(finalServices, service)
+		traefikServices = append(traefikServices, service)
 	}
+
+	// 6. Add manual services
+	manualServices := getManualServices()
+
+	// 7. Merge and sort all services by priority
+	finalServices := append(traefikServices, manualServices...)
+
+	// Sort by priority (higher priority first)
+	sort.Slice(finalServices, func(i, j int) bool {
+		return finalServices[i].Priority > finalServices[j].Priority
+	})
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(finalServices)
@@ -850,6 +869,61 @@ func extractServiceNameFromURL(searchURL string) string {
 	return hostname
 }
 
+// getManualServices processes manually configured services and returns them as Service objects
+func getManualServices() []Service {
+	configurationMux.RLock()
+	defer configurationMux.RUnlock()
+
+	manualServices := make([]Service, 0, len(configuration.Services.Manual))
+
+	for _, manualService := range configuration.Services.Manual {
+		// Validate URL
+		if !IsValidUrl(manualService.URL) {
+			log.Printf("Warning: Invalid URL for manual service '%s': %s", manualService.Name, manualService.URL)
+			continue
+		}
+
+		// Find icon using the same logic as for Traefik services
+		iconURL := manualService.Icon
+		if iconURL == "" {
+			// If no icon is specified, try to find one automatically
+			iconURL = findBestIconURL(manualService.Name, manualService.URL)
+		} else {
+			// If icon is specified, check if it's a full URL or just a filename
+			if !strings.HasPrefix(iconURL, "http://") && !strings.HasPrefix(iconURL, "https://") {
+				// Check if it's a filename with valid extension
+				ext := filepath.Ext(iconURL)
+				if ext == ".png" || ext == ".svg" || ext == ".webp" {
+					iconURL = configuration.Environment.SelfhstIconURL + strings.TrimPrefix(ext, ".") + "/" + strings.ToLower(iconURL)
+				} else {
+					// Fallback to default behavior if extension is not valid
+					iconURL = configuration.Environment.SelfhstIconURL + "png/" + iconURL
+				}
+			}
+		}
+
+		// Default priority if not specified
+		priority := manualService.Priority
+		if priority == 0 {
+			priority = 50 // Default priority for manual services
+		}
+
+		service := Service{
+			RouterName:  manualService.Name,
+			DisplayName: manualService.Name,
+			URL:         manualService.URL,
+			Priority:    priority,
+			Icon:        iconURL,
+		}
+
+		manualServices = append(manualServices, service)
+		debugf("Added manual service: %s (URL: %s, Icon: %s, Priority: %d)",
+			manualService.Name, manualService.URL, iconURL, priority)
+	}
+
+	return manualServices
+}
+
 func loadConfiguration() {
 	configurationMux.Lock()
 	defer configurationMux.Unlock()
@@ -869,6 +943,7 @@ func loadConfiguration() {
 		Services: ServiceConfiguration{
 			Exclude:   make([]string, 0),
 			Overrides: make([]ServiceOverride, 0),
+			Manual:    make([]ManualService, 0),
 		},
 	}
 
