@@ -119,6 +119,13 @@ type FrontendConfig struct {
 	RefreshIntervalSeconds int    `json:"refreshIntervalSeconds"`
 }
 
+// ApplicationStatus represents the combined status information for the application
+type ApplicationStatus struct {
+	Version  VersionInfo    `json:"version"`
+	Config   ConfigStatus   `json:"config"`
+	Frontend FrontendConfig `json:"frontend"`
+}
+
 // SelfHstIcon represents an entry in the selfh.st icons index.json.
 type SelfHstIcon struct {
 	Name      string `json:"Name"`
@@ -291,47 +298,9 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(finalServices)
 }
 
-// versionHandler returns the application version information
-func versionHandler(w http.ResponseWriter, r *http.Request) {
-	versionInfo := VersionInfo{
-		Version:   version,
-		Commit:    commit,
-		BuildTime: buildTime,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(versionInfo)
-}
-
 func IsValidUrl(str string) bool {
 	u, err := url.Parse(str)
 	return err == nil && u.Scheme != "" && u.Host != ""
-}
-
-// frontendConfigHandler returns the frontend configuration as JSON
-func frontendConfigHandler(w http.ResponseWriter, r *http.Request) {
-	configurationMux.RLock()
-	searchEngineURL := configuration.Environment.SearchEngineURL
-	refreshIntervalSeconds := configuration.Environment.RefreshIntervalSeconds
-	configurationMux.RUnlock()
-
-	// Extract service name from search engine URL and find its icon
-	searchEngineIconURL := ""
-	if searchEngineURL != "" {
-		serviceName := extractServiceNameFromURL(searchEngineURL)
-		if serviceName != "" {
-			searchEngineIconURL = findBestIconURL(serviceName, searchEngineURL)
-		}
-	}
-
-	frontendConfig := FrontendConfig{
-		SearchEngineURL:        searchEngineURL,
-		SearchEngineIconURL:    searchEngineIconURL,
-		RefreshIntervalSeconds: refreshIntervalSeconds,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(frontendConfig)
 }
 
 // healthHandler performs health checks and returns the status
@@ -393,13 +362,49 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "OK")
 }
 
-// configStatusHandler returns the configuration compatibility status
-func configStatusHandler(w http.ResponseWriter, r *http.Request) {
+// statusHandler returns combined application status information
+func statusHandler(w http.ResponseWriter, r *http.Request) {
 	configurationMux.RLock()
 	defer configurationMux.RUnlock()
 
+	// Get version information
+	versionInfo := VersionInfo{
+		Version:   version,
+		Commit:    commit,
+		BuildTime: buildTime,
+	}
+
+	// Get configuration status (already stored in global variable)
+	configStatus := configCompatibilityStatus
+
+	// Get frontend configuration
+	searchEngineURL := configuration.Environment.SearchEngineURL
+	refreshIntervalSeconds := configuration.Environment.RefreshIntervalSeconds
+
+	// Extract service name from search engine URL and find its icon
+	searchEngineIconURL := ""
+	if searchEngineURL != "" {
+		serviceName := extractServiceNameFromURL(searchEngineURL)
+		if serviceName != "" {
+			searchEngineIconURL = findBestIconURL(serviceName, searchEngineURL)
+		}
+	}
+
+	frontendConfig := FrontendConfig{
+		SearchEngineURL:        searchEngineURL,
+		SearchEngineIconURL:    searchEngineIconURL,
+		RefreshIntervalSeconds: refreshIntervalSeconds,
+	}
+
+	// Combine all status information
+	status := ApplicationStatus{
+		Version:  versionInfo,
+		Config:   configStatus,
+		Frontend: frontendConfig,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(configCompatibilityStatus)
+	json.NewEncoder(w).Encode(status)
 }
 
 // --- Data Processing & Icon Finding ---
@@ -1117,10 +1122,8 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/services", servicesHandler)
-	mux.HandleFunc("/api/version", versionHandler)
-	mux.HandleFunc("/api/frontend-config", frontendConfigHandler)
+	mux.HandleFunc("/api/status", statusHandler)
 	mux.HandleFunc("/api/health", healthHandler)
-	mux.HandleFunc("/api/config-status", configStatusHandler)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticPath))))
 	mux.Handle("/icons/", http.StripPrefix("/icons/", http.FileServer(http.Dir("/icons"))))
 	mux.HandleFunc("/", serveHTMLTemplate)

@@ -246,56 +246,36 @@
             
             searchForm.addEventListener('submit', (e) => { e.preventDefault(); if (searchInput.value) { window.open(`${SEARCH_ENGINE_URL}${encodeURIComponent(searchInput.value)}`, '_blank'); } });
 
-            // Fetch and display version information
-            const fetchVersion = async () => {
+            // Fetch all application status information in a single call
+            const fetchApplicationStatus = async () => {
                 try {
-                    const response = await fetch('/api/version');
-                    if (response.ok) {
-                        const versionInfo = await response.json();
-                        const versionElement = document.getElementById('version-number');
-                        const versionLink = document.getElementById('version-link');
-                        if (versionElement && versionLink) {
-                            const version = versionInfo.version || 'unknown';
-                            versionElement.textContent = version;
-                            versionLink.href = `https://github.com/dannybouwers/trala/releases/tag/${version}`;
-                        }
+                    const response = await fetch('/api/status');
+                    if (!response.ok) {
+                        throw new Error(`Status request failed: ${response.status}`);
                     }
-                } catch (error) {
-                    console.error('Error fetching version:', error);
+                    
+                    const status = await response.json();
+                    
+                    // Update version information
                     const versionElement = document.getElementById('version-number');
                     const versionLink = document.getElementById('version-link');
-                    if (versionElement && versionLink) {
-                        versionElement.textContent = 'dev';
-                        versionLink.href = 'https://github.com/dannybouwers/trala/releases';
+                    if (versionElement && versionLink && status.version) {
+                        const version = status.version.version || 'unknown';
+                        versionElement.textContent = version;
+                        versionLink.href = `https://github.com/dannybouwers/trala/releases/tag/${version}`;
                     }
-                }
-            };
-
-            // Fetch configuration status
-            const fetchConfigStatus = async () => {
-                try {
-                    const response = await fetch('/api/config-status');
-                    if (response.ok) {
-                        const configStatus = await response.json();
-                        if (!configStatus.isCompatible && configWarning) {
-                            configWarning.style.display = 'inline';
-                            configWarning.title = configStatus.warningMessage || 'Configuration version mismatch detected';
-                        }
+                    
+                    // Update configuration status warning
+                    if (status.config && !status.config.isCompatible && configWarning) {
+                        configWarning.style.display = 'inline';
+                        configWarning.title = status.config.warningMessage || 'Configuration version mismatch detected';
                     }
-                } catch (error) {
-                    console.error('Error fetching config status:', error);
-                }
-            };
-
-            // Fetch frontend configuration
-            const fetchFrontendConfig = async () => {
-                try {
-                    const response = await fetch('/api/frontend-config');
-                    if (response.ok) {
-                        const config = await response.json();
-                        SEARCH_ENGINE_URL = config.searchEngineURL;
-                        SEARCH_ENGINE_ICON_URL = config.searchEngineIconURL || '';
-                        REFRESH_INTERVAL_SECONDS = config.refreshIntervalSeconds;
+                    
+                    // Update frontend configuration
+                    if (status.frontend) {
+                        SEARCH_ENGINE_URL = status.frontend.searchEngineURL || SEARCH_ENGINE_URL;
+                        SEARCH_ENGINE_ICON_URL = status.frontend.searchEngineIconURL || '';
+                        REFRESH_INTERVAL_SECONDS = status.frontend.refreshIntervalSeconds || REFRESH_INTERVAL_SECONDS;
                         
                         // Update search icon if available
                         if (SEARCH_ENGINE_ICON_URL) {
@@ -311,24 +291,30 @@
                             };
                         }
                     }
+                    
+                    return status;
                 } catch (error) {
-                    console.error('Error fetching frontend config:', error);
+                    console.error('Error fetching application status:', error);
+                    
+                    // Set fallback values
+                    const versionElement = document.getElementById('version-number');
+                    const versionLink = document.getElementById('version-link');
+                    if (versionElement && versionLink) {
+                        versionElement.textContent = 'dev';
+                        versionLink.href = 'https://github.com/dannybouwers/trala/releases';
+                    }
+                    
+                    return null;
                 }
             };
 
             const startApp = async () => {
-                // Fetch frontend configuration first
-                await fetchFrontendConfig();
+                // Fetch all application status information in a single call
+                await fetchApplicationStatus();
                 
                 updateGreeting();
                 updateClock();
                 setInterval(updateClock, 6000);
-
-                // Fetch version information
-                await fetchVersion();
-                
-                // Fetch configuration status
-                await fetchConfigStatus();
 
                 await fetchAndProcessServices();
                 if (refreshIntervalId) clearInterval(refreshIntervalId);
