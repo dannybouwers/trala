@@ -51,10 +51,11 @@ type TraefikEntryPoint struct {
 
 // Service represents the final, processed data sent to the frontend.
 type Service struct {
-	RouterName string `json:"routerName"`
-	URL        string `json:"url"`
-	Priority   int    `json:"priority"`
-	Icon       string `json:"icon"`
+	RouterName  string `json:"routerName"`
+	DisplayName string `json:"displayName"`
+	URL         string `json:"url"`
+	Priority    int    `json:"priority"`
+	Icon        string `json:"icon"`
 }
 
 // VersionInfo represents the application version information
@@ -68,17 +69,15 @@ type TraefikConfig struct {
 	APIHost string `yaml:"api_host"`
 }
 
-type IconOverride struct {
-	Service string `yaml:"service"`
-	Icon    string `yaml:"icon"`
-}
-
-type IconConfiguration struct {
-	Overrides []IconOverride `yaml:"overrides"`
+type ServiceOverride struct {
+	Service     string `yaml:"service"`
+	DisplayName string `yaml:"display_name,omitempty"`
+	Icon        string `yaml:"icon,omitempty"`
 }
 
 type ServiceConfiguration struct {
-	Exclude []string `yaml:"exclude"`
+	Exclude   []string          `yaml:"exclude"`
+	Overrides []ServiceOverride `yaml:"overrides"`
 }
 
 type EnvironmentConfiguration struct {
@@ -92,7 +91,6 @@ type EnvironmentConfiguration struct {
 type TralaConfiguration struct {
 	Version     string                   `yaml:"version"`
 	Environment EnvironmentConfiguration `yaml:"environment"`
-	Icons       IconConfiguration        `yaml:"icons"`
 	Services    ServiceConfiguration     `yaml:"services"`
 }
 
@@ -126,10 +124,10 @@ var (
 	selfhstCacheTime time.Time
 	selfhstCacheMux  sync.RWMutex
 	configuration    TralaConfiguration
-	// Map used to quickly map a router name to a given icon override
-	iconOverrideMap  map[string]IconOverride
-	configurationMux sync.RWMutex
-	httpClient       = &http.Client{Timeout: 5 * time.Second}
+	// Map used to quickly map a router name to a given service override
+	serviceOverrideMap map[string]ServiceOverride
+	configurationMux   sync.RWMutex
+	httpClient         = &http.Client{Timeout: 5 * time.Second}
 	// Regex to reliably find Host and PathPrefix.
 	hostRegex = regexp.MustCompile(`Host\(\s*` + "`" + `([^` + "`" + `]+)` + "`" + `\s*\)`)
 	pathRegex = regexp.MustCompile(`PathPrefix\(\s*` + "`" + `([^` + "`" + `]+)` + "`" + `\s*\)`)
@@ -395,14 +393,21 @@ func processRouter(router TraefikRouter, entryPoints map[string]TraefikEntryPoin
 		}
 	}
 
-	debugf("Processing router: %s, URL: %s", routerName, serviceURL)
-	iconURL := findBestIconURL(routerName, serviceURL)
+	// Get display name override if available
+	displayName := getDisplayNameOverride(routerName)
+	if displayName == "" {
+		displayName = routerName
+	}
+
+	debugf("Processing router: %s (display: %s), URL: %s", routerName, displayName, serviceURL)
+	iconURL := findBestIconURL(displayName, serviceURL)
 
 	ch <- Service{
-		RouterName: routerName,
-		URL:        serviceURL,
-		Priority:   router.Priority,
-		Icon:       iconURL,
+		RouterName:  routerName,
+		DisplayName: displayName,
+		URL:         serviceURL,
+		Priority:    router.Priority,
+		Icon:        iconURL,
 	}
 }
 
@@ -468,8 +473,19 @@ func checkOverrides(routerName string) string {
 	configurationMux.RLock()
 	defer configurationMux.RUnlock()
 
-	if override, ok := iconOverrideMap[routerName]; ok {
+	if override, ok := serviceOverrideMap[routerName]; ok {
 		return override.Icon
+	}
+	return ""
+}
+
+// getDisplayNameOverride looks for a router name in the loaded config file.
+func getDisplayNameOverride(routerName string) string {
+	configurationMux.RLock()
+	defer configurationMux.RUnlock()
+
+	if override, ok := serviceOverrideMap[routerName]; ok {
+		return override.DisplayName
 	}
 	return ""
 }
@@ -850,11 +866,9 @@ func loadConfiguration() {
 				APIHost: "",
 			},
 		},
-		Icons: IconConfiguration{
-			Overrides: make([]IconOverride, 0),
-		},
 		Services: ServiceConfiguration{
-			Exclude: make([]string, 0),
+			Exclude:   make([]string, 0),
+			Overrides: make([]ServiceOverride, 0),
 		},
 	}
 
@@ -905,14 +919,14 @@ func loadConfiguration() {
 		config.Environment.SelfhstIconURL += "/"
 	}
 
-	// Build map that maps a router name to a IconOverride for fast lookups
-	iconOverrideMap = make(map[string]IconOverride, len(config.Icons.Overrides))
-	for _, o := range config.Icons.Overrides {
-		iconOverrideMap[o.Service] = o
+	// Build map that maps a router name to a ServiceOverride for fast lookups
+	serviceOverrideMap = make(map[string]ServiceOverride, len(config.Services.Overrides))
+	for _, o := range config.Services.Overrides {
+		serviceOverrideMap[o.Service] = o
 	}
 
 	log.Printf("Loaded %d service excludes from %s", len(config.Services.Exclude), configurationFilePath)
-	log.Printf("Loaded %d icon overrides from %s", len(config.Icons.Overrides), configurationFilePath)
+	log.Printf("Loaded %d service overrides from %s", len(config.Services.Overrides), configurationFilePath)
 
 	configuration = config
 
