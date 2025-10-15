@@ -28,6 +28,9 @@ var (
 	buildTime string
 )
 
+// Minimum supported configuration version
+const minimumConfigVersion = "2.0"
+
 // --- Structs ---
 
 // TraefikRouter represents the essential fields from the Traefik API response.
@@ -51,10 +54,10 @@ type TraefikEntryPoint struct {
 
 // Service represents the final, processed data sent to the frontend.
 type Service struct {
-	RouterName string `json:"routerName"`
-	URL        string `json:"url"`
-	Priority   int    `json:"priority"`
-	Icon       string `json:"icon"`
+	Name     string `json:"Name"`
+	URL      string `json:"url"`
+	Priority int    `json:"priority"`
+	Icon     string `json:"icon"`
 }
 
 // VersionInfo represents the application version information
@@ -64,21 +67,35 @@ type VersionInfo struct {
 	BuildTime string `json:"buildTime"`
 }
 
+// ConfigStatus represents the configuration compatibility status
+type ConfigStatus struct {
+	ConfigVersion          string `json:"configVersion"`
+	MinimumRequiredVersion string `json:"minimumRequiredVersion"`
+	IsCompatible           bool   `json:"isCompatible"`
+	WarningMessage         string `json:"warningMessage,omitempty"`
+}
+
 type TraefikConfig struct {
 	APIHost string `yaml:"api_host"`
 }
 
-type IconOverride struct {
-	Service string `yaml:"service"`
-	Icon    string `yaml:"icon"`
+type ServiceOverride struct {
+	Service     string `yaml:"service"`
+	DisplayName string `yaml:"display_name,omitempty"`
+	Icon        string `yaml:"icon,omitempty"`
 }
 
-type IconConfiguration struct {
-	Overrides []IconOverride `yaml:"overrides"`
+type ManualService struct {
+	Name     string `yaml:"name"`
+	URL      string `yaml:"url"`
+	Icon     string `yaml:"icon,omitempty"`
+	Priority int    `yaml:"priority,omitempty"`
 }
 
 type ServiceConfiguration struct {
-	Exclude []string `yaml:"exclude"`
+	Exclude   []string          `yaml:"exclude"`
+	Overrides []ServiceOverride `yaml:"overrides"`
+	Manual    []ManualService   `yaml:"manual"`
 }
 
 type EnvironmentConfiguration struct {
@@ -92,7 +109,6 @@ type EnvironmentConfiguration struct {
 type TralaConfiguration struct {
 	Version     string                   `yaml:"version"`
 	Environment EnvironmentConfiguration `yaml:"environment"`
-	Icons       IconConfiguration        `yaml:"icons"`
 	Services    ServiceConfiguration     `yaml:"services"`
 }
 
@@ -101,6 +117,13 @@ type FrontendConfig struct {
 	SearchEngineURL        string `json:"searchEngineURL"`
 	SearchEngineIconURL    string `json:"searchEngineIconURL"`
 	RefreshIntervalSeconds int    `json:"refreshIntervalSeconds"`
+}
+
+// ApplicationStatus represents the combined status information for the application
+type ApplicationStatus struct {
+	Version  VersionInfo    `json:"version"`
+	Config   ConfigStatus   `json:"config"`
+	Frontend FrontendConfig `json:"frontend"`
 }
 
 // SelfHstIcon represents an entry in the selfh.st icons index.json.
@@ -126,10 +149,10 @@ var (
 	selfhstCacheTime time.Time
 	selfhstCacheMux  sync.RWMutex
 	configuration    TralaConfiguration
-	// Map used to quickly map a router name to a given icon override
-	iconOverrideMap  map[string]IconOverride
-	configurationMux sync.RWMutex
-	httpClient       = &http.Client{Timeout: 5 * time.Second}
+	// Map used to quickly map a router name to a given service override
+	serviceOverrideMap map[string]ServiceOverride
+	configurationMux   sync.RWMutex
+	httpClient         = &http.Client{Timeout: 5 * time.Second}
 	// Regex to reliably find Host and PathPrefix.
 	hostRegex = regexp.MustCompile(`Host\(\s*` + "`" + `([^` + "`" + `]+)` + "`" + `\s*\)`)
 	pathRegex = regexp.MustCompile(`PathPrefix\(\s*` + "`" + `([^` + "`" + `]+)` + "`" + `\s*\)`)
@@ -145,6 +168,9 @@ const selfhstCacheTTL = 1 * time.Hour
 const selfhstAPIURL = "https://raw.githubusercontent.com/selfhst/icons/refs/heads/main/index.json"
 const configurationFilePath = "/config/configuration.yml"
 const defaultIcon = "" // Frontend will use a fallback if icon is empty.
+
+// Global variable to track configuration compatibility status
+var configCompatibilityStatus ConfigStatus
 
 // --- Logging ---
 
@@ -251,57 +277,30 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 	wg.Wait()
 	close(serviceChan)
 
-	// 5. Collect results and send as JSON.
-	finalServices := make([]Service, 0, len(routers))
+	// 5. Collect results from Traefik services.
+	traefikServices := make([]Service, 0, len(routers))
 	for service := range serviceChan {
-		finalServices = append(finalServices, service)
+		traefikServices = append(traefikServices, service)
 	}
+
+	// 6. Add manual services
+	manualServices := getManualServices()
+
+	// 7. Merge and sort all services by priority
+	finalServices := append(traefikServices, manualServices...)
+
+	// Sort by priority (higher priority first)
+	sort.Slice(finalServices, func(i, j int) bool {
+		return finalServices[i].Priority > finalServices[j].Priority
+	})
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(finalServices)
 }
 
-// versionHandler returns the application version information
-func versionHandler(w http.ResponseWriter, r *http.Request) {
-	versionInfo := VersionInfo{
-		Version:   version,
-		Commit:    commit,
-		BuildTime: buildTime,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(versionInfo)
-}
-
 func IsValidUrl(str string) bool {
 	u, err := url.Parse(str)
 	return err == nil && u.Scheme != "" && u.Host != ""
-}
-
-// frontendConfigHandler returns the frontend configuration as JSON
-func frontendConfigHandler(w http.ResponseWriter, r *http.Request) {
-	configurationMux.RLock()
-	searchEngineURL := configuration.Environment.SearchEngineURL
-	refreshIntervalSeconds := configuration.Environment.RefreshIntervalSeconds
-	configurationMux.RUnlock()
-
-	// Extract service name from search engine URL and find its icon
-	searchEngineIconURL := ""
-	if searchEngineURL != "" {
-		serviceName := extractServiceNameFromURL(searchEngineURL)
-		if serviceName != "" {
-			searchEngineIconURL = findBestIconURL(serviceName, searchEngineURL)
-		}
-	}
-
-	frontendConfig := FrontendConfig{
-		SearchEngineURL:        searchEngineURL,
-		SearchEngineIconURL:    searchEngineIconURL,
-		RefreshIntervalSeconds: refreshIntervalSeconds,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(frontendConfig)
 }
 
 // healthHandler performs health checks and returns the status
@@ -363,6 +362,51 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "OK")
 }
 
+// statusHandler returns combined application status information
+func statusHandler(w http.ResponseWriter, r *http.Request) {
+	configurationMux.RLock()
+	defer configurationMux.RUnlock()
+
+	// Get version information
+	versionInfo := VersionInfo{
+		Version:   version,
+		Commit:    commit,
+		BuildTime: buildTime,
+	}
+
+	// Get configuration status (already stored in global variable)
+	configStatus := configCompatibilityStatus
+
+	// Get frontend configuration
+	searchEngineURL := configuration.Environment.SearchEngineURL
+	refreshIntervalSeconds := configuration.Environment.RefreshIntervalSeconds
+
+	// Extract service name from search engine URL and find its icon
+	searchEngineIconURL := ""
+	if searchEngineURL != "" {
+		serviceName := extractServiceNameFromURL(searchEngineURL)
+		if serviceName != "" {
+			searchEngineIconURL = findBestIconURL(serviceName, searchEngineURL)
+		}
+	}
+
+	frontendConfig := FrontendConfig{
+		SearchEngineURL:        searchEngineURL,
+		SearchEngineIconURL:    searchEngineIconURL,
+		RefreshIntervalSeconds: refreshIntervalSeconds,
+	}
+
+	// Combine all status information
+	status := ApplicationStatus{
+		Version:  versionInfo,
+		Config:   configStatus,
+		Frontend: frontendConfig,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(status)
+}
+
 // --- Data Processing & Icon Finding ---
 
 // processRouter takes a raw Traefik router, finds its best icon, and sends the final Service object to a channel.
@@ -395,14 +439,20 @@ func processRouter(router TraefikRouter, entryPoints map[string]TraefikEntryPoin
 		}
 	}
 
-	debugf("Processing router: %s, URL: %s", routerName, serviceURL)
-	iconURL := findBestIconURL(routerName, serviceURL)
+	// Get display name override if available
+	displayName := getDisplayNameOverride(routerName)
+	if displayName == "" {
+		displayName = routerName
+	}
+
+	debugf("Processing router: %s (display: %s), URL: %s", routerName, displayName, serviceURL)
+	iconURL := findBestIconURL(displayName, serviceURL)
 
 	ch <- Service{
-		RouterName: routerName,
-		URL:        serviceURL,
-		Priority:   router.Priority,
-		Icon:       iconURL,
+		Name:     displayName,
+		URL:      serviceURL,
+		Priority: router.Priority,
+		Icon:     iconURL,
 	}
 }
 
@@ -468,8 +518,19 @@ func checkOverrides(routerName string) string {
 	configurationMux.RLock()
 	defer configurationMux.RUnlock()
 
-	if override, ok := iconOverrideMap[routerName]; ok {
+	if override, ok := serviceOverrideMap[routerName]; ok {
 		return override.Icon
+	}
+	return ""
+}
+
+// getDisplayNameOverride looks for a router name in the loaded config file.
+func getDisplayNameOverride(routerName string) string {
+	configurationMux.RLock()
+	defer configurationMux.RUnlock()
+
+	if override, ok := serviceOverrideMap[routerName]; ok {
+		return override.DisplayName
 	}
 	return ""
 }
@@ -834,13 +895,122 @@ func extractServiceNameFromURL(searchURL string) string {
 	return hostname
 }
 
+// getManualServices processes manually configured services and returns them as Service objects
+func getManualServices() []Service {
+	configurationMux.RLock()
+	defer configurationMux.RUnlock()
+
+	manualServices := make([]Service, 0, len(configuration.Services.Manual))
+
+	for _, manualService := range configuration.Services.Manual {
+		// Validate URL
+		if !IsValidUrl(manualService.URL) {
+			log.Printf("Warning: Invalid URL for manual service '%s': %s", manualService.Name, manualService.URL)
+			continue
+		}
+
+		// Find icon using the same logic as for Traefik services
+		iconURL := manualService.Icon
+		if iconURL == "" {
+			// If no icon is specified, try to find one automatically
+			iconURL = findBestIconURL(manualService.Name, manualService.URL)
+		} else {
+			// If icon is specified, check if it's a full URL or just a filename
+			if !strings.HasPrefix(iconURL, "http://") && !strings.HasPrefix(iconURL, "https://") {
+				// Check if it's a filename with valid extension
+				ext := filepath.Ext(iconURL)
+				if ext == ".png" || ext == ".svg" || ext == ".webp" {
+					iconURL = configuration.Environment.SelfhstIconURL + strings.TrimPrefix(ext, ".") + "/" + strings.ToLower(iconURL)
+				} else {
+					// Fallback to default behavior if extension is not valid
+					iconURL = configuration.Environment.SelfhstIconURL + "png/" + iconURL
+				}
+			}
+		}
+
+		// Default priority if not specified
+		priority := manualService.Priority
+		if priority == 0 {
+			priority = 50 // Default priority for manual services
+		}
+
+		service := Service{
+			Name:     manualService.Name,
+			URL:      manualService.URL,
+			Priority: priority,
+			Icon:     iconURL,
+		}
+
+		manualServices = append(manualServices, service)
+		debugf("Added manual service: %s (URL: %s, Icon: %s, Priority: %d)",
+			manualService.Name, manualService.URL, iconURL, priority)
+	}
+
+	return manualServices
+}
+
+// compareVersions compares two version strings using semantic versioning
+// Returns -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
+func compareVersions(v1, v2 string) int {
+	// Normalize versions by ensuring they have 3 components (major.minor.patch)
+	normalizeVersion := func(v string) []int {
+		parts := strings.Split(v, ".")
+		result := make([]int, 3)
+		for i := 0; i < 3; i++ {
+			if i < len(parts) {
+				if num, err := strconv.Atoi(parts[i]); err == nil {
+					result[i] = num
+				}
+			}
+			// Missing parts default to 0
+		}
+		return result
+	}
+
+	v1Parts := normalizeVersion(v1)
+	v2Parts := normalizeVersion(v2)
+
+	for i := 0; i < 3; i++ {
+		if v1Parts[i] < v2Parts[i] {
+			return -1
+		} else if v1Parts[i] > v2Parts[i] {
+			return 1
+		}
+	}
+	return 0
+}
+
+// validateConfigVersion checks if the configuration version is compatible
+func validateConfigVersion(configVersion string) ConfigStatus {
+	status := ConfigStatus{
+		ConfigVersion:          configVersion,
+		MinimumRequiredVersion: minimumConfigVersion,
+		IsCompatible:           true,
+	}
+
+	// Check if configuration version is specified
+	if configVersion == "" {
+		status.IsCompatible = false
+		status.WarningMessage = "No configuration version specified. Please add 'version: X.Y' to your configuration file."
+		return status
+	}
+
+	// Compare versions
+	if compareVersions(configVersion, minimumConfigVersion) < 0 {
+		status.IsCompatible = false
+		status.WarningMessage = fmt.Sprintf("Configuration version %s is below the minimum required version %s. Some configuration options may be ignored.", configVersion, minimumConfigVersion)
+	}
+
+	return status
+}
+
 func loadConfiguration() {
 	configurationMux.Lock()
 	defer configurationMux.Unlock()
 
 	// Step 1: defaults
 	config := TralaConfiguration{
-		Version: "1.0",
+		Version: "",
 		Environment: EnvironmentConfiguration{
 			SelfhstIconURL:         "https://cdn.jsdelivr.net/gh/selfhst/icons/",
 			SearchEngineURL:        "https://www.google.com/search?q=",
@@ -850,11 +1020,10 @@ func loadConfiguration() {
 				APIHost: "",
 			},
 		},
-		Icons: IconConfiguration{
-			Overrides: make([]IconOverride, 0),
-		},
 		Services: ServiceConfiguration{
-			Exclude: make([]string, 0),
+			Exclude:   make([]string, 0),
+			Overrides: make([]ServiceOverride, 0),
+			Manual:    make([]ManualService, 0),
 		},
 	}
 
@@ -863,6 +1032,7 @@ func loadConfiguration() {
 	if err != nil {
 		if os.IsNotExist(err) {
 			log.Printf("Info: No configuration file found at %s. Using defaults + env vars.", configurationFilePath)
+			config.Version = minimumConfigVersion // Set to minimum required if no config file
 		} else {
 			log.Printf("Warning: Could not read configuration file at %s: %v", configurationFilePath, err)
 		}
@@ -905,14 +1075,20 @@ func loadConfiguration() {
 		config.Environment.SelfhstIconURL += "/"
 	}
 
-	// Build map that maps a router name to a IconOverride for fast lookups
-	iconOverrideMap = make(map[string]IconOverride, len(config.Icons.Overrides))
-	for _, o := range config.Icons.Overrides {
-		iconOverrideMap[o.Service] = o
+	// Build map that maps a router name to a ServiceOverride for fast lookups
+	serviceOverrideMap = make(map[string]ServiceOverride, len(config.Services.Overrides))
+	for _, o := range config.Services.Overrides {
+		serviceOverrideMap[o.Service] = o
 	}
 
 	log.Printf("Loaded %d service excludes from %s", len(config.Services.Exclude), configurationFilePath)
-	log.Printf("Loaded %d icon overrides from %s", len(config.Icons.Overrides), configurationFilePath)
+	log.Printf("Loaded %d service overrides from %s", len(config.Services.Overrides), configurationFilePath)
+
+	// Validate configuration version
+	configCompatibilityStatus = validateConfigVersion(config.Version)
+	if !configCompatibilityStatus.IsCompatible {
+		log.Printf("WARNING: %s", configCompatibilityStatus.WarningMessage)
+	}
 
 	configuration = config
 
@@ -946,8 +1122,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/services", servicesHandler)
-	mux.HandleFunc("/api/version", versionHandler)
-	mux.HandleFunc("/api/frontend-config", frontendConfigHandler)
+	mux.HandleFunc("/api/status", statusHandler)
 	mux.HandleFunc("/api/health", healthHandler)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticPath))))
 	mux.Handle("/icons/", http.StripPrefix("/icons/", http.FileServer(http.Dir("/icons"))))

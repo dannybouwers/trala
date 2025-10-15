@@ -7,6 +7,7 @@ A simple, modern, and dynamic dashboard for your Traefik services. This applicat
 ## ✨ Features
 
 - **Auto-Discovery:** Automatically fetches and displays all HTTP routers from your Traefik instance.
+- **Manual Services:** Add custom services to your dashboard that aren't managed by Traefik (e.g., Reddit, GitHub, external websites).
 - **Advanced Icon Fetching:** Intelligently finds the best icon for each service using a robust, prioritized strategy.
 - **Icon Overrides:** Manually map router names to specific icons for perfect results every time.
 - **Custom Icon Directory:** Mount your own icon directory at `/icons` for ultimate customization with fuzzy matching.
@@ -84,9 +85,9 @@ A sample configuration file is shown below:
 
 ```yaml
 # TraLa Configuration File
-# Version 1.0
+# Version 2.0
 
-version: 1.0
+version: 2.0
 
 # Environment settings (optional, environment variables take precedence)
 environment:
@@ -97,40 +98,65 @@ environment:
   traefik:
     api_host: http://traefik:8080
 
-# Icon customization
-icons:
-  # Override icons for specific services
-  overrides:
-    # Using full URL
-    - service: "firefly-core"
-      icon: "https://selfh.st/content/images/2023/09/favicon-1.png"
-    
-    # Using selfh.st filename with extension
-    - service: "unifi-controller"
-      icon: "ubiquiti-unifi.png"
-    - service: "home-assistant"
-      icon: "home-assistant.svg"
-    - service: "plex"
-      icon: "plex.webp"
-    
-    # Using simple name (resolves to selfh.st)
-    - service: "nextcloud"
-      icon: "nextcloud"
-    - service: "portainer"
-      icon: "portainer"
-
-    # Override for search engine icon
-    - service: "searxng-domain"
-      icon: "searxng.svg"
-    - service: "duckduckgo"
-      icon: "https://example.com/ddg-icon.png"
-
 # Service configuration
 services:
   # Services to exclude from the dashboard
   exclude:
     - "traefik-api"  # Hide the Traefik API itself
     - "admin-panel"  # Hide internal admin interface
+  
+  # Service overrides for display names and icons
+  overrides:
+    # Override both display name and icon
+    - service: "firefly-core"
+      display_name: "Firefly III"
+      icon: "https://cdn.jsdelivr.net/gh/selfhst/icons/svg/firefly-iii.svg"
+    - service: "unifi-controller"
+      display_name: "UniFi Network"
+      icon: "ubiquiti-unifi.svg"
+    - service: "home-assistant"
+      display_name: "Home Assistant"
+      icon: "home-assistant.svg"
+    - service: "nextcloud"
+      display_name: "NextCloud"
+      icon: "nextcloud.svg"
+    - service: "portainer"
+      display_name: "Portainer"
+      icon: "portainer.svg"
+    
+    # Override only icon
+    - service: "plex"
+      icon: "plex.webp"
+    - service: "unknown-service"
+      icon: "https://selfh.st/content/images/2023/09/favicon-1.png"
+    
+    # Override for search engine icon
+    - service: "searxng-domain"
+      icon: "searxng.svg"
+    - service: "duckduckgo"
+      icon: "https://example.com/ddg-icon.png"
+  
+  # Manually added services (not from Traefik)
+  manual:
+    # Basic manual service with just name and URL
+    - name: "Reddit"
+      url: "https://www.reddit.com"
+    
+    # Manual service with custom icon
+    - name: "GitHub"
+      url: "https://github.com"
+      icon: "github.svg"
+    
+    # Manual service with icon and priority
+    - name: "The Verge"
+      url: "https://www.theverge.com"
+      icon: "https://www.theverge.com/favicon.ico"
+      priority: 100
+    
+    # Manual service with just name, URL, and priority (icon will be auto-detected)
+    - name: "Hacker News"
+      url: "https://news.ycombinator.com"
+      priority: 90
 ```
 
 Supported environment variables are shown below.
@@ -143,18 +169,34 @@ Supported environment variables are shown below.
 | `SEARCH_ENGINE_URL`        | The URL for the external search engine. The search query will be appended to this URL.                    | `https://www.google.com/search?q=`     | No       |
 | `LOG_LEVEL`                | Set to `debug` for verbose logging of the icon-finding process. Any other value is silent.              | `info`                                 | No       |
 
-### Icon Overrides
+### Service Exclusion
 
-While TraLa does its best to find the right icon, fuzzy search isn't perfect. For ultimate control, you can provide ovverides in the `configuration.yml` file with the `overrides` key. This is the most powerful feature for customizing your dashboard.
+You can hide specific services from appearing in the dashboard by specifying their router names in the `configuration.yml` file with the `exclusions` key. This is useful for hiding administrative interfaces or services you don't want to be easily accessible through the dashboard.
 
 #### How It Works
 
-The application uses the **router name** from your Traefik configuration (the part before the `@`) as the primary identifier for a service. You can map this router name to either:
+The application uses the **router name** from your Traefik configuration (the part before the `@`) to identify services. By adding router names to the exclusion list, those services will not be processed or displayed in the dashboard.
 
-1. A full URL to an icon (e.g., `https://selfh.st/content/images/2023/09/favicon-1.png`)
-2. A specific icon filename from the [selfh.st icon repository](https://selfh.st/icons/)
+### Service Overrides
 
-**This override has the highest priority.** If a router name is found in this file, TraLa will use the specified icon and skip all other detection methods.
+TraLa provides unified service overrides that allow you to customize both the display name and icon for your services. This is the most powerful feature for customizing your dashboard.
+
+#### How It Works
+
+The application uses the **router name** from your Traefik configuration (the part before the `@`) as the primary identifier for a service. You can map this router name to:
+
+1. A custom display name (for better readability)
+2. A specific icon (full URL or filename from selfh.st)
+3. Both display name and icon
+
+**This override has the highest priority.** If a router name is found in this file, TraLa will use the specified display name and/or icon and skip all other detection methods.
+
+#### Configuration Options
+
+Each service override can include:
+- `service`: The router name to match (required)
+- `display_name`: Custom display name (optional)
+- `icon`: Icon override (optional)
 
 When using a filename from the selfh.st icon repository, you can specify files with the following extensions:
 
@@ -185,13 +227,25 @@ The search bar displays a greyscale icon of your configured search engine. The i
 - The search engine is treated as a service using the second-level domain of the search URL. For example: `duckduckgo` from `https://duckduckgo.com/?q=` or `google` from `https://www.google.com/search?q=`
 - Icon overrides work the same way - you can override the search engine icon using the service name (e.g., `google`, `duckduckgo`)
 
-### Service Exclusion
+### Manual Services
 
-You can hide specific services from appearing in the dashboard by specifying their router names in the `configuration.yml` file with the `exclusions` key. This is useful for hiding administrative interfaces or services you don't want to be easily accessible through the dashboard.
+Sometimes you want to add services to your dashboard that aren't managed by Traefik - like external websites, cloud services, or resources hosted elsewhere. TraLa allows you to manually add these services through the configuration file.
 
 #### How It Works
 
-The application uses the **router name** from your Traefik configuration (the part before the `@`) to identify services. By adding router names to the exclusion list, those services will not be processed or displayed in the dashboard.
+Manual services are defined in the `manual` section of your `configuration.yml` file. These services:
+
+1. Are merged with Traefik-discovered services and displayed together
+2. Use the same icon detection logic as Traefik services
+3. Support all icon options (auto-detection, custom icons, etc.)
+
+#### Configuration Options
+
+Each manual service can include:
+- `name`: The display name (required)
+- `url`: The URL of the service (required)
+- `icon`: Custom icon (optional - full URL or filename from selfh.st)
+- `priority`: Priority for sorting (optional - higher numbers appear first, default: 50)
 
 ---
 
