@@ -51,11 +51,10 @@ type TraefikEntryPoint struct {
 
 // Service represents the final, processed data sent to the frontend.
 type Service struct {
-	RouterName  string `json:"routerName"`
-	DisplayName string `json:"displayName"`
-	URL         string `json:"url"`
-	Priority    int    `json:"priority"`
-	Icon        string `json:"icon"`
+	Name     string `json:"Name"`
+	URL      string `json:"url"`
+	Priority int    `json:"priority"`
+	Icon     string `json:"icon"`
 }
 
 // VersionInfo represents the application version information
@@ -422,11 +421,10 @@ func processRouter(router TraefikRouter, entryPoints map[string]TraefikEntryPoin
 	iconURL := findBestIconURL(displayName, serviceURL)
 
 	ch <- Service{
-		RouterName:  routerName,
-		DisplayName: displayName,
-		URL:         serviceURL,
-		Priority:    router.Priority,
-		Icon:        iconURL,
+		Name:     displayName,
+		URL:      serviceURL,
+		Priority: router.Priority,
+		Icon:     iconURL,
 	}
 }
 
@@ -909,11 +907,10 @@ func getManualServices() []Service {
 		}
 
 		service := Service{
-			RouterName:  manualService.Name,
-			DisplayName: manualService.Name,
-			URL:         manualService.URL,
-			Priority:    priority,
-			Icon:        iconURL,
+			Name:     manualService.Name,
+			URL:      manualService.URL,
+			Priority: priority,
+			Icon:     iconURL,
 		}
 
 		manualServices = append(manualServices, service)

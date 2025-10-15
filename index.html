@@ -148,10 +148,10 @@
                 card.rel = 'noopener noreferrer';
                 card.className = 'block p-4 rounded-lg bg-white dark:bg-gray-800 shadow-md hover:shadow-lg hover:-translate-y-1 transition-all duration-300';
                 
-                const firstLetter = service.routerName.charAt(0).toUpperCase();
-                const bgColor = getColorFromString(service.routerName);
+                const firstLetter = service.Name.charAt(0).toUpperCase();
+                const bgColor = getColorFromString(service.Name);
                 
-                card.innerHTML = `<div class="flex flex-col items-center text-center"><div class="w-16 h-16 mb-4 flex items-center justify-center rounded-lg overflow-hidden"><img class="w-full h-full object-contain icon-img" src="${service.icon}" alt="Icon for ${service.routerName}" style="display: block;" /><div class="fallback-icon w-full h-full ${bgColor}" style="display: none;">${firstLetter}</div></div><p class="font-semibold truncate w-full" title="${service.routerName}">${service.routerName}</p><p class="text-xs text-gray-500 dark:text-gray-400 truncate w-full" title="${service.url}">${service.url.replace('https://', '')}</p></div>`;
+                card.innerHTML = `<div class="flex flex-col items-center text-center"><div class="w-16 h-16 mb-4 flex items-center justify-center rounded-lg overflow-hidden"><img class="w-full h-full object-contain icon-img" src="${service.icon}" alt="Icon for ${service.Name}" style="display: block;" /><div class="fallback-icon w-full h-full ${bgColor}" style="display: none;">${firstLetter}</div></div><p class="font-semibold truncate w-full" title="${service.Name}">${service.Name}</p><p class="text-xs text-gray-500 dark:text-gray-400 truncate w-full" title="${service.url}">${service.url.replace('https://', '')}</p></div>`;
                 
                 serviceGrid.appendChild(card);
 
@@ -172,12 +172,12 @@
 
         const applyFiltersAndSort = () => {
             const searchTerm = searchInput.value.toLowerCase();
-            let filteredServices = allServices.filter(service => service.routerName.toLowerCase().includes(searchTerm) || service.url.toLowerCase().includes(searchTerm));
+            let filteredServices = allServices.filter(service => service.Name.toLowerCase().includes(searchTerm) || service.url.toLowerCase().includes(searchTerm));
             
             let sortedServices = [...filteredServices];
             switch (currentSort) {
                 case 'name': 
-                    sortedServices.sort((a, b) => a.routerName.localeCompare(b.routerName)); 
+                    sortedServices.sort((a, b) => a.Name.localeCompare(b.Name)); 
                     break;
                 case 'url': 
                     sortedServices.sort((a, b) => a.url.localeCompare(b.url)); 
