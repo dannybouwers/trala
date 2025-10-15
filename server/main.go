@@ -28,6 +28,9 @@ var (
 	buildTime string
 )
 
+// Minimum supported configuration version
+const minimumConfigVersion = "2.0"
+
 // --- Structs ---
 
 // TraefikRouter represents the essential fields from the Traefik API response.
@@ -62,6 +65,14 @@ type VersionInfo struct {
 	Version   string `json:"version"`
 	Commit    string `json:"commit"`
 	BuildTime string `json:"buildTime"`
+}
+
+// ConfigStatus represents the configuration compatibility status
+type ConfigStatus struct {
+	ConfigVersion          string `json:"configVersion"`
+	MinimumRequiredVersion string `json:"minimumRequiredVersion"`
+	IsCompatible           bool   `json:"isCompatible"`
+	WarningMessage         string `json:"warningMessage,omitempty"`
 }
 
 type TraefikConfig struct {
@@ -150,6 +161,9 @@ const selfhstCacheTTL = 1 * time.Hour
 const selfhstAPIURL = "https://raw.githubusercontent.com/selfhst/icons/refs/heads/main/index.json"
 const configurationFilePath = "/config/configuration.yml"
 const defaultIcon = "" // Frontend will use a fallback if icon is empty.
+
+// Global variable to track configuration compatibility status
+var configCompatibilityStatus ConfigStatus
 
 // --- Logging ---
 
@@ -377,6 +391,15 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 
 	// If we reach here, all checks passed
 	fmt.Fprint(w, "OK")
+}
+
+// configStatusHandler returns the configuration compatibility status
+func configStatusHandler(w http.ResponseWriter, r *http.Request) {
+	configurationMux.RLock()
+	defer configurationMux.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(configCompatibilityStatus)
 }
 
 // --- Data Processing & Icon Finding ---
@@ -921,13 +944,68 @@ func getManualServices() []Service {
 	return manualServices
 }
 
+// compareVersions compares two version strings using semantic versioning
+// Returns -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
+func compareVersions(v1, v2 string) int {
+	// Normalize versions by ensuring they have 3 components (major.minor.patch)
+	normalizeVersion := func(v string) []int {
+		parts := strings.Split(v, ".")
+		result := make([]int, 3)
+		for i := 0; i < 3; i++ {
+			if i < len(parts) {
+				if num, err := strconv.Atoi(parts[i]); err == nil {
+					result[i] = num
+				}
+			}
+			// Missing parts default to 0
+		}
+		return result
+	}
+
+	v1Parts := normalizeVersion(v1)
+	v2Parts := normalizeVersion(v2)
+
+	for i := 0; i < 3; i++ {
+		if v1Parts[i] < v2Parts[i] {
+			return -1
+		} else if v1Parts[i] > v2Parts[i] {
+			return 1
+		}
+	}
+	return 0
+}
+
+// validateConfigVersion checks if the configuration version is compatible
+func validateConfigVersion(configVersion string) ConfigStatus {
+	status := ConfigStatus{
+		ConfigVersion:          configVersion,
+		MinimumRequiredVersion: minimumConfigVersion,
+		IsCompatible:           true,
+	}
+
+	// Check if configuration version is specified
+	if configVersion == "" {
+		status.IsCompatible = false
+		status.WarningMessage = "No configuration version specified. Please add 'version: X.Y' to your configuration file."
+		return status
+	}
+
+	// Compare versions
+	if compareVersions(configVersion, minimumConfigVersion) < 0 {
+		status.IsCompatible = false
+		status.WarningMessage = fmt.Sprintf("Configuration version %s is below the minimum required version %s. Some configuration options may be ignored.", configVersion, minimumConfigVersion)
+	}
+
+	return status
+}
+
 func loadConfiguration() {
 	configurationMux.Lock()
 	defer configurationMux.Unlock()
 
 	// Step 1: defaults
 	config := TralaConfiguration{
-		Version: "1.0",
+		Version: "",
 		Environment: EnvironmentConfiguration{
 			SelfhstIconURL:         "https://cdn.jsdelivr.net/gh/selfhst/icons/",
 			SearchEngineURL:        "https://www.google.com/search?q=",
@@ -949,6 +1027,7 @@ func loadConfiguration() {
 	if err != nil {
 		if os.IsNotExist(err) {
 			log.Printf("Info: No configuration file found at %s. Using defaults + env vars.", configurationFilePath)
+			config.Version = minimumConfigVersion // Set to minimum required if no config file
 		} else {
 			log.Printf("Warning: Could not read configuration file at %s: %v", configurationFilePath, err)
 		}
@@ -1000,6 +1079,12 @@ func loadConfiguration() {
 	log.Printf("Loaded %d service excludes from %s", len(config.Services.Exclude), configurationFilePath)
 	log.Printf("Loaded %d service overrides from %s", len(config.Services.Overrides), configurationFilePath)
 
+	// Validate configuration version
+	configCompatibilityStatus = validateConfigVersion(config.Version)
+	if !configCompatibilityStatus.IsCompatible {
+		log.Printf("WARNING: %s", configCompatibilityStatus.WarningMessage)
+	}
+
 	configuration = config
 
 	if config.Environment.LogLevel == "debug" {
@@ -1035,6 +1120,7 @@ func main() {
 	mux.HandleFunc("/api/version", versionHandler)
 	mux.HandleFunc("/api/frontend-config", frontendConfigHandler)
 	mux.HandleFunc("/api/health", healthHandler)
+	mux.HandleFunc("/api/config-status", configStatusHandler)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticPath))))
 	mux.Handle("/icons/", http.StripPrefix("/icons/", http.FileServer(http.Dir("/icons"))))
 	mux.HandleFunc("/", serveHTMLTemplate)
