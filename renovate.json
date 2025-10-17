@@ -3,29 +3,29 @@
   "extends": [
     "config:recommended"
   ],
-  "baseBranches": [
+  "baseBranchPatterns": [
     "main"
   ],
   "packageRules": [
     {
-      "matchPackagePatterns": [
-        "*"
-      ],
       "matchUpdateTypes": [
         "major"
+      ],
+      "matchPackageNames": [
+        "*"
       ]
     },
     {
       "groupName": "all non-major updates",
       "groupSlug": "patch",
-      "matchPackagePatterns": [
-        "*"
-      ],
       "matchUpdateTypes": [
         "minor",
         "patch"
       ],
-      "automerge": true
+      "automerge": true,
+      "matchPackageNames": [
+        "*"
+      ]
     }
   ]
 }
