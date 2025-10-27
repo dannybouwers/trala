@@ -174,7 +174,7 @@ Supported environment variables are shown below.
 | `SEARCH_ENGINE_URL`        | The URL for the external search engine. The search query will be appended to this URL.                    | `https://www.google.com/search?q=`     | No       |
 | `LOG_LEVEL`                | Set to `debug` for verbose logging of the icon-finding process. Any other value is silent.              | `info`                                 | No       |
 | `TRAEFIK_BASIC_AUTH_USER`  | Sets the username for the Traefik basic auth scheme if enabled.              | `(none)`                                 | No       |
-| `TRAEFIK_BASIC_AUTH_PASS`  | Sets the password for the Traefik basic auth scheme if enabled.             | `(none)`                                 | No       |
+| `TRAEFIK_BASIC_AUTH_FILE`  | Sets the file path from where to load the password for the Traefik basic auth scheme if enabled.         | `(none)`                                 | No       |
 
 ### Service Exclusion
 
@@ -294,7 +294,47 @@ With this configuration, you can remove the `--api.insecure=true` flag from your
 
 # Traefik Basic Auth
 
-To secure the Traefik API access with basic auth, you need to add a basic-auth middleware to the router that exposes the Traefik API:
+To secure the Traefik API access with basic auth, create a credentials file:
+
+```bash
+echo "<PASSWORD>" > basic_auth_password.txt
+```
+
+Add the file as Docker secret in the Docker compose:
+
+```yaml
+services:
+  trala:
+    [...]
+    secrets:
+      - basic_auth_password
+    
+secrets:
+  basic_auth_password:
+    file: ./basic_auth_password.txt
+```
+
+To point Trala to the secret, either specify the path in the configuration file:
+
+```yaml
+environment:
+  traefik:
+    basic_auth:
+      username: <USERNAME>
+      password_file: /run/secrets/basic_auth_password
+```
+
+Or specify the path as environment variable:
+
+```yaml
+services:
+  trala:
+    [...]
+    environment:
+      - TRAEFIK_BASIC_AUTH_FILE=/run/secrets/basic_auth_password
+```
+
+To add basic auth to the Traefik API, insert a basic auth middleware into the router that exposes the API. To create the hashed credentials for the middleware, use `echo $(htpasswd -nB user) | sed -e s/\\$/\\$\\$/g`. Replace the resulting string with the `<REPLACE_ME>` tag:
 
 ```yaml
 - "traefik.http.routers.internal-api.entrypoints=traefik-internal"
@@ -304,27 +344,12 @@ To secure the Traefik API access with basic auth, you need to add a basic-auth m
 - "traefik.http.middlewares.auth.basicauth.users=<REPLACE_ME>"
 ```
 
-To create the hashed credentials for the middleware, use `echo $(htpasswd -nB user) | sed -e s/\\$/\\$\\$/g`. Replace the resulting string with the `<REPLACE_ME>` tag in the middleware definition. Note down the password, and either specify it in the Trala configuration:
+Finally, enable basic auth in the configuration file with the `environment.traefik.enable_basic_auth` setting:
 
 ```yaml
 environment:
   traefik:
     enable_basic_auth: true
-    basic_auth:
-      username: user
-      password: pass  
-```
-
-Or pass the credentials with the `TRAEFIK_BASIC_AUTH_USER` and `TRAEFIK_BASIC_AUTH_PASS` environment variables in the `docker-compose.yml`:
-
-```yaml
-services:
-  trala:
-    [...]
-    container_name: trala
-    environment:
-      - TRAEFIK_BASIC_AUTH_USER=<USERNAME>
-      - TRAEFIK_BASIC_AUTH_PASS=<PASSWORD>
 ```
 
 ---
