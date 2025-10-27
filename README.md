@@ -173,6 +173,8 @@ Supported environment variables are shown below.
 | `REFRESH_INTERVAL_SECONDS` | The interval in seconds at which the service list automatically refreshes.                                | `30`                                   | No       |
 | `SEARCH_ENGINE_URL`        | The URL for the external search engine. The search query will be appended to this URL.                    | `https://www.google.com/search?q=`     | No       |
 | `LOG_LEVEL`                | Set to `debug` for verbose logging of the icon-finding process. Any other value is silent.              | `info`                                 | No       |
+| `TRAEFIK_BASIC_AUTH_USER`  | Sets the username for the Traefik basic auth scheme if enabled.              | `(none)`                                 | No       |
+| `TRAEFIK_BASIC_AUTH_PASS`  | Sets the password for the Traefik basic auth scheme if enabled.             | `(none)`                                 | No       |
 
 ### Service Exclusion
 
@@ -290,9 +292,44 @@ services:
 ```
 With this configuration, you can remove the `--api.insecure=true` flag from your Traefik configuration, making your setup more secure. TraLa will automatically ignore the service created for connecting to Traefik's API.
 
- ---
+# Traefik Basic Auth
 
-## 🛠️ Building Locally
+To secure the Traefik API access with basic auth, you need to add a basic-auth middleware to the router that exposes the Traefik API:
+
+```yaml
+- "traefik.http.routers.internal-api.entrypoints=traefik-internal"
+- "traefik.http.routers.internal-api.rule=PathPrefix(`/api`)"
+- "traefik.http.routers.internal-api.service=api@internal"
+- "traefik.http.routers.internal-api.middlewares=auth"
+- "traefik.http.middlewares.auth.basicauth.users=<REPLACE_ME>"
+```
+
+To create the hashed credentials for the middleware, use `echo $(htpasswd -nB user) | sed -e s/\\$/\\$\\$/g`. Replace the resulting string with the `<REPLACE_ME>` tag in the middleware definition. Note down the password, and either specify it in the Trala configuration:
+
+```yaml
+environment:
+  traefik:
+    enable_basic_auth: true
+    basic_auth:
+      username: user
+      password: pass  
+```
+
+Or pass the credentials with the `TRAEFIK_BASIC_AUTH_USER` and `TRAEFIK_BASIC_AUTH_PASS` environment variables in the `docker-compose.yml`:
+
+```yaml
+services:
+  trala:
+    [...]
+    container_name: trala
+    environment:
+      - TRAEFIK_BASIC_AUTH_USER=<USERNAME>
+      - TRAEFIK_BASIC_AUTH_PASS=<PASSWORD>
+```
+
+---
+
+# 🛠️ Building Locally
 
 If you want to build the image yourself:
 
