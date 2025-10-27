@@ -99,8 +99,8 @@ environment:
     api_host: http://traefik:8080
     enable_basic_auth: true
     basic_auth:
-      username: user
-      password: pass  
+      username: username
+      password_file: /run/secrets/basic_auth_password
 
 # Service configuration
 services:
