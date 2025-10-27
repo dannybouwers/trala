@@ -1111,6 +1111,12 @@ func loadConfiguration() {
 	if v := os.Getenv("TRAEFIK_API_HOST"); v != "" {
 		config.Environment.Traefik.APIHost = v
 	}
+	if v := os.Getenv("TRAEFIK_BASIC_AUTH_USER"); v != "" {
+		config.Environment.Traefik.BasicAuth.Username = v
+	}
+	if v := os.Getenv("TRAEFIK_BASIC_AUTH_PASS"); v != "" {
+		config.Environment.Traefik.BasicAuth.Password = v
+	}
 	if v := os.Getenv("LOG_LEVEL"); v != "" {
 		config.Environment.LogLevel = v
 	}
