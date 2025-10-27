@@ -378,6 +378,12 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Set basic auth option
+	if configuration.Environment.Traefik.EnableBasicAuth {
+		debugf("Setting basic auth")
+		req.SetBasicAuth(configuration.Environment.Traefik.BasicAuth.Username, configuration.Environment.Traefik.BasicAuth.Password)
+	}
+
 	// Make the request
 	resp, err := httpClient.Do(req)
 	if err != nil {
