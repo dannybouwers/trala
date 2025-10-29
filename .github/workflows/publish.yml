@@ -61,4 +61,3 @@ jobs:
             VERSION=${{ env.VERSION }}
             COMMIT=${{ env.COMMIT }}
             BUILD_TIME=${{ env.BUILD_TIME }}
-

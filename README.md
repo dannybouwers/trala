@@ -104,6 +104,7 @@ services:
   exclude:
     - "traefik-api"  # Hide the Traefik API itself
     - "admin-panel"  # Hide internal admin interface
+    - "api*" # Hide all routers starting with "api"
   
   # Service overrides for display names and icons
   overrides:
@@ -171,7 +172,7 @@ Supported environment variables are shown below.
 
 ### Service Exclusion
 
-You can hide specific services from appearing in the dashboard by specifying their router names in the `configuration.yml` file with the `exclusions` key. This is useful for hiding administrative interfaces or services you don't want to be easily accessible through the dashboard.
+You can hide specific services from appearing in the dashboard by specifying their router names in the `configuration.yml` file with the `exclusions` key. Wildcard patterns (*, ?) are supported, allowing flexible matching of multiple services. This is useful for hiding administrative interfaces or services you don't want to be easily accessible through the dashboard.
 
 #### How It Works
 

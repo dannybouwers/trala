@@ -536,14 +536,21 @@ func getDisplayNameOverride(routerName string) string {
 }
 
 // isExcluded checks if a router name is in the exclude list.
+// Supports wildcard patterns (*, ?) and logs invalid patterns.
 func isExcluded(routerName string) bool {
 	configurationMux.RLock()
 	defer configurationMux.RUnlock()
 
-	for _, exclude := range configuration.Services.Exclude {
-		if exclude == routerName {
-			return true
-		}
+    for _, exclude := range configuration.Services.Exclude {
+        match, err := filepath.Match(exclude, routerName)
+        if err != nil {
+            // Log invalid pattern so it is visible in docker logs
+            log.Printf("WARNING: invalid exclude pattern %q: %v", exclude, err)
+            continue
+        }
+        if match {
+            return true
+        }
 	}
 	return false
 }
