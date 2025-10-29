@@ -95,6 +95,7 @@ environment:
   search_engine_url: https://duckduckgo.com/?q=
   refresh_interval_seconds: 30
   log_level: info
+  language: de  # change Language (Default "en"). Available: en, de
   traefik:
     api_host: http://traefik:8080
 
