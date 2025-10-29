@@ -2,6 +2,11 @@ name: Publish Docker Image to GHCR
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag for the Docker image'
+        required: false
+        default: 'manual'
 
 jobs:
   build-and-push:
@@ -33,13 +38,12 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=raw,value=manual
+            type=raw,value=${{ github.event.inputs.version }}
             type=raw,value=latest
 
-      - name: Extract version from tag
-        id: extract_version
+      - name: Set version info
         run: |
-          echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+          echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
           echo "COMMIT=$(git rev-parse HEAD)" >> $GITHUB_ENV
           echo "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
 
@@ -56,4 +60,3 @@ jobs:
             VERSION=${{ env.VERSION }}
             COMMIT=${{ env.COMMIT }}
             BUILD_TIME=${{ env.BUILD_TIME }}
-
