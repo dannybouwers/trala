@@ -1,0 +1,36 @@
+
+[title]
+other = "TraLa - Traefik Startseite"
+
+[error]
+other = "Hoppla, etwas ist schiefgelaufen."
+
+[fetch_error]
+other = "Dienste konnten nicht geladen werden."
+
+[search]
+other = "Suche"
+
+[search_placeholder]
+other = "Dienste filtern oder im Internet suchen..."
+
+[name]
+other = "Name"
+
+[url]
+other = "URL"
+
+[priority]
+other = "Priorität"
+
+[greeting_night]
+other = "Gute Nacht"
+
+[greeting_morning]
+other = "Guten Morgen"
+
+[greeting_afternoon]
+other = "Guten Tag"
+
+[greeting_evening]
+other = "Guten Abend"

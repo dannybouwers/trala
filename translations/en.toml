@@ -1,0 +1,36 @@
+
+[title]
+other = "TraLa - Traefik Landing Page"
+
+[error]
+other = "Oops, something went wrong."
+
+[fetch_error]
+other = "Could not fetch services."
+
+[search]
+other = "Search"
+
+[search_placeholder]
+other = "Filter services or search the web..."
+
+[name]
+other = "Name"
+
+[url]
+other = "URL"
+
+[priority]
+other = "Priority"
+
+[greeting_night]
+other = "Good night"
+
+[greeting_morning]
+other = "Good morning"
+
+[greeting_afternoon]
+other = "Good afternoon"
+
+[greeting_evening]
+other = "Good evening"
