@@ -1,9 +1,7 @@
 name: Publish Docker Image to GHCR
 
 on:
-  push:
-    tags:
-      - 'v*.*.*' # Trigger on tags like v0.1.0, v1.2.3, etc.
+  workflow_dispatch:
 
 jobs:
   build-and-push:
