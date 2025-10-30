@@ -14,10 +14,13 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/lithammer/fuzzysearch/fuzzy"
+	"github.com/nicksnyder/go-i18n/v2/i18n"
+	"golang.org/x/text/language"
 	"gopkg.in/yaml.v3"
 )
 
@@ -26,6 +29,8 @@ var (
 	version   string
 	commit    string
 	buildTime string
+	bundle    *i18n.Bundle
+	localizer *i18n.Localizer
 )
 
 // Minimum supported configuration version
@@ -104,6 +109,7 @@ type EnvironmentConfiguration struct {
 	RefreshIntervalSeconds int           `yaml:"refresh_interval_seconds"`
 	LogLevel               string        `yaml:"log_level"`
 	Traefik                TraefikConfig `yaml:"traefik"`
+	Language               string        `yaml:"language"`
 }
 
 type TralaConfiguration struct {
@@ -145,6 +151,7 @@ type SelfHstIcon struct {
 var (
 	htmlTemplate     []byte
 	htmlOnce         sync.Once
+	parsedTemplate   *template.Template
 	selfhstIcons     []SelfHstIcon
 	selfhstCacheTime time.Time
 	selfhstCacheMux  sync.RWMutex
@@ -168,6 +175,7 @@ const selfhstCacheTTL = 1 * time.Hour
 const selfhstAPIURL = "https://raw.githubusercontent.com/selfhst/icons/refs/heads/main/index.json"
 const configurationFilePath = "/config/configuration.yml"
 const defaultIcon = "" // Frontend will use a fallback if icon is empty.
+const translationDir = "/app/translations"
 
 // Global variable to track configuration compatibility status
 var configCompatibilityStatus ConfigStatus
@@ -192,15 +200,106 @@ func loadHTMLTemplate(templatePath string) {
 		if err != nil {
 			log.Fatalf("FATAL: Could not read index.html template at %s: %v", templatePath, err)
 		}
+		// Parse Template once
+		//tmpl, err := template.New("index").Parse(string(htmlTemplate))
+		tmpl, err := template.New("index").Funcs(template.FuncMap{"T": T}).Parse(string(htmlTemplate))
+		if err != nil {
+			log.Fatalf("FATAL: Could not parse index.html: %v", err)
+		}
+		parsedTemplate = tmpl
 	})
 }
 
 // --- Main HTTP Handlers ---
 
-// serveHTMLTemplate serves the static index.html file, injecting environment variables.
+// serveHTMLTemplate renders the HTML template with i18n support using go-i18n
 func serveHTMLTemplate(w http.ResponseWriter, r *http.Request) {
+	configurationMux.RLock()
+	lang := configuration.Environment.Language
+	configurationMux.RUnlock()
+
+	// Create a localizer for the selected language
+	localizer := i18n.NewLocalizer(bundle, lang)
+
+	tmpl, err := parsedTemplate.Clone()
+	if err != nil {
+		http.Error(w, "Template clone error", http.StatusInternalServerError)
+		return
+	}
+
+	tmpl = tmpl.Funcs(template.FuncMap{
+		"T": func(id string) string {
+			msg, err := localizer.Localize(&i18n.LocalizeConfig{MessageID: id})
+			if err != nil {
+				return id
+			}
+			return msg
+		},
+	})
+
+	// Set the response content type and execute the template
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write(htmlTemplate)
+	tmpl.Execute(w, nil)
+}
+
+// initI18n initializes the i18n bundle and loads the appropriate translation file.
+// It falls back to English if the desired language file is missing.
+func initI18n() {
+	const fallbackLang = "en"
+
+	// Get the language from environment configuration
+	lang := configuration.Environment.Language
+	if lang == "" {
+		log.Printf("Language not set - using fallback language: %s", fallbackLang)
+		lang = fallbackLang
+	}
+
+	// Build the path to the translation file for the selected language
+	translationFile := filepath.Join(translationDir, lang+".yaml")
+	log.Printf("Attempting to load translation file: %s", translationFile)
+
+	// Check if the translation file exists
+	if _, err := os.Stat(translationFile); os.IsNotExist(err) {
+		log.Printf("Translation file not found for language '%s': %s", lang, translationFile)
+
+		// Fallback to default language if the desired file is missing
+		lang = fallbackLang
+		translationFile = filepath.Join(translationDir, lang+".yaml")
+		log.Printf("Falling back to default translation file: %s", translationFile)
+
+		// If fallback file is also missing, terminate the application
+		if _, err := os.Stat(translationFile); os.IsNotExist(err) {
+			log.Fatalf("FATAL: Fallback translation file also not found: %s", translationFile)
+			return
+		}
+	}
+
+	log.Printf("Language set to: %s", lang)
+
+	// Create a new i18n bundle with the selected language
+	bundle = i18n.NewBundle(language.Make(lang))
+
+	// Register the YAML unmarshal function to read translation files
+	bundle.RegisterUnmarshalFunc("yaml", yaml.Unmarshal)
+
+	// Load the translation file into the bundle
+	if _, err := bundle.LoadMessageFile(translationFile); err != nil {
+		log.Fatalf("Failed to load translation file '%s': %v", translationFile, err)
+
+		// Create a localizer for the current language
+		localizer = i18n.NewLocalizer(bundle, lang)
+	}
+}
+
+// T is a helper function for localization. It takes a message ID and returns the localized string.
+// If the localization fails, it returns the message ID as a fallback.
+func T(id string) string {
+	msg, err := localizer.Localize(&i18n.LocalizeConfig{MessageID: id})
+	if err != nil {
+		// If localization fails, return the message ID as a fallback.
+		return id
+	}
+	return msg
 }
 
 // servicesHandler is the main API endpoint. It fetches, processes, and returns all service data.
@@ -541,16 +640,16 @@ func isExcluded(routerName string) bool {
 	configurationMux.RLock()
 	defer configurationMux.RUnlock()
 
-    for _, exclude := range configuration.Services.Exclude {
-        match, err := filepath.Match(exclude, routerName)
-        if err != nil {
-            // Log invalid pattern so it is visible in docker logs
-            log.Printf("WARNING: invalid exclude pattern %q: %v", exclude, err)
-            continue
-        }
-        if match {
-            return true
-        }
+	for _, exclude := range configuration.Services.Exclude {
+		match, err := filepath.Match(exclude, routerName)
+		if err != nil {
+			// Log invalid pattern so it is visible in docker logs
+			log.Printf("WARNING: invalid exclude pattern %q: %v", exclude, err)
+			continue
+		}
+		if match {
+			return true
+		}
 	}
 	return false
 }
@@ -1069,6 +1168,9 @@ func loadConfiguration() {
 	if v := os.Getenv("LOG_LEVEL"); v != "" {
 		config.Environment.LogLevel = v
 	}
+	if v := os.Getenv("LANGUAGE"); v != "" {
+		config.Environment.Language = v
+	}
 
 	// Step 4: post-processing / validation
 	if config.Environment.Traefik.APIHost == "" {
@@ -1113,7 +1215,7 @@ func loadConfiguration() {
 // --- Main Application Setup ---
 func main() {
 	loadConfiguration()
-
+	initI18n()
 	const templatePath = "template"
 	loadHTMLTemplate(templatePath)
 

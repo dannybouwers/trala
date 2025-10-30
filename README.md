@@ -95,6 +95,7 @@ environment:
   search_engine_url: https://duckduckgo.com/?q=
   refresh_interval_seconds: 30
   log_level: info
+  language: de  # change Language (Default "en"). Available: en, de
   traefik:
     api_host: http://traefik:8080
 
@@ -104,7 +105,6 @@ services:
   exclude:
     - "traefik-api"  # Hide the Traefik API itself
     - "admin-panel"  # Hide internal admin interface
-    - "api*" # Hide all routers starting with "api"
   
   # Service overrides for display names and icons
   overrides:
@@ -169,10 +169,11 @@ Supported environment variables are shown below.
 | `REFRESH_INTERVAL_SECONDS` | The interval in seconds at which the service list automatically refreshes.                                | `30`                                   | No       |
 | `SEARCH_ENGINE_URL`        | The URL for the external search engine. The search query will be appended to this URL.                    | `https://www.google.com/search?q=`     | No       |
 | `LOG_LEVEL`                | Set to `debug` for verbose logging of the icon-finding process. Any other value is silent.              | `info`                                 | No       |
+| `LANGUAGE`                 | The language of the application. Supported values are `en` (English) and `de` (German).                 | `en`                                   | No       |
 
 ### Service Exclusion
 
-You can hide specific services from appearing in the dashboard by specifying their router names in the `configuration.yml` file with the `exclusions` key. Wildcard patterns (*, ?) are supported, allowing flexible matching of multiple services. This is useful for hiding administrative interfaces or services you don't want to be easily accessible through the dashboard.
+You can hide specific services from appearing in the dashboard by specifying their router names in the `configuration.yml` file with the `exclusions` key. This is useful for hiding administrative interfaces or services you don't want to be easily accessible through the dashboard.
 
 #### How It Works
 
