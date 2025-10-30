@@ -30,6 +30,7 @@ var (
 	commit    string
 	buildTime string
 	bundle    *i18n.Bundle
+	localizer *i18n.Localizer
 )
 
 // Minimum supported configuration version
@@ -150,6 +151,7 @@ type SelfHstIcon struct {
 var (
 	htmlTemplate     []byte
 	htmlOnce         sync.Once
+	parsedTemplate   *template.Template
 	selfhstIcons     []SelfHstIcon
 	selfhstCacheTime time.Time
 	selfhstCacheMux  sync.RWMutex
@@ -198,6 +200,13 @@ func loadHTMLTemplate(templatePath string) {
 		if err != nil {
 			log.Fatalf("FATAL: Could not read index.html template at %s: %v", templatePath, err)
 		}
+		// Parse Template once
+		//tmpl, err := template.New("index").Parse(string(htmlTemplate))
+		tmpl, err := template.New("index").Funcs(template.FuncMap{"T": T}).Parse(string(htmlTemplate))
+		if err != nil {
+			log.Fatalf("FATAL: Could not parse index.html: %v", err)
+		}
+		parsedTemplate = tmpl
 	})
 }
 
@@ -212,17 +221,21 @@ func serveHTMLTemplate(w http.ResponseWriter, r *http.Request) {
 	// Create a localizer for the selected language
 	localizer := i18n.NewLocalizer(bundle, lang)
 
-	// Parse the HTML template and register the translation function "T"
-	tmpl := template.Must(template.New("index").Funcs(template.FuncMap{
+	tmpl, err := parsedTemplate.Clone()
+	if err != nil {
+		http.Error(w, "Template clone error", http.StatusInternalServerError)
+		return
+	}
+
+	tmpl = tmpl.Funcs(template.FuncMap{
 		"T": func(id string) string {
-			// Use the localizer to translate the given message ID
 			msg, err := localizer.Localize(&i18n.LocalizeConfig{MessageID: id})
 			if err != nil {
-				return id // Fallback: return the message ID if translation is missing
+				return id
 			}
 			return msg
 		},
-	}).Parse(string(htmlTemplate)))
+	})
 
 	// Set the response content type and execute the template
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -272,7 +285,21 @@ func initI18n() {
 	// Load the translation file into the bundle
 	if _, err := bundle.LoadMessageFile(translationFile); err != nil {
 		log.Fatalf("Failed to load translation file '%s': %v", translationFile, err)
+
+		// Create a localizer for the current language
+		localizer = i18n.NewLocalizer(bundle, lang)
 	}
+}
+
+// T is a helper function for localization. It takes a message ID and returns the localized string.
+// If the localization fails, it returns the message ID as a fallback.
+func T(id string) string {
+	msg, err := localizer.Localize(&i18n.LocalizeConfig{MessageID: id})
+	if err != nil {
+		// If localization fails, return the message ID as a fallback.
+		return id
+	}
+	return msg
 }
 
 // servicesHandler is the main API endpoint. It fetches, processes, and returns all service data.
