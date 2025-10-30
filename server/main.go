@@ -1141,7 +1141,7 @@ func loadConfiguration() {
 	if v := os.Getenv("LOG_LEVEL"); v != "" {
 		config.Environment.LogLevel = v
 	}
-	if v := os.Getenv("APP_LANG"); v != "" {
+	if v := os.Getenv("LANGUAGE"); v != "" {
 		config.Environment.Language = v
 	}
 
