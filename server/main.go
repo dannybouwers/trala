@@ -20,7 +20,6 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/lithammer/fuzzysearch/fuzzy"
 	"github.com/nicksnyder/go-i18n/v2/i18n"
-	"github.com/pelletier/go-toml"
 	"golang.org/x/text/language"
 	"gopkg.in/yaml.v3"
 )
@@ -210,9 +209,6 @@ func serveHTMLTemplate(w http.ResponseWriter, r *http.Request) {
 	lang := configuration.Environment.Language
 	configurationMux.RUnlock()
 
-	if lang == "" {
-		lang = "en" // Default to English if not se
-	}
 	// Create a localizer for the selected language
 	localizer := i18n.NewLocalizer(bundle, lang)
 
@@ -246,7 +242,7 @@ func initI18n() {
 	}
 
 	// Build the path to the translation file for the selected language
-	translationFile := filepath.Join(translationDir, lang+".toml")
+	translationFile := filepath.Join(translationDir, lang+".yaml")
 	log.Printf("Attempting to load translation file: %s", translationFile)
 
 	// Check if the translation file exists
@@ -255,7 +251,7 @@ func initI18n() {
 
 		// Fallback to default language if the desired file is missing
 		lang = fallbackLang
-		translationFile = filepath.Join(translationDir, lang+".toml")
+		translationFile = filepath.Join(translationDir, lang+".yaml")
 		log.Printf("Falling back to default translation file: %s", translationFile)
 
 		// If fallback file is also missing, terminate the application
@@ -270,8 +266,8 @@ func initI18n() {
 	// Create a new i18n bundle with the selected language
 	bundle = i18n.NewBundle(language.Make(lang))
 
-	// Register the TOML unmarshal function to read translation files
-	bundle.RegisterUnmarshalFunc("toml", toml.Unmarshal)
+	// Register the YAML unmarshal function to read translation files
+	bundle.RegisterUnmarshalFunc("yaml", yaml.Unmarshal)
 
 	// Load the translation file into the bundle
 	if _, err := bundle.LoadMessageFile(translationFile); err != nil {

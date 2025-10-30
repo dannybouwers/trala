@@ -1,0 +1,47 @@
+# Title of the homepage
+title:
+    other: "TraLa - Traefik Landing Page"
+
+# Error message for a general error
+error:
+    other: "Oops, something went wrong."
+
+# Error message when services cannot be loaded
+fetch_error:
+    other: "Could not fetch services."
+
+# Label for the search function
+search:
+    other: "Search"
+
+# Placeholder text for the search field
+search_placeholder:
+    other: "Filter services or search the web..."
+
+# Button label to sort by the name of a service
+name:
+    other: "Name"
+
+# Button label to sort by the URL of a service
+url:
+    other: "URL"
+
+# Button label to sort by the priority of a service
+priority:
+    other: "Priority"
+
+# Greeting for the night (00:00 - 5:59)
+greeting_night:
+    other: "Good night"
+
+# Greeting for the morning (6:00 - 11:59)
+greeting_morning:
+    other: "Good morning"
+
+# Greeting for the afternoon (12:00 - 17:59)
+greeting_afternoon:
+    other: "Good afternoon"
+
+# Greeting for the evening (18:00 - 23:59)
+greeting_evening:
+    other: "Good evening"
