@@ -1119,7 +1119,7 @@ func loadConfiguration() {
 	if v := os.Getenv("TRAEFIK_BASIC_AUTH_PASSWORD"); v != "" {
 		config.Environment.Traefik.BasicAuth.Password = v
 	}
-	if v := os.Getenv("TRAEFIK_BASIC_AUTH_FILE"); v != "" {
+	if v := os.Getenv("TRAEFIK_BASIC_AUTH_PASSWORD_FILE"); v != "" {
 		config.Environment.Traefik.BasicAuth.PasswordFile = v
 	}
 	if v := os.Getenv("LOG_LEVEL"); v != "" {

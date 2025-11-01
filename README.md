@@ -167,16 +167,16 @@ services:
 
 Supported environment variables are shown below.
 
-| Variable                       | Description                                                                                                                                       | Default                                      | Required |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | -------- |
-| `TRAEFIK_API_HOST`             | The full base URL of your Traefik API. From within Docker, this is typically `http://traefik:8080`.                                               | `(none)`                                     | **Yes**  |
-| `SELFHST_ICON_URL`             | Base URL of the Selfhst icon endpoint. Customize if you are hosting your own local instance.                                                      | `https://cdn.jsdelivr.net/gh/selfhst/icons/` | No       |
-| `REFRESH_INTERVAL_SECONDS`     | The interval in seconds at which the service list automatically refreshes.                                                                        | `30`                                         | No       |
-| `SEARCH_ENGINE_URL`            | The URL for the external search engine. The search query will be appended to this URL.                                                            | `https://www.google.com/search?q=`           | No       |
-| `LOG_LEVEL`                    | Set to `debug` for verbose logging of the icon-finding process. Any other value is silent.                                                        | `info`                                       | No       |
-| `TRAEFIK_BASIC_AUTH_USERNAME`  | Sets the username for the Traefik basic auth scheme if enabled.                                                                                   | `(none)`                                     | No       |
-| `TRAEFIK_BASIC_AUTH_PASSWORD`  | Sets the password for the Traefik basic auth scheme if enabled.                                                                                   | `(none)`                                     | No       |
-| `TRAEFIK_BASIC_AUTH_FILE`      | Sets the file path from where to load the password for the Traefik basic auth scheme if enabled. Takes precedence over setting password directly. | `(none)`                                     | No       |
+| Variable                           | Description                                                                                                                                       | Default                                      | Required |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | -------- |
+| `TRAEFIK_API_HOST`                 | The full base URL of your Traefik API. From within Docker, this is typically `http://traefik:8080`.                                               | `(none)`                                     | **Yes**  |
+| `SELFHST_ICON_URL`                 | Base URL of the Selfhst icon endpoint. Customize if you are hosting your own local instance.                                                      | `https://cdn.jsdelivr.net/gh/selfhst/icons/` | No       |
+| `REFRESH_INTERVAL_SECONDS`         | The interval in seconds at which the service list automatically refreshes.                                                                        | `30`                                         | No       |
+| `SEARCH_ENGINE_URL`                | The URL for the external search engine. The search query will be appended to this URL.                                                            | `https://www.google.com/search?q=`           | No       |
+| `LOG_LEVEL`                        | Set to `debug` for verbose logging of the icon-finding process. Any other value is silent.                                                        | `info`                                       | No       |
+| `TRAEFIK_BASIC_AUTH_USERNAME`      | Sets the username for the Traefik basic auth scheme if enabled.                                                                                   | `(none)`                                     | No       |
+| `TRAEFIK_BASIC_AUTH_PASSWORD`      | Sets the password for the Traefik basic auth scheme if enabled.                                                                                   | `(none)`                                     | No       |
+| `TRAEFIK_BASIC_AUTH_PASSWORD_FILE` | Sets the file path from where to load the password for the Traefik basic auth scheme if enabled. Takes precedence over setting password directly. | `(none)`                                     | No       |
 
 ### Service Exclusion
 
@@ -365,7 +365,7 @@ services:
   trala:
     [...]
     environment:
-      - TRAEFIK_BASIC_AUTH_FILE=/run/secrets/basic_auth_password
+      - TRAEFIK_BASIC_AUTH_PASSWORD_FILE=/run/secrets/basic_auth_password
 ```
 
 ### Environment Variable
