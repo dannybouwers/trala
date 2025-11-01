@@ -308,6 +308,8 @@ To add basic auth to the Traefik API, insert a basic auth middleware into the ro
 - "traefik.http.middlewares.auth.basicauth.users=<REPLACE_ME>"
 ```
 
+**NOTE**: The Traefik API will be reachable on all routes that use the `api@internal` service. If you have a router that exposes the Traefik dashboard, the API will be reachable there as well. Ensure there is authentication in place on all routers!
+
 Enable basic auth in the configuration file with the `environment.traefik.enable_basic_auth` setting:
 
 ```yaml
