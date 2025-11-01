@@ -100,7 +100,8 @@ environment:
     enable_basic_auth: true
     basic_auth:
       username: username
-      password_file: /run/secrets/basic_auth_password
+      password: password # mutually exclusive with password_file
+      password_file: /run/secrets/basic_auth_password # mutually exclusive with password
 
 # Service configuration
 services:
