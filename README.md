@@ -97,6 +97,11 @@ environment:
   log_level: info
   traefik:
     api_host: http://traefik:8080
+    enable_basic_auth: true
+    basic_auth:
+      username: username
+      password: password # mutually exclusive with password_file
+      password_file: /run/secrets/basic_auth_password # mutually exclusive with password
 
 # Service configuration
 services:
@@ -162,13 +167,16 @@ services:
 
 Supported environment variables are shown below.
 
-| Variable                   | Description                                                                                             | Default                                | Required |
-| -------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------- | -------- |
-| `TRAEFIK_API_HOST`         | The full base URL of your Traefik API. From within Docker, this is typically `http://traefik:8080`.        | `(none)`                               | **Yes** |
-| `SELFHST_ICON_URL`         | Base URL of the Selfhst icon endpoint. Customize if you are hosting your own local instance. | `https://cdn.jsdelivr.net/gh/selfhst/icons/`                               | No |
-| `REFRESH_INTERVAL_SECONDS` | The interval in seconds at which the service list automatically refreshes.                                | `30`                                   | No       |
-| `SEARCH_ENGINE_URL`        | The URL for the external search engine. The search query will be appended to this URL.                    | `https://www.google.com/search?q=`     | No       |
-| `LOG_LEVEL`                | Set to `debug` for verbose logging of the icon-finding process. Any other value is silent.              | `info`                                 | No       |
+| Variable                           | Description                                                                                                                                       | Default                                      | Required |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | -------- |
+| `TRAEFIK_API_HOST`                 | The full base URL of your Traefik API. From within Docker, this is typically `http://traefik:8080`.                                               | `(none)`                                     | **Yes**  |
+| `SELFHST_ICON_URL`                 | Base URL of the Selfhst icon endpoint. Customize if you are hosting your own local instance.                                                      | `https://cdn.jsdelivr.net/gh/selfhst/icons/` | No       |
+| `REFRESH_INTERVAL_SECONDS`         | The interval in seconds at which the service list automatically refreshes.                                                                        | `30`                                         | No       |
+| `SEARCH_ENGINE_URL`                | The URL for the external search engine. The search query will be appended to this URL.                                                            | `https://www.google.com/search?q=`           | No       |
+| `LOG_LEVEL`                        | Set to `debug` for verbose logging of the icon-finding process. Any other value is silent.                                                        | `info`                                       | No       |
+| `TRAEFIK_BASIC_AUTH_USERNAME`      | Sets the username for the Traefik basic auth scheme if enabled.                                                                                   | `(none)`                                     | No       |
+| `TRAEFIK_BASIC_AUTH_PASSWORD`      | Sets the password for the Traefik basic auth scheme if enabled.                                                                                   | `(none)`                                     | No       |
+| `TRAEFIK_BASIC_AUTH_PASSWORD_FILE` | Sets the file path from where to load the password for the Traefik basic auth scheme if enabled. Takes precedence over setting password directly. | `(none)`                                     | No       |
 
 ### Service Exclusion
 
@@ -252,6 +260,8 @@ Each manual service can include:
 
 # 🔒 Secure Traefik API Access (Advanced)
 
+## Dedicated Router Method
+
 Instead of using `--api.insecure=true` in your Traefik configuration, you can create a dedicated router for the API. This approach is more secure as it allows fine-grained control over API access.
 
 ### How It Works
@@ -286,9 +296,97 @@ services:
 ```
 With this configuration, you can remove the `--api.insecure=true` flag from your Traefik configuration, making your setup more secure. TraLa will automatically ignore the service created for connecting to Traefik's API.
 
- ---
+## Basic Auth Method
 
-## 🛠️ Building Locally
+To add basic auth to the Traefik API, insert a basic auth middleware into the router that exposes the API. To create the hashed credentials for the middleware, use `echo $(htpasswd -nB user) | sed -e s/\\$/\\$\\$/g`. Replace the resulting string with the `<REPLACE_ME>` tag:
+
+```yaml
+- "traefik.http.routers.internal-api.entrypoints=traefik-internal"
+- "traefik.http.routers.internal-api.rule=PathPrefix(`/api`)"
+- "traefik.http.routers.internal-api.service=api@internal"
+- "traefik.http.routers.internal-api.middlewares=auth"
+- "traefik.http.middlewares.auth.basicauth.users=<REPLACE_ME>"
+```
+
+**NOTE**: The Traefik API will be reachable on all routes that use the `api@internal` service. If you have a router that exposes the Traefik dashboard, the API will be reachable there as well. Ensure there is authentication in place on all routers!
+
+Enable basic auth in the configuration file with the `environment.traefik.enable_basic_auth` setting:
+
+```yaml
+environment:
+  traefik:
+    enable_basic_auth: true
+```
+
+There are three ways to specify the credentials for the basic auth scheme in Trala, where the lower number takes precedence over higher numbers:
+
+1. Docker Secret
+2. Environment Variable
+3. Configuration File
+
+Note that while we use the password hash for Traefik, the plain password has to be specified for all methods.
+
+### Docker Secret (Recommended)
+
+To use a Docker secret, create a credentials file:
+
+```bash
+echo "<PASSWORD>" > basic_auth_password.txt
+```
+
+Add the file as Docker secret in the Docker compose:
+
+```yaml
+services:
+  trala:
+    [...]
+    secrets:
+      - basic_auth_password
+    
+secrets:
+  basic_auth_password:
+    file: ./basic_auth_password.txt
+```
+
+To point Trala to the secret, either specify the path in the configuration file:
+
+```yaml
+environment:
+  traefik:
+    basic_auth:
+      username: <USERNAME>
+      password_file: /run/secrets/basic_auth_password
+```
+
+Or specify the path as environment variable:
+
+```yaml
+services:
+  trala:
+    [...]
+    environment:
+      - TRAEFIK_BASIC_AUTH_PASSWORD_FILE=/run/secrets/basic_auth_password
+```
+
+### Environment Variable
+
+To specify the credentials with environment variables, specify the `TRAEFIK_BASIC_AUTH_USERNAME` and `TRAEFIK_BASIC_AUTH_PASSWORD` variables.
+
+### Configuration File
+
+To store the credentials as part of the configuration file, specify the following settings:
+
+```yaml
+environment:
+  traefik:
+    basic_auth:
+      username: <USERNAME>
+      password: <PASSWORD>
+```
+
+---
+
+# 🛠️ Building Locally
 
 If you want to build the image yourself:
 
