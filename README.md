@@ -334,7 +334,13 @@ services:
 
 ### Basic Auth Method
 
-To add basic auth to the Traefik API, insert a basic auth middleware into the router that exposes the API. To create the hashed credentials for the middleware, use `echo $(htpasswd -nbB <USERNAME> <PASSWORD>) | sed -e s/\\$/\\$\\$/g`. Replace the `<REPLACE_ME>` tag with the resulting string:
+To add basic auth to the Traefik API, insert a basic auth middleware into the router that exposes the API. Create the hashed credentials for the middleware:
+
+``` bash
+echo $(htpasswd -nbB <USERNAME> <PASSWORD>) | sed -e s/\\$/\\$\\$/g
+```
+
+Replace the `<REPLACE_ME>` tag with the resulting string:
 
 ```yaml
 services:
