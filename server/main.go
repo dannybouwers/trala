@@ -203,6 +203,29 @@ func loadHTMLTemplate(templatePath string) {
 	})
 }
 
+// --- HTTP Helper Functions ---
+
+// createHTTPRequestWithAuth creates an HTTP request with basic auth if enabled in configuration
+func createHTTPRequestWithAuth(method, url string) (*http.Request, error) {
+	return createHTTPRequestWithAuthAndContext(context.Background(), method, url)
+}
+
+// createHTTPRequestWithAuthAndContext creates an HTTP request with context and basic auth if enabled in configuration
+func createHTTPRequestWithAuthAndContext(ctx context.Context, method, url string) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, method, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set basic auth option if enabled
+	if configuration.Environment.Traefik.EnableBasicAuth {
+		debugf("Setting basic auth")
+		req.SetBasicAuth(configuration.Environment.Traefik.BasicAuth.Username, configuration.Environment.Traefik.BasicAuth.Password)
+	}
+
+	return req, nil
+}
+
 // --- Main HTTP Handlers ---
 
 // serveHTMLTemplate serves the static index.html file, injecting environment variables.
@@ -216,17 +239,11 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 	// Fetch entrypoints from the Traefik API.
 	entryPointsURL := fmt.Sprintf("%s/api/entrypoints", configuration.Environment.Traefik.APIHost)
 	debugf("Fetching entrypoints from Traefik API: %s", entryPointsURL)
-	req, err := http.NewRequest("GET", entryPointsURL, nil)
+	req, err := createHTTPRequestWithAuth("GET", entryPointsURL)
 	if err != nil {
 		log.Printf("ERROR: Could not create request: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
-	}
-
-	// Set basic auth option
-	if configuration.Environment.Traefik.EnableBasicAuth {
-		debugf("Setting basic auth")
-		req.SetBasicAuth(configuration.Environment.Traefik.BasicAuth.Username, configuration.Environment.Traefik.BasicAuth.Password)
 	}
 
 	// Send request
@@ -262,16 +279,11 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 	routersURL := fmt.Sprintf("%s/api/http/routers", configuration.Environment.Traefik.APIHost)
 	debugf("Fetching routers from Traefik API: %s", routersURL)
 
-	req, err = http.NewRequest("GET", routersURL, nil)
+	req, err = createHTTPRequestWithAuth("GET", routersURL)
 	if err != nil {
 		log.Printf("ERROR: Could not fetch routers from Traefik API: %v", err)
 		http.Error(w, "Could not connect to Traefik API to get routers", http.StatusBadGateway)
 		return
-	}
-
-	// Set basic auth option
-	if configuration.Environment.Traefik.EnableBasicAuth {
-		req.SetBasicAuth(configuration.Environment.Traefik.BasicAuth.Username, configuration.Environment.Traefik.BasicAuth.Password)
 	}
 
 	// Send request
@@ -372,17 +384,11 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Create a request with context
-	req, err := http.NewRequestWithContext(ctx, "GET", entryPointsURL, nil)
+	// Create a request with context and auth
+	req, err := createHTTPRequestWithAuthAndContext(ctx, "GET", entryPointsURL)
 	if err != nil {
 		http.Error(w, "Traefik: Error creating request", http.StatusInternalServerError)
 		return
-	}
-
-	// Set basic auth option
-	if configuration.Environment.Traefik.EnableBasicAuth {
-		debugf("Setting basic auth")
-		req.SetBasicAuth(configuration.Environment.Traefik.BasicAuth.Username, configuration.Environment.Traefik.BasicAuth.Password)
 	}
 
 	// Make the request
@@ -582,16 +588,16 @@ func isExcluded(routerName string) bool {
 	configurationMux.RLock()
 	defer configurationMux.RUnlock()
 
-    for _, exclude := range configuration.Services.Exclude {
-        match, err := filepath.Match(exclude, routerName)
-        if err != nil {
-            // Log invalid pattern so it is visible in docker logs
-            log.Printf("WARNING: invalid exclude pattern %q: %v", exclude, err)
-            continue
-        }
-        if match {
-            return true
-        }
+	for _, exclude := range configuration.Services.Exclude {
+		match, err := filepath.Match(exclude, routerName)
+		if err != nil {
+			// Log invalid pattern so it is visible in docker logs
+			log.Printf("WARNING: invalid exclude pattern %q: %v", exclude, err)
+			continue
+		}
+		if match {
+			return true
+		}
 	}
 	return false
 }
