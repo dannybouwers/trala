@@ -1034,8 +1034,46 @@ func compareVersions(v1, v2 string) int {
 	return 0
 }
 
+// validateBasicAuthPassword checks if the basic auth password is configured using only one method
+func validateBasicAuthPassword(config TraefikConfig) string {
+	// If basic auth is not enabled, no validation needed
+	if !config.EnableBasicAuth {
+		return ""
+	}
+
+	// Count the number of password sources that are set
+	passwordSources := 0
+
+	// Check config file password
+	if config.BasicAuth.Password != "" {
+		passwordSources++
+	}
+
+	// Check config file password file
+	if config.BasicAuth.PasswordFile != "" {
+		passwordSources++
+	}
+
+	// Check environment variable password
+	if os.Getenv("TRAEFIK_BASIC_AUTH_PASSWORD") != "" {
+		passwordSources++
+	}
+
+	// Check environment variable password file
+	if os.Getenv("TRAEFIK_BASIC_AUTH_PASSWORD_FILE") != "" {
+		passwordSources++
+	}
+
+	// If more than one password source is configured, it's a warning
+	if passwordSources > 1 {
+		return "Basic auth password is configured using multiple methods. Please use only one method: either password in config file, password file, or environment variable."
+	}
+
+	return ""
+}
+
 // validateConfigVersion checks if the configuration version is compatible
-func validateConfigVersion(configVersion string) ConfigStatus {
+func validateConfigVersion(configVersion string, config TraefikConfig) ConfigStatus {
 	status := ConfigStatus{
 		ConfigVersion:          configVersion,
 		MinimumRequiredVersion: minimumConfigVersion,
@@ -1053,6 +1091,17 @@ func validateConfigVersion(configVersion string) ConfigStatus {
 	if compareVersions(configVersion, minimumConfigVersion) < 0 {
 		status.IsCompatible = false
 		status.WarningMessage = fmt.Sprintf("Configuration version %s is below the minimum required version %s. Some configuration options may be ignored.", configVersion, minimumConfigVersion)
+	}
+
+	// Validate basic auth password configuration
+	basicAuthWarning := validateBasicAuthPassword(config)
+	if basicAuthWarning != "" {
+		// If there's already a warning message, append to it
+		if status.WarningMessage != "" {
+			status.WarningMessage += " " + basicAuthWarning
+		} else {
+			status.WarningMessage = basicAuthWarning
+		}
 	}
 
 	return status
@@ -1180,7 +1229,7 @@ func loadConfiguration() {
 	log.Printf("Loaded %d service overrides from %s", len(config.Services.Overrides), configurationFilePath)
 
 	// Validate configuration version
-	configCompatibilityStatus = validateConfigVersion(config.Version)
+	configCompatibilityStatus = validateConfigVersion(config.Version, config.Environment.Traefik)
 	if !configCompatibilityStatus.IsCompatible {
 		log.Printf("WARNING: %s", configCompatibilityStatus.WarningMessage)
 	}
