@@ -1081,7 +1081,7 @@ func validateBasicAuthPassword(config TraefikConfig) string {
 }
 
 // validateConfigVersion checks if the configuration version is compatible
-func validateConfigVersion(configVersion string, config TraefikConfig) ConfigStatus {
+func validateConfigVersion(configVersion string, basicAuthWarning string) ConfigStatus {
 	status := ConfigStatus{
 		ConfigVersion:          configVersion,
 		MinimumRequiredVersion: minimumConfigVersion,
@@ -1101,8 +1101,7 @@ func validateConfigVersion(configVersion string, config TraefikConfig) ConfigSta
 		status.WarningMessage = fmt.Sprintf("Configuration version %s is below the minimum required version %s. Some configuration options may be ignored.", configVersion, minimumConfigVersion)
 	}
 
-	// Validate basic auth password configuration
-	basicAuthWarning := validateBasicAuthPassword(config)
+	// Merge with basic auth warning if present
 	if basicAuthWarning != "" {
 		// If there's already a warning message, append to it
 		if status.WarningMessage != "" {
@@ -1159,7 +1158,14 @@ func loadConfiguration() {
 		}
 	}
 
-	// Step 3: environment overrides
+	// Step 3: validate basic auth password configuration before environment overrides
+	// This ensures we check both the original config values and environment variables
+	basicAuthWarning := validateBasicAuthPassword(config.Environment.Traefik)
+	if basicAuthWarning != "" {
+		log.Printf("WARNING: %s", basicAuthWarning)
+	}
+
+	// Step 4: environment overrides
 	if v := os.Getenv("SELFHST_ICON_URL"); v != "" {
 		config.Environment.SelfhstIconURL = v
 	}
@@ -1189,7 +1195,7 @@ func loadConfiguration() {
 		config.Environment.LogLevel = v
 	}
 
-	// Step 4: post-processing / validation
+	// Step 5: post-processing / validation
 	if config.Environment.Traefik.APIHost == "" {
 		log.Printf("ERROR: Traefik API host is not set. Provide via env var or config file.")
 		os.Exit(1)
@@ -1236,8 +1242,8 @@ func loadConfiguration() {
 	log.Printf("Loaded %d service excludes from %s", len(config.Services.Exclude), configurationFilePath)
 	log.Printf("Loaded %d service overrides from %s", len(config.Services.Overrides), configurationFilePath)
 
-	// Validate configuration version
-	configCompatibilityStatus = validateConfigVersion(config.Version, config.Environment.Traefik)
+	// Validate configuration version (without basic auth validation since we already did it above)
+	configCompatibilityStatus = validateConfigVersion(config.Version, basicAuthWarning)
 	if !configCompatibilityStatus.IsCompatible {
 		log.Printf("WARNING: %s", configCompatibilityStatus.WarningMessage)
 	}
