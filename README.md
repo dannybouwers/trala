@@ -258,23 +258,25 @@ Each manual service can include:
 
 ---
 
-## 🔒 Secure Traefik API Access (Advanced)
+## 🔒 Traefik API Access and security (Advanced)
 
-Instead of using `--api.insecure=true` in your Traefik configuration, you can create a dedicated router for the API. This approach is more secure as it allows fine-grained control over API access and security.
+Instead of using `--api.insecure=true` in your Traefik configuration, you can create a dedicated router for the API. This approach allows fine-grained control over API access and security.
 
-### How It Works
+ - Define a router rule for accessing the Traefik API from other services. This will not add security.
+ - Implement security features using middlewares such as allowlisting or basicAuth as described below. This doesn't require `--api.insecure=false`.
+
+### Router rule
 
 If TraLa is deployed in the same Docker network as Traefik, the router should also work within the network. This can be accomplished by adding the internal Traefik hostname as a host in the router of Traefik. TraLa will automatically ignore the service created for connecting to Traefik's API.
 
-### Example Configuration
+#### Example Configuration
 
 ```yaml
 version: '3.8'
 services:
   traefik:
     image: "traefik:v3.0"
-    hostname: traefik # Hostname for internal Docker network communication
-    # ... your existing traefik configuration ...
+    # ... your existing Traefik configuration ...
     command:
       # ...
       - --api # Secure API (instead of --api.insecure=true)
@@ -288,13 +290,10 @@ services:
       - traefik.http.routers.traefik-api.service=api@internal
 
   trala:
-    # ... your existing trala configuration ...
+    # ... your existing TraLa configuration ...
     environment:
-      - TRAEFIK_API_HOST=http://traefik # Use hostname of traefik container with entrypoint port (80 in this example)
+      - TRAEFIK_API_HOST=http://traefik # Use service name of traefik container with entrypoint port (80 in this example)
 ```
-
-> [!WARNING]
-> The configuration above will not add security to the Traefik API. It will still be accessible by any service within the Docker stack. To secure the connection, additional middleware needs to be implemented. Two methods, allowlisting and basic auth, are described below.
 
 ### Allowlisting Method
 
