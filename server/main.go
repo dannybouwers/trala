@@ -226,6 +226,60 @@ func createHTTPRequestWithAuthAndContext(ctx context.Context, method, url string
 	return req, nil
 }
 
+// createAndExecuteHTTPRequest creates an authenticated HTTP request, executes it, and handles common errors
+// Returns the response and error, or writes an HTTP error response and returns nil
+func createAndExecuteHTTPRequest(w http.ResponseWriter, method, url string) (*http.Response, error) {
+	req, err := createHTTPRequestWithAuth(method, url)
+	if err != nil {
+		log.Printf("ERROR: Could not create request: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return nil, err
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		log.Printf("ERROR: Could not fetch from %s: %v", url, err)
+		http.Error(w, "Could not connect to API", http.StatusBadGateway)
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("ERROR: API returned non-200 status: %s", resp.Status)
+		http.Error(w, "Received non-200 status from API", http.StatusBadGateway)
+		resp.Body.Close()
+		return nil, fmt.Errorf("non-200 status: %s", resp.Status)
+	}
+
+	return resp, nil
+}
+
+// createAndExecuteHTTPRequestWithContext creates an authenticated HTTP request with context, executes it, and handles common errors
+// Returns the response and error, or writes an HTTP error response and returns nil
+func createAndExecuteHTTPRequestWithContext(w http.ResponseWriter, ctx context.Context, method, url string) (*http.Response, error) {
+	req, err := createHTTPRequestWithAuthAndContext(ctx, method, url)
+	if err != nil {
+		log.Printf("ERROR: Could not create request: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return nil, err
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		log.Printf("ERROR: Could not fetch from %s: %v", url, err)
+		http.Error(w, "Could not connect to API", http.StatusBadGateway)
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("ERROR: API returned non-200 status: %s", resp.Status)
+		http.Error(w, "Received non-200 status from API", http.StatusBadGateway)
+		resp.Body.Close()
+		return nil, fmt.Errorf("non-200 status: %s", resp.Status)
+	}
+
+	return resp, nil
+}
+
 // --- Main HTTP Handlers ---
 
 // serveHTMLTemplate serves the static index.html file, injecting environment variables.
@@ -239,27 +293,11 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 	// Fetch entrypoints from the Traefik API.
 	entryPointsURL := fmt.Sprintf("%s/api/entrypoints", configuration.Environment.Traefik.APIHost)
 	debugf("Fetching entrypoints from Traefik API: %s", entryPointsURL)
-	req, err := createHTTPRequestWithAuth("GET", entryPointsURL)
+	resp, err := createAndExecuteHTTPRequest(w, "GET", entryPointsURL)
 	if err != nil {
-		log.Printf("ERROR: Could not create request: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	// Send request
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		log.Printf("ERROR: Could not fetch entrypoints from Traefik API: %v", err)
-		http.Error(w, "Could not connect to Traefik API to get entrypoints", http.StatusBadGateway)
-		return
+		return // Error already handled by createAndExecuteHTTPRequest
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("ERROR: Traefik Entrypoints API returned non-200 status: %s", resp.Status)
-		http.Error(w, "Received non-200 status from Traefik Entrypoints API", http.StatusBadGateway)
-		return
-	}
 
 	var entryPoints []TraefikEntryPoint
 	if err := json.NewDecoder(resp.Body).Decode(&entryPoints); err != nil {
@@ -279,27 +317,11 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 	routersURL := fmt.Sprintf("%s/api/http/routers", configuration.Environment.Traefik.APIHost)
 	debugf("Fetching routers from Traefik API: %s", routersURL)
 
-	req, err = createHTTPRequestWithAuth("GET", routersURL)
+	resp, err = createAndExecuteHTTPRequest(w, "GET", routersURL)
 	if err != nil {
-		log.Printf("ERROR: Could not fetch routers from Traefik API: %v", err)
-		http.Error(w, "Could not connect to Traefik API to get routers", http.StatusBadGateway)
-		return
-	}
-
-	// Send request
-	resp, err = httpClient.Do(req)
-	if err != nil {
-		log.Printf("ERROR: Could not fetch routers from Traefik API: %v", err)
-		http.Error(w, "Could not connect to Traefik API to get routers", http.StatusBadGateway)
-		return
+		return // Error already handled by createAndExecuteHTTPRequest
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("ERROR: Traefik Routers API returned non-200 status: %s", resp.Status)
-		http.Error(w, "Received non-200 status from Traefik Routers API", http.StatusBadGateway)
-		return
-	}
 
 	var routers []TraefikRouter
 	if err := json.NewDecoder(resp.Body).Decode(&routers); err != nil {
@@ -384,26 +406,12 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Create a request with context and auth
-	req, err := createHTTPRequestWithAuthAndContext(ctx, "GET", entryPointsURL)
+	// Create and execute the request with context and auth
+	resp, err := createAndExecuteHTTPRequestWithContext(w, ctx, "GET", entryPointsURL)
 	if err != nil {
-		http.Error(w, "Traefik: Error creating request", http.StatusInternalServerError)
-		return
-	}
-
-	// Make the request
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		http.Error(w, "Traefik: Connection error", http.StatusInternalServerError)
-		return
+		return // Error already handled by createAndExecuteHTTPRequestWithContext
 	}
 	defer resp.Body.Close()
-
-	// Check response status
-	if resp.StatusCode != http.StatusOK {
-		http.Error(w, "Traefik: Response "+http.StatusText(resp.StatusCode), http.StatusInternalServerError)
-		return
-	}
 
 	// If we reach here, all checks passed
 	fmt.Fprint(w, "OK")
