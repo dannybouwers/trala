@@ -80,8 +80,16 @@ type ConfigStatus struct {
 	WarningMessage         string `json:"warningMessage,omitempty"`
 }
 
+type TraefikBasicAuth struct {
+	Username     string `yaml:"username"`
+	Password     string `yaml:"password"`
+	PasswordFile string `yaml:"password_file"`
+}
+
 type TraefikConfig struct {
-	APIHost string `yaml:"api_host"`
+	APIHost         string           `yaml:"api_host"`
+	EnableBasicAuth bool             `yaml:"enable_basic_auth"`
+	BasicAuth       TraefikBasicAuth `yaml:"basic_auth"`
 }
 
 type ServiceOverride struct {
@@ -307,7 +315,21 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 	// Fetch entrypoints from the Traefik API.
 	entryPointsURL := fmt.Sprintf("%s/api/entrypoints", configuration.Environment.Traefik.APIHost)
 	debugf("Fetching entrypoints from Traefik API: %s", entryPointsURL)
-	resp, err := httpClient.Get(entryPointsURL)
+	req, err := http.NewRequest("GET", entryPointsURL, nil)
+	if err != nil {
+		log.Printf("ERROR: Could not create request: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Set basic auth option
+	if configuration.Environment.Traefik.EnableBasicAuth {
+		debugf("Setting basic auth")
+		req.SetBasicAuth(configuration.Environment.Traefik.BasicAuth.Username, configuration.Environment.Traefik.BasicAuth.Password)
+	}
+
+	// Send request
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		log.Printf("ERROR: Could not fetch entrypoints from Traefik API: %v", err)
 		http.Error(w, "Could not connect to Traefik API to get entrypoints", http.StatusBadGateway)
@@ -339,7 +361,20 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 	routersURL := fmt.Sprintf("%s/api/http/routers", configuration.Environment.Traefik.APIHost)
 	debugf("Fetching routers from Traefik API: %s", routersURL)
 
-	resp, err = httpClient.Get(routersURL)
+	req, err = http.NewRequest("GET", routersURL, nil)
+	if err != nil {
+		log.Printf("ERROR: Could not fetch routers from Traefik API: %v", err)
+		http.Error(w, "Could not connect to Traefik API to get routers", http.StatusBadGateway)
+		return
+	}
+
+	// Set basic auth option
+	if configuration.Environment.Traefik.EnableBasicAuth {
+		req.SetBasicAuth(configuration.Environment.Traefik.BasicAuth.Username, configuration.Environment.Traefik.BasicAuth.Password)
+	}
+
+	// Send request
+	resp, err = httpClient.Do(req)
 	if err != nil {
 		log.Printf("ERROR: Could not fetch routers from Traefik API: %v", err)
 		http.Error(w, "Could not connect to Traefik API to get routers", http.StatusBadGateway)
@@ -441,6 +476,12 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "Traefik: Error creating request", http.StatusInternalServerError)
 		return
+	}
+
+	// Set basic auth option
+	if configuration.Environment.Traefik.EnableBasicAuth {
+		debugf("Setting basic auth")
+		req.SetBasicAuth(configuration.Environment.Traefik.BasicAuth.Username, configuration.Environment.Traefik.BasicAuth.Password)
 	}
 
 	// Make the request
@@ -1123,7 +1164,13 @@ func loadConfiguration() {
 			RefreshIntervalSeconds: 30,
 			LogLevel:               "info",
 			Traefik: TraefikConfig{
-				APIHost: "",
+				APIHost:         "",
+				EnableBasicAuth: false,
+				BasicAuth: TraefikBasicAuth{
+					Username:     "",
+					Password:     "",
+					PasswordFile: "",
+				},
 			},
 		},
 		Services: ServiceConfiguration{
@@ -1165,6 +1212,15 @@ func loadConfiguration() {
 	if v := os.Getenv("TRAEFIK_API_HOST"); v != "" {
 		config.Environment.Traefik.APIHost = v
 	}
+	if v := os.Getenv("TRAEFIK_BASIC_AUTH_USERNAME"); v != "" {
+		config.Environment.Traefik.BasicAuth.Username = v
+	}
+	if v := os.Getenv("TRAEFIK_BASIC_AUTH_PASSWORD"); v != "" {
+		config.Environment.Traefik.BasicAuth.Password = v
+	}
+	if v := os.Getenv("TRAEFIK_BASIC_AUTH_PASSWORD_FILE"); v != "" {
+		config.Environment.Traefik.BasicAuth.PasswordFile = v
+	}
 	if v := os.Getenv("LOG_LEVEL"); v != "" {
 		config.Environment.LogLevel = v
 	}
@@ -1182,6 +1238,32 @@ func loadConfiguration() {
 	}
 	if !strings.HasSuffix(config.Environment.SelfhstIconURL, "/") {
 		config.Environment.SelfhstIconURL += "/"
+	}
+
+	if config.Environment.Traefik.EnableBasicAuth {
+		if config.Environment.Traefik.BasicAuth.Username == "" || (config.Environment.Traefik.BasicAuth.Password == "" && config.Environment.Traefik.BasicAuth.PasswordFile == "") {
+			log.Printf("ERROR: Basic auth is enabled, but basic auth username, password or password file is not set!")
+			os.Exit(1)
+		}
+		if config.Environment.Traefik.BasicAuth.Password != "" && config.Environment.Traefik.BasicAuth.PasswordFile != "" {
+			log.Printf("WARNING: Basic auth password and password file is set, content of file will take precedence over password!")
+		}
+	}
+
+	passwordFilePath := config.Environment.Traefik.BasicAuth.PasswordFile
+	if config.Environment.Traefik.EnableBasicAuth && passwordFilePath != "" {
+		data, err := os.ReadFile(passwordFilePath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				log.Printf("ERROR: No password file found at %s for basic auth.", passwordFilePath)
+				os.Exit(1)
+			} else {
+				log.Printf("ERROR: Could not read password file at %s: %v", passwordFilePath, err)
+				os.Exit(1)
+			}
+		} else {
+			config.Environment.Traefik.BasicAuth.Password = string(data)
+		}
 	}
 
 	// Build map that maps a router name to a ServiceOverride for fast lookups
