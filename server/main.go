@@ -468,6 +468,19 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 func processRouter(router TraefikRouter, entryPoints map[string]TraefikEntryPoint, ch chan<- Service) {
 	routerName := strings.Split(router.Name, "@")[0]
 
+	// Remove entrypoint name from the beginning of router name (case-insensitive)
+	if len(router.EntryPoints) > 0 {
+		entryPointName := router.EntryPoints[0]
+		// Create the pattern to match: entrypoint name followed by a dash
+		prefix := entryPointName + "-"
+		// Check if router name starts with the entrypoint name (case-insensitive)
+		if strings.HasPrefix(strings.ToLower(routerName), strings.ToLower(prefix)) {
+			// Remove the entrypoint prefix
+			routerName = routerName[len(prefix):]
+			debugf("Removed entrypoint prefix '%s' from router name, new name: '%s'", prefix, routerName)
+		}
+	}
+
 	serviceURL := reconstructURL(router, entryPoints)
 
 	if serviceURL == "" {
