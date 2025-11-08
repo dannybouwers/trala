@@ -461,7 +461,9 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 	manualServices := getManualServices()
 
 	// 7. Merge and sort all services by priority
-	finalServices := append(traefikServices, manualServices...)
+	finalServices := make([]Service, 0, len(traefikServices)+len(manualServices))
+	finalServices = append(finalServices, traefikServices...)
+	finalServices = append(finalServices, manualServices...)
 
 	// Sort by priority (higher priority first)
 	sort.Slice(finalServices, func(i, j int) bool {
@@ -546,7 +548,7 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 	if searchEngineURL != "" {
 		serviceName := extractServiceNameFromURL(searchEngineURL)
 		if serviceName != "" {
-			searchEngineIconURL = findBestIconURL(serviceName, searchEngineURL)
+			searchEngineIconURL = findBestIconURL(serviceName, searchEngineURL, serviceName)
 		}
 	}
 
@@ -619,7 +621,7 @@ func processRouter(router TraefikRouter, entryPoints map[string]TraefikEntryPoin
 	}
 
 	debugf("Processing router: %s (display: %s), URL: %s", routerName, displayName, serviceURL)
-	iconURL := findBestIconURL(displayName, serviceURL)
+	iconURL := findBestIconURL(routerName, serviceURL, displayName)
 
 	ch <- Service{
 		Name:     displayName,
@@ -630,8 +632,8 @@ func processRouter(router TraefikRouter, entryPoints map[string]TraefikEntryPoin
 }
 
 // findBestIconURL tries all icon-finding methods in order of priority.
-func findBestIconURL(routerName, serviceURL string) string {
-	routerNameReplaced := strings.ReplaceAll(routerName, " ", "-")
+func findBestIconURL(routerName, serviceURL string, displayName string) string {
+	displayNameReplaced := strings.ReplaceAll(displayName, " ", "-")
 
 	// Priority 1: Check user-defined overrides.
 	if iconValue := checkOverrides(routerName); iconValue != "" {
@@ -656,15 +658,15 @@ func findBestIconURL(routerName, serviceURL string) string {
 	}
 
 	// Priority 2: Check user icons
-	if iconPath := findUserIcon(routerNameReplaced); iconPath != "" {
+	if iconPath := findUserIcon(displayNameReplaced); iconPath != "" {
 		// For user icons, we return the URL that can be served by the application
-		debugf("[%s] Found icon via user icons (fuzzy search): %s", routerNameReplaced, iconPath)
+		debugf("[%s] Found icon via user icons (fuzzy search): %s", displayNameReplaced, iconPath)
 		return iconPath
 	}
 
 	// Priority 3: Fuzzy search against selfh.st icons
-	if iconURL := findSelfHstIcon(routerNameReplaced); iconURL != "" {
-		debugf("[%s] Found icon via fuzzy search: %s", routerNameReplaced, iconURL)
+	if iconURL := findSelfHstIcon(displayNameReplaced); iconURL != "" {
+		debugf("[%s] Found icon via fuzzy search: %s", displayNameReplaced, iconURL)
 		return iconURL
 	}
 
@@ -1093,18 +1095,16 @@ func getManualServices() []Service {
 		iconURL := manualService.Icon
 		if iconURL == "" {
 			// If no icon is specified, try to find one automatically
-			iconURL = findBestIconURL(manualService.Name, manualService.URL)
-		} else {
+			iconURL = findBestIconURL(manualService.Name, manualService.URL, manualService.Name)
+		} else if !strings.HasPrefix(iconURL, "http://") && !strings.HasPrefix(iconURL, "https://") {
 			// If icon is specified, check if it's a full URL or just a filename
-			if !strings.HasPrefix(iconURL, "http://") && !strings.HasPrefix(iconURL, "https://") {
-				// Check if it's a filename with valid extension
-				ext := filepath.Ext(iconURL)
-				if ext == ".png" || ext == ".svg" || ext == ".webp" {
-					iconURL = configuration.Environment.SelfhstIconURL + strings.TrimPrefix(ext, ".") + "/" + strings.ToLower(iconURL)
-				} else {
-					// Fallback to default behavior if extension is not valid
-					iconURL = configuration.Environment.SelfhstIconURL + "png/" + iconURL
-				}
+			// Check if it's a filename with valid extension
+			ext := filepath.Ext(iconURL)
+			if ext == ".png" || ext == ".svg" || ext == ".webp" {
+				iconURL = configuration.Environment.SelfhstIconURL + strings.TrimPrefix(ext, ".") + "/" + strings.ToLower(iconURL)
+			} else {
+				// Fallback to default behavior if extension is not valid
+				iconURL = configuration.Environment.SelfhstIconURL + "png/" + iconURL
 			}
 		}
 
@@ -1233,9 +1233,6 @@ func validateConfigVersion(configVersion string, basicAuthWarning string) Config
 }
 
 func loadConfiguration() {
-	configurationMux.Lock()
-	defer configurationMux.Unlock()
-
 	// Step 1: defaults
 	config := TralaConfiguration{
 		Version: "",
@@ -1368,6 +1365,10 @@ func loadConfiguration() {
 	if !configCompatibilityStatus.IsCompatible {
 		log.Printf("WARNING: %s", configCompatibilityStatus.WarningMessage)
 	}
+
+	// Now that all validation is complete, lock the mutex and update the global configuration
+	configurationMux.Lock()
+	defer configurationMux.Unlock()
 
 	configuration = config
 
