@@ -187,6 +187,7 @@ The application's language can be configured either through the `LANGUAGE` envir
 #### Available Languages
 - `en` (English)
 - `de` (German)
+- `nl` (Dutch)
 
 If no language is specified, the default language is English (`en`).
 
