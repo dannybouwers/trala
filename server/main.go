@@ -229,13 +229,12 @@ func serveHTMLTemplate(w http.ResponseWriter, r *http.Request) {
 	// Create a localizer for the selected language
 	localizer := i18n.NewLocalizer(bundle, lang)
 
-	tmpl, err := parsedTemplate.Clone()
-	if err != nil {
-		http.Error(w, "Template clone error", http.StatusInternalServerError)
-		return
-	}
+	// Set the response content type and execute the pre-parsed template
+	// Set the response content type
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	tmpl = tmpl.Funcs(template.FuncMap{
+	// Execute the pre-parsed template with the localization function
+	err := parsedTemplate.Execute(w, map[string]interface{}{
 		"T": func(id string) string {
 			msg, err := localizer.Localize(&i18n.LocalizeConfig{MessageID: id})
 			if err != nil {
@@ -244,10 +243,9 @@ func serveHTMLTemplate(w http.ResponseWriter, r *http.Request) {
 			return msg
 		},
 	})
-
-	// Set the response content type and execute the template
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	tmpl.Execute(w, nil)
+	if err != nil {
+		http.Error(w, "Template execution error", http.StatusInternalServerError)
+	}
 }
 
 // initI18n initializes the i18n bundle and loads the appropriate translation file.
