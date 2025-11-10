@@ -182,7 +182,7 @@ Supported environment variables are shown below.
 
 ### Switching Languages
 
-The application's language can be configured either through the `LANGUAGE` environment variable or the `configuration.yml` file. The configuration file takes precedence over the environment variable.
+The application's language can be configured either through the `LANGUAGE` environment variable or the `configuration.yml` file.
 
 #### Available Languages
 - `en` (English)
