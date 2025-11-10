@@ -191,7 +191,7 @@ Additionally, you can exclude services based on their entrypoint names using the
 
 The application uses the **router name** from your Traefik configuration (the part before the `@`) to identify services. By adding router names to the exclusion list, those services will not be processed or displayed in the dashboard.
 
-Similarly, if a router uses an entrypoint that matches a pattern in the exclude_entrypoints list, it will also be excluded. Wildcard patterns are supported here as well.
+Similarly, if a router uses an entrypoint that matches a pattern in the `exclude_entrypoints` list, it will also be excluded. Wildcard patterns are supported here as well.
 
 ### Service Overrides
 
