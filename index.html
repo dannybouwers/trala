@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TraLa - Traefik Landing Page</title>
+    <title>{{ T .Localizer "title" }}</title>
     <link rel="stylesheet" href="static/output.css">
+     <!-- <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script> -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
@@ -44,9 +45,14 @@
         <div class="mb-4">
             <form id="search-form" class="flex-grow">
                 <div class="relative">
-                    <input type="search" id="search-input" placeholder="Filter services or search the web..." class="w-full p-3 pr-12 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition">
+                    <input type="search" id="search-input" placeholder="{{ T .Localizer "search_placeholder" }}" class="w-full p-3 pr-12 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition">
+                    <button type="button" id="clear-button" class="absolute right-10 top-1/2 transform -translate-y-1/2 p-1 rounded transition-colors" style="display: none;" title="{{ T .Localizer "clear_search" }}">
+                        <svg class="w-5 h-5 opacity-40 hover:opacity-70 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
                     <button type="submit" id="search-button" class="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 rounded-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
-                        <img id="search-icon" src="" alt="Search" class="w-5 h-5 opacity-70" style="display: none;">
+                        <img id="search-icon" src="" alt="{{ T .Localizer "search" }}" class="w-5 h-5 opacity-70" style="display: none;">
                         <svg id="search-icon-fallback" class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                         </svg>
@@ -55,15 +61,15 @@
             </form>
         </div>
         <div id="sort-controls" class="flex justify-center gap-2 mb-8">
-            <button data-sort="name" class="sort-btn active px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">Name</button>
-            <button data-sort="url" class="sort-btn px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">URL</button>
-            <button data-sort="priority" class="sort-btn px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">Priority</button>
+            <button data-sort="name" class="sort-btn active px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">{{ T .Localizer "name" }}</button>
+            <button data-sort="url" class="sort-btn px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">{{ T .Localizer "url" }}</button>
+            <button data-sort="priority" class="sort-btn px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">{{ T .Localizer "priority" }}</button>
         </div>
         <main id="service-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6"></main>
         <div id="error-page" class="hidden text-center py-16">
             <svg class="mx-auto h-12 w-12 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-            <h2 class="mt-4 text-2xl font-bold">Oops, something went wrong.</h2>
-            <p id="error-message" class="mt-2 text-gray-500 dark:text-gray-400">Could not fetch services.</p>
+            <h2 class="mt-4 text-2xl font-bold">{{ T .Localizer "error" }}</h2>
+            <p id="error-message" class="mt-2 text-gray-500 dark:text-gray-400">{{ T .Localizer "fetch_error" }}</p>
         </div>
     </div>
     
@@ -92,6 +98,7 @@
 
         const serviceGrid = document.getElementById('service-grid');
         const searchInput = document.getElementById('search-input');
+        const clearButton = document.getElementById('clear-button');
         const sortControls = document.getElementById('sort-controls');
         const searchForm = document.getElementById('search-form');
         const searchButton = document.getElementById('search-button');
@@ -119,13 +126,13 @@
             const hour = new Date().getHours();
             let greeting;
             if (hour < 6) {
-                greeting = "Good night";
+                greeting = '{{ T .Localizer "greeting_night" }}';
             } else if (hour < 12) {
-                greeting = "Good morning";
+                greeting = '{{ T .Localizer "greeting_morning" }}';
             } else if (hour < 18) {
-                greeting = "Good afternoon";
+                greeting = '{{ T .Localizer "greeting_afternoon" }}';
             } else {
-                greeting = "Good evening";
+                greeting = '{{ T .Localizer "greeting_evening" }}';
             }
             greetingText.textContent = greeting;
         };
@@ -233,7 +240,19 @@
             applyTheme(prefersDark.matches);
             prefersDark.addEventListener('change', (e) => applyTheme(e.matches));
             
-            searchInput.addEventListener('input', applyFiltersAndSort);
+            searchInput.addEventListener('input', () => {
+                // Show/hide clear button based on input content
+                clearButton.style.display = searchInput.value ? 'block' : 'none';
+                applyFiltersAndSort();
+            });
+            
+            // Clear search when clear button is clicked
+            clearButton.addEventListener('click', () => {
+                searchInput.value = '';
+                clearButton.style.display = 'none';
+                applyFiltersAndSort();
+                searchInput.focus();
+            });
             
             sortControls.addEventListener('click', (e) => {
                 if (e.target.tagName === 'BUTTON') {
@@ -245,6 +264,7 @@
             });
             
             searchForm.addEventListener('submit', (e) => { e.preventDefault(); if (searchInput.value) { window.open(`${SEARCH_ENGINE_URL}${encodeURIComponent(searchInput.value)}`, '_blank'); } });
+            
 
             // Fetch all application status information in a single call
             const fetchApplicationStatus = async () => {
@@ -317,7 +337,10 @@
                 
                 updateGreeting();
                 updateClock();
-                setInterval(updateClock, 6000);
+                setInterval(() => {
+                    updateClock();
+                    updateGreeting();
+                }, 6000);
 
                 await fetchAndProcessServices();
                 if (refreshIntervalId) clearInterval(refreshIntervalId);

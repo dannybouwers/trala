@@ -95,6 +95,7 @@ environment:
   search_engine_url: https://duckduckgo.com/?q=
   refresh_interval_seconds: 30
   log_level: info
+  language: de  # change Language (Default "en").
   traefik:
     api_host: http://traefik:8080
     enable_basic_auth: true
@@ -170,20 +171,32 @@ services:
 
 Supported environment variables are shown below.
 
-| Variable                           | Description                                                                                                                                       | Default                                      | Required |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | -------- |
-| `TRAEFIK_API_HOST`                 | The full base URL of your Traefik API. From within Docker, this is typically `http://traefik:8080`.                                               | `(none)`                                     | **Yes**  |
-| `SELFHST_ICON_URL`                 | Base URL of the Selfhst icon endpoint. Customize if you are hosting your own local instance.                                                      | `https://cdn.jsdelivr.net/gh/selfhst/icons/` | No       |
-| `REFRESH_INTERVAL_SECONDS`         | The interval in seconds at which the service list automatically refreshes.                                                                        | `30`                                         | No       |
-| `SEARCH_ENGINE_URL`                | The URL for the external search engine. The search query will be appended to this URL.                                                            | `https://www.google.com/search?q=`           | No       |
-| `LOG_LEVEL`                        | Set to `debug` for verbose logging of the icon-finding process. Any other value is silent.                                                        | `info`                                       | No       |
+| Variable                   | Description                                                                                             | Default                                | Required |
+| -------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------- | -------- |
+| `TRAEFIK_API_HOST`         | The full base URL of your Traefik API. From within Docker, this is typically `http://traefik:8080`.        | `(none)`                               | **Yes** |
+| `SELFHST_ICON_URL`         | Base URL of the Selfhst icon endpoint. Customize if you are hosting your own local instance. | `https://cdn.jsdelivr.net/gh/selfhst/icons/`                               | No |
+| `REFRESH_INTERVAL_SECONDS` | The interval in seconds at which the service list automatically refreshes.                                | `30`                                   | No       |
+| `SEARCH_ENGINE_URL`        | The URL for the external search engine. The search query will be appended to this URL.                    | `https://www.google.com/search?q=`     | No       |
+| `LOG_LEVEL`                | Set to `debug` for verbose logging of the icon-finding process. Any other value is silent.              | `info`                                 | No       |
 | `TRAEFIK_BASIC_AUTH_USERNAME`      | Sets the username for the Traefik basic auth scheme if enabled.                                                                                   | `(none)`                                     | No       |
 | `TRAEFIK_BASIC_AUTH_PASSWORD`      | Sets the password for the Traefik basic auth scheme if enabled.                                                                                   | `(none)`                                     | No       |
 | `TRAEFIK_BASIC_AUTH_PASSWORD_FILE` | Sets the file path from where to load the password for the Traefik basic auth scheme if enabled. Takes precedence over setting password directly. | `(none)`                                     | No       |
+| `LANGUAGE`                 | The language of the application.                 | `en`                                   | No       |
+
+### Switching Languages
+
+The application's language can be configured either through the `LANGUAGE` environment variable or the `configuration.yml` file.
+
+#### Available Languages
+- `en` (English)
+- `de` (German)
+- `nl` (Dutch)
+
+If no language is specified, the default language is English (`en`).
 
 ### Service Exclusion
 
-You can hide specific services from appearing in the dashboard by specifying their router names in the `configuration.yml` file with the `exclusions` key. Wildcard patterns (*, ?) are supported, allowing flexible matching of multiple services. This is useful for hiding administrative interfaces or services you don't want to be easily accessible through the dashboard.
+You can hide specific services from appearing in the dashboard by specifying their router names in the `configuration.yml` file with the `exclusions` key. Wildcard patterns (`*`, `?`) are supported, allowing flexible matching of multiple services. This is useful for hiding administrative interfaces or services you don't want to be easily accessible through the dashboard.
 
 Additionally, you can exclude services based on their entrypoint names using the `exclude_entrypoints` key. This allows you to hide entire categories of services (e.g. internal-only or admin interfaces) by filtering on the Traefik entrypoint they use.
 
