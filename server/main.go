@@ -208,9 +208,22 @@ func loadHTMLTemplate(templatePath string) {
 		if err != nil {
 			log.Fatalf("FATAL: Could not read index.html template at %s: %v", templatePath, err)
 		}
-		// Parse Template once
-		//tmpl, err := template.New("index").Parse(string(htmlTemplate))
-		tmpl, err := template.New("index").Funcs(template.FuncMap{"T": T}).Parse(string(htmlTemplate))
+		// Parse Template once and register a T function that expects a *i18n.Localizer
+		// as first argument. The handler will pass the request-local Localizer via
+		// the template data as "Localizer".
+		tmpl, err := template.New("index").Funcs(template.FuncMap{
+			"T": func(localizer *i18n.Localizer, id string) string {
+				if localizer == nil {
+					return id
+				}
+				msg, err := localizer.Localize(&i18n.LocalizeConfig{MessageID: id})
+				if err != nil {
+					return id
+				}
+				return msg
+			},
+		}).Parse(string(htmlTemplate))
+
 		if err != nil {
 			log.Fatalf("FATAL: Could not parse index.html: %v", err)
 		}
@@ -233,17 +246,12 @@ func serveHTMLTemplate(w http.ResponseWriter, r *http.Request) {
 	// Set the response content type
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	// Execute the pre-parsed template with the localization function
-	err := parsedTemplate.Execute(w, map[string]interface{}{
-		"T": func(id string) string {
-			msg, err := localizer.Localize(&i18n.LocalizeConfig{MessageID: id})
-			if err != nil {
-				return id
-			}
-			return msg
-		},
-	})
-	if err != nil {
+	// Execute the pre-parsed template and pass the request-local Localizer in data.
+	// Templates must call the function like: {{ T .Localizer "message.id" }}
+	data := map[string]interface{}{
+		"Localizer": localizer,
+	}
+	if err := parsedTemplate.Execute(w, data); err != nil {
 		http.Error(w, "Template execution error", http.StatusInternalServerError)
 	}
 }
