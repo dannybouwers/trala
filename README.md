@@ -95,7 +95,7 @@ environment:
   search_engine_url: https://duckduckgo.com/?q=
   refresh_interval_seconds: 30
   log_level: info
-  language: de  # change Language (Default "en"). Available: en, de
+  language: de  # change Language (Default "en").
   traefik:
     api_host: http://traefik:8080
     enable_basic_auth: true
@@ -110,7 +110,8 @@ services:
   exclude:
     - "traefik-api"  # Hide the Traefik API itself
     - "admin-panel"  # Hide internal admin interface
-  
+    - "api*" # Hide all routers starting with "api"
+
   # Service overrides for display names and icons
   overrides:
     # Override both display name and icon
@@ -181,25 +182,7 @@ Supported environment variables are shown below.
 
 ### Switching Languages
 
-#### How It Works
 The application's language can be configured either through the `LANGUAGE` environment variable or the `configuration.yml` file. The configuration file takes precedence over the environment variable.
-
-#### Configuration Options
-
-1. **Environment Variable**
-   Set the `LANGUAGE` environment variable to the desired language code (e.g., `en` for English or `de` for German):
-
-   ```bash
-   export LANGUAGE=de
-   ```
-
-2. **Configuration File**
-   In the `configuration.yml` file, the language can be specified under the `language` key in the `environment` section. Example:
-
-   ```yaml
-   environment:
-     language: de  # Change the language to German (default is English)
-   ```
 
 #### Available Languages
 - `en` (English)
@@ -209,7 +192,7 @@ If no language is specified, the default language is English (`en`).
 
 ### Service Exclusion
 
-You can hide specific services from appearing in the dashboard by specifying their router names in the `configuration.yml` file with the `exclusions` key. This is useful for hiding administrative interfaces or services you don't want to be easily accessible through the dashboard.
+You can hide specific services from appearing in the dashboard by specifying their router names in the `configuration.yml` file with the `exclusions` key. Wildcard patterns (`*`, `?`) are supported, allowing flexible matching of multiple services. This is useful for hiding administrative interfaces or services you don't want to be easily accessible through the dashboard.
 
 #### How It Works
 
