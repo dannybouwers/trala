@@ -23,6 +23,8 @@
         .sort-btn { transition: background-color 0.2s, color 0.2s; }
         .sort-btn.active { background-color: #3b82f6; color: white; }
         .search-icon-greyscale { filter: grayscale(100%); }
+        #clear-button { position: absolute; right: 3.5rem; top: 50%; transform: translateY(-50%);border: none; background: transparent; cursor: pointer; font-size: 0.9rem; padding: 0.25rem; color: #6b7280;}
+        #clear-button:hover { color: #374151; }
     </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 antialiased">
@@ -45,6 +47,7 @@
             <form id="search-form" class="flex-grow">
                 <div class="relative">
                     <input type="search" id="search-input" placeholder="Filter services or search the web..." class="w-full p-3 pr-12 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition">
+                    <button id="clear-button" type="button" aria-label="Clear search" title="Clear" style="display:none;">✕</button>
                     <button type="submit" id="search-button" class="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 rounded-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
                         <img id="search-icon" src="" alt="Search" class="w-5 h-5 opacity-70" style="display: none;">
                         <svg id="search-icon-fallback" class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -234,6 +237,20 @@
             prefersDark.addEventListener('change', (e) => applyTheme(e.matches));
             
             searchInput.addEventListener('input', applyFiltersAndSort);
+            
+            // Clear-button logic: show when input has value, hide when empty.
+            const clearButton = document.getElementById('clear-button');
+            function updateClearVisibility() {
+                if (!clearButton) return;
+                clearButton.style.display = searchInput.value.length ? 'block' : 'none';
+            }
+            searchInput.addEventListener('input', updateClearVisibility);
+            clearButton && clearButton.addEventListener('click', () => {
+                searchInput.value = '';
+                searchInput.focus();
+                updateClearVisibility();
+                applyFiltersAndSort();
+            });
             
             sortControls.addEventListener('click', (e) => {
                 if (e.target.tagName === 'BUTTON') {
