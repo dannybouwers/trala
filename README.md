@@ -185,7 +185,7 @@ Supported environment variables are shown below.
 
 You can hide specific services from appearing in the dashboard by specifying their router names in the `configuration.yml` file with the `exclusions` key. Wildcard patterns (*, ?) are supported, allowing flexible matching of multiple services. This is useful for hiding administrative interfaces or services you don't want to be easily accessible through the dashboard.
 
-Additionally, you can exclude services based on their entrypoint names using the exclude_entrypoints key. This allows you to hide entire categories of services (e.g. internal-only or admin interfaces) by filtering on the Traefik entrypoint they use.
+Additionally, you can exclude services based on their entrypoint names using the `exclude_entrypoints` key. This allows you to hide entire categories of services (e.g. internal-only or admin interfaces) by filtering on the Traefik entrypoint they use.
 
 #### How It Works
 
