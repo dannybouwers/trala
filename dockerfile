@@ -49,6 +49,9 @@ COPY --from=builder /server /app/server
 # Copy the static frontend files into a 'static' directory
 COPY static/* /app/static/
 
+# Copy the translations code
+COPY translations/* /app/translations/
+
 # Copy the compiled Tailwind CSS from the tailwind-builder stage
 COPY --from=tailwind-builder /app/src/output.css /app/static/output.css
 
