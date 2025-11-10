@@ -177,7 +177,35 @@ Supported environment variables are shown below.
 | `TRAEFIK_BASIC_AUTH_USERNAME`      | Sets the username for the Traefik basic auth scheme if enabled.                                                                                   | `(none)`                                     | No       |
 | `TRAEFIK_BASIC_AUTH_PASSWORD`      | Sets the password for the Traefik basic auth scheme if enabled.                                                                                   | `(none)`                                     | No       |
 | `TRAEFIK_BASIC_AUTH_PASSWORD_FILE` | Sets the file path from where to load the password for the Traefik basic auth scheme if enabled. Takes precedence over setting password directly. | `(none)`                                     | No       |
-| `LANGUAGE`                 | The language of the application. Supported values are `en` (English) and `de` (German).                 | `en`                                   | No       |
+| `LANGUAGE`                 | The language of the application.                 | `en`                                   | No       |
+
+### Switching Languages
+
+#### How It Works
+The application's language can be configured either through the `LANGUAGE` environment variable or the `configuration.yml` file. The configuration file takes precedence over the environment variable.
+
+#### Configuration Options
+
+1. **Environment Variable**
+   Set the `LANGUAGE` environment variable to the desired language code (e.g., `en` for English or `de` for German):
+
+   ```bash
+   export LANGUAGE=de
+   ```
+
+2. **Configuration File**
+   In the `configuration.yml` file, the language can be specified under the `language` key in the `environment` section. Example:
+
+   ```yaml
+   environment:
+     language: de  # Change the language to German (default is English)
+   ```
+
+#### Available Languages
+- `en` (English)
+- `de` (German)
+
+If no language is specified, the default language is English (`en`).
 
 ### Service Exclusion
 
