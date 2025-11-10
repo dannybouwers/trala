@@ -101,9 +101,10 @@ type ManualService struct {
 }
 
 type ServiceConfiguration struct {
-	Exclude   []string          `yaml:"exclude"`
-	Overrides []ServiceOverride `yaml:"overrides"`
-	Manual    []ManualService   `yaml:"manual"`
+	Exclude            []string          `yaml:"exclude"`
+	ExcludeEntrypoints []string          `yaml:"exclude_entrypoints"`
+	Overrides          []ServiceOverride `yaml:"overrides"`
+	Manual             []ManualService   `yaml:"manual"`
 }
 
 type EnvironmentConfiguration struct {
@@ -467,6 +468,12 @@ func processRouter(router TraefikRouter, entryPoints map[string]TraefikEntryPoin
 		return
 	}
 
+	// Check if this router should be excluded based on entrypoints
+	if isEntrypointExcluded(router.EntryPoints) {
+		debugf("Excluding router %s due to entrypoint exclusion", routerName)
+		return
+	}
+
 	// Check if this is the Traefik API service and exclude it
 	traefikAPIHost := configuration.Environment.Traefik.APIHost
 	if traefikAPIHost != "" {
@@ -582,16 +589,38 @@ func isExcluded(routerName string) bool {
 	configurationMux.RLock()
 	defer configurationMux.RUnlock()
 
-    for _, exclude := range configuration.Services.Exclude {
-        match, err := filepath.Match(exclude, routerName)
-        if err != nil {
-            // Log invalid pattern so it is visible in docker logs
-            log.Printf("WARNING: invalid exclude pattern %q: %v", exclude, err)
-            continue
-        }
-        if match {
-            return true
-        }
+	for _, exclude := range configuration.Services.Exclude {
+		match, err := filepath.Match(exclude, routerName)
+		if err != nil {
+			// Log invalid pattern so it is visible in docker logs
+			log.Printf("WARNING: invalid exclude pattern %q: %v", exclude, err)
+			continue
+		}
+		if match {
+			return true
+		}
+	}
+	return false
+}
+
+// isEntrypointExcluded checks if a entrypoint name is in the exclude list.
+// Supports wildcard patterns (*, ?) and logs invalid patterns.
+func isEntrypointExcluded(entryPoints []string) bool {
+	configurationMux.RLock()
+	defer configurationMux.RUnlock()
+
+	for _, ep := range entryPoints {
+		for _, exclude := range configuration.Services.ExcludeEntrypoints {
+			match, err := filepath.Match(exclude, ep)
+			if err != nil {
+				log.Printf("WARNING: invalid exclude_entrypoints pattern %q: %v", exclude, err)
+				continue
+			}
+			if match {
+				debugf("Excluding entrypoint: %s matched pattern %s", ep, exclude)
+				return true
+			}
+		}
 	}
 	return false
 }
