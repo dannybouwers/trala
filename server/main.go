@@ -218,6 +218,83 @@ func loadHTMLTemplate(templatePath string) {
 	})
 }
 
+// --- HTTP Helper Functions ---
+
+// createHTTPRequestWithAuth creates an HTTP request with basic auth if enabled in configuration
+func createHTTPRequestWithAuth(method, url string) (*http.Request, error) {
+	return createHTTPRequestWithAuthAndContext(context.Background(), method, url)
+}
+
+// createHTTPRequestWithAuthAndContext creates an HTTP request with context and basic auth if enabled in configuration
+func createHTTPRequestWithAuthAndContext(ctx context.Context, method, url string) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, method, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set basic auth option if enabled
+	if configuration.Environment.Traefik.EnableBasicAuth {
+		debugf("Setting basic auth")
+		req.SetBasicAuth(configuration.Environment.Traefik.BasicAuth.Username, configuration.Environment.Traefik.BasicAuth.Password)
+	}
+
+	return req, nil
+}
+
+// createAndExecuteHTTPRequest creates an authenticated HTTP request, executes it, and handles common errors
+// Returns the response and error, or writes an HTTP error response and returns nil
+func createAndExecuteHTTPRequest(w http.ResponseWriter, method, url string) (*http.Response, error) {
+	req, err := createHTTPRequestWithAuth(method, url)
+	if err != nil {
+		log.Printf("ERROR: Could not create request: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return nil, err
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		log.Printf("ERROR: Could not fetch from %s: %v", url, err)
+		http.Error(w, "Could not connect to API", http.StatusBadGateway)
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("ERROR: API returned non-200 status: %s", resp.Status)
+		http.Error(w, "Received non-200 status from API", http.StatusBadGateway)
+		resp.Body.Close()
+		return nil, fmt.Errorf("non-200 status: %s", resp.Status)
+	}
+
+	return resp, nil
+}
+
+// createAndExecuteHTTPRequestWithContext creates an authenticated HTTP request with context, executes it, and handles common errors
+// Returns the response and error, or writes an HTTP error response and returns nil
+func createAndExecuteHTTPRequestWithContext(w http.ResponseWriter, ctx context.Context, method, url string) (*http.Response, error) {
+	req, err := createHTTPRequestWithAuthAndContext(ctx, method, url)
+	if err != nil {
+		log.Printf("ERROR: Could not create request: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return nil, err
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		log.Printf("ERROR: Could not fetch from %s: %v", url, err)
+		http.Error(w, "Could not connect to API", http.StatusBadGateway)
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("ERROR: API returned non-200 status: %s", resp.Status)
+		http.Error(w, "Received non-200 status from API", http.StatusBadGateway)
+		resp.Body.Close()
+		return nil, fmt.Errorf("non-200 status: %s", resp.Status)
+	}
+
+	return resp, nil
+}
+
 // --- Main HTTP Handlers ---
 
 // serveHTMLTemplate renders the HTML template with i18n support using go-i18n
@@ -313,33 +390,11 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 	// Fetch entrypoints from the Traefik API.
 	entryPointsURL := fmt.Sprintf("%s/api/entrypoints", configuration.Environment.Traefik.APIHost)
 	debugf("Fetching entrypoints from Traefik API: %s", entryPointsURL)
-	req, err := http.NewRequest("GET", entryPointsURL, nil)
+	resp, err := createAndExecuteHTTPRequest(w, "GET", entryPointsURL)
 	if err != nil {
-		log.Printf("ERROR: Could not create request: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	// Set basic auth option
-	if configuration.Environment.Traefik.EnableBasicAuth {
-		debugf("Setting basic auth")
-		req.SetBasicAuth(configuration.Environment.Traefik.BasicAuth.Username, configuration.Environment.Traefik.BasicAuth.Password)
-	}
-
-	// Send request
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		log.Printf("ERROR: Could not fetch entrypoints from Traefik API: %v", err)
-		http.Error(w, "Could not connect to Traefik API to get entrypoints", http.StatusBadGateway)
-		return
+		return // Error already handled by createAndExecuteHTTPRequest
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("ERROR: Traefik Entrypoints API returned non-200 status: %s", resp.Status)
-		http.Error(w, "Received non-200 status from Traefik Entrypoints API", http.StatusBadGateway)
-		return
-	}
 
 	var entryPoints []TraefikEntryPoint
 	if err := json.NewDecoder(resp.Body).Decode(&entryPoints); err != nil {
@@ -359,32 +414,11 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 	routersURL := fmt.Sprintf("%s/api/http/routers", configuration.Environment.Traefik.APIHost)
 	debugf("Fetching routers from Traefik API: %s", routersURL)
 
-	req, err = http.NewRequest("GET", routersURL, nil)
+	resp, err = createAndExecuteHTTPRequest(w, "GET", routersURL)
 	if err != nil {
-		log.Printf("ERROR: Could not fetch routers from Traefik API: %v", err)
-		http.Error(w, "Could not connect to Traefik API to get routers", http.StatusBadGateway)
-		return
-	}
-
-	// Set basic auth option
-	if configuration.Environment.Traefik.EnableBasicAuth {
-		req.SetBasicAuth(configuration.Environment.Traefik.BasicAuth.Username, configuration.Environment.Traefik.BasicAuth.Password)
-	}
-
-	// Send request
-	resp, err = httpClient.Do(req)
-	if err != nil {
-		log.Printf("ERROR: Could not fetch routers from Traefik API: %v", err)
-		http.Error(w, "Could not connect to Traefik API to get routers", http.StatusBadGateway)
-		return
+		return // Error already handled by createAndExecuteHTTPRequest
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("ERROR: Traefik Routers API returned non-200 status: %s", resp.Status)
-		http.Error(w, "Received non-200 status from Traefik Routers API", http.StatusBadGateway)
-		return
-	}
 
 	var routers []TraefikRouter
 	if err := json.NewDecoder(resp.Body).Decode(&routers); err != nil {
@@ -469,32 +503,12 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Create a request with context
-	req, err := http.NewRequestWithContext(ctx, "GET", entryPointsURL, nil)
+	// Create and execute the request with context and auth
+	resp, err := createAndExecuteHTTPRequestWithContext(w, ctx, "GET", entryPointsURL)
 	if err != nil {
-		http.Error(w, "Traefik: Error creating request", http.StatusInternalServerError)
-		return
-	}
-
-	// Set basic auth option
-	if configuration.Environment.Traefik.EnableBasicAuth {
-		debugf("Setting basic auth")
-		req.SetBasicAuth(configuration.Environment.Traefik.BasicAuth.Username, configuration.Environment.Traefik.BasicAuth.Password)
-	}
-
-	// Make the request
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		http.Error(w, "Traefik: Connection error", http.StatusInternalServerError)
-		return
+		return // Error already handled by createAndExecuteHTTPRequestWithContext
 	}
 	defer resp.Body.Close()
-
-	// Check response status
-	if resp.StatusCode != http.StatusOK {
-		http.Error(w, "Traefik: Response "+http.StatusText(resp.StatusCode), http.StatusInternalServerError)
-		return
-	}
 
 	// If we reach here, all checks passed
 	fmt.Fprint(w, "OK")
@@ -550,6 +564,19 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 // processRouter takes a raw Traefik router, finds its best icon, and sends the final Service object to a channel.
 func processRouter(router TraefikRouter, entryPoints map[string]TraefikEntryPoint, ch chan<- Service) {
 	routerName := strings.Split(router.Name, "@")[0]
+
+	// Remove entrypoint name from the beginning of router name (case-insensitive)
+	if len(router.EntryPoints) > 0 {
+		entryPointName := router.EntryPoints[0]
+		// Create the pattern to match: entrypoint name followed by a dash
+		prefix := entryPointName + "-"
+		// Check if router name starts with the entrypoint name (case-insensitive)
+		if strings.HasPrefix(strings.ToLower(routerName), strings.ToLower(prefix)) {
+			// Remove the entrypoint prefix
+			routerName = routerName[len(prefix):]
+			debugf("Removed entrypoint prefix '%s' from router name, new name: '%s'", prefix, routerName)
+		}
+	}
 
 	serviceURL := reconstructURL(router, entryPoints)
 
@@ -1125,8 +1152,46 @@ func compareVersions(v1, v2 string) int {
 	return 0
 }
 
+// validateBasicAuthPassword checks if the basic auth password is configured using only one method
+func validateBasicAuthPassword(config TraefikConfig) string {
+	// If basic auth is not enabled, no validation needed
+	if !config.EnableBasicAuth {
+		return ""
+	}
+
+	// Count the number of password sources that are set
+	passwordSources := 0
+
+	// Check config file password
+	if config.BasicAuth.Password != "" {
+		passwordSources++
+	}
+
+	// Check config file password file
+	if config.BasicAuth.PasswordFile != "" {
+		passwordSources++
+	}
+
+	// Check environment variable password
+	if os.Getenv("TRAEFIK_BASIC_AUTH_PASSWORD") != "" {
+		passwordSources++
+	}
+
+	// Check environment variable password file
+	if os.Getenv("TRAEFIK_BASIC_AUTH_PASSWORD_FILE") != "" {
+		passwordSources++
+	}
+
+	// If more than one password source is configured, it's a warning
+	if passwordSources > 1 {
+		return "Basic auth password is configured using multiple methods. Please use only one method: either password in config file, password file, or environment variable."
+	}
+
+	return ""
+}
+
 // validateConfigVersion checks if the configuration version is compatible
-func validateConfigVersion(configVersion string) ConfigStatus {
+func validateConfigVersion(configVersion string, basicAuthWarning string) ConfigStatus {
 	status := ConfigStatus{
 		ConfigVersion:          configVersion,
 		MinimumRequiredVersion: minimumConfigVersion,
@@ -1144,6 +1209,16 @@ func validateConfigVersion(configVersion string) ConfigStatus {
 	if compareVersions(configVersion, minimumConfigVersion) < 0 {
 		status.IsCompatible = false
 		status.WarningMessage = fmt.Sprintf("Configuration version %s is below the minimum required version %s. Some configuration options may be ignored.", configVersion, minimumConfigVersion)
+	}
+
+	// Merge with basic auth warning if present
+	if basicAuthWarning != "" {
+		// If there's already a warning message, append to it
+		if status.WarningMessage != "" {
+			status.WarningMessage += " " + basicAuthWarning
+		} else {
+			status.WarningMessage = basicAuthWarning
+		}
 	}
 
 	return status
@@ -1193,7 +1268,14 @@ func loadConfiguration() {
 		}
 	}
 
-	// Step 3: environment overrides
+	// Step 3: validate basic auth password configuration before environment overrides
+	// This ensures we check both the original config values and environment variables
+	basicAuthWarning := validateBasicAuthPassword(config.Environment.Traefik)
+	if basicAuthWarning != "" {
+		log.Printf("WARNING: %s", basicAuthWarning)
+	}
+
+	// Step 4: environment overrides
 	if v := os.Getenv("SELFHST_ICON_URL"); v != "" {
 		config.Environment.SelfhstIconURL = v
 	}
@@ -1226,7 +1308,7 @@ func loadConfiguration() {
 		config.Environment.Language = v
 	}
 
-	// Step 4: post-processing / validation
+	// Step 5: post-processing / validation
 	if config.Environment.Traefik.APIHost == "" {
 		log.Printf("ERROR: Traefik API host is not set. Provide via env var or config file.")
 		os.Exit(1)
@@ -1273,8 +1355,8 @@ func loadConfiguration() {
 	log.Printf("Loaded %d service excludes from %s", len(config.Services.Exclude), configurationFilePath)
 	log.Printf("Loaded %d service overrides from %s", len(config.Services.Overrides), configurationFilePath)
 
-	// Validate configuration version
-	configCompatibilityStatus = validateConfigVersion(config.Version)
+	// Validate configuration version (without basic auth validation since we already did it above)
+	configCompatibilityStatus = validateConfigVersion(config.Version, basicAuthWarning)
 	if !configCompatibilityStatus.IsCompatible {
 		log.Printf("WARNING: %s", configCompatibilityStatus.WarningMessage)
 	}
