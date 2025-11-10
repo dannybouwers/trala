@@ -10,6 +10,9 @@ fetch_error: "Dienste konnten nicht geladen werden."
 # Label for the search function
 search: "Suche"
 
+# Tooltip for the clear search button
+clear_search: "Suche löschen"
+
 # Placeholder text for the search field
 search_placeholder: "Dienste filtern oder im Internet suchen..."
 

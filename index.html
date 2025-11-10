@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ T .Localizer "title" }}</title>
     <link rel="stylesheet" href="static/output.css">
+     <!-- <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script> -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
@@ -45,6 +46,11 @@
             <form id="search-form" class="flex-grow">
                 <div class="relative">
                     <input type="search" id="search-input" placeholder="{{ T .Localizer "search_placeholder" }}" class="w-full p-3 pr-12 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition">
+                    <button type="button" id="clear-button" class="absolute right-10 top-1/2 transform -translate-y-1/2 p-1 rounded transition-colors" style="display: none;" title="{{ T .Localizer "clear_search" }}">
+                        <svg class="w-5 h-5 opacity-40 hover:opacity-70 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
                     <button type="submit" id="search-button" class="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 rounded-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
                         <img id="search-icon" src="" alt="{{ T .Localizer "search" }}" class="w-5 h-5 opacity-70" style="display: none;">
                         <svg id="search-icon-fallback" class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -92,6 +98,7 @@
 
         const serviceGrid = document.getElementById('service-grid');
         const searchInput = document.getElementById('search-input');
+        const clearButton = document.getElementById('clear-button');
         const sortControls = document.getElementById('sort-controls');
         const searchForm = document.getElementById('search-form');
         const searchButton = document.getElementById('search-button');
@@ -233,7 +240,19 @@
             applyTheme(prefersDark.matches);
             prefersDark.addEventListener('change', (e) => applyTheme(e.matches));
             
-            searchInput.addEventListener('input', applyFiltersAndSort);
+            searchInput.addEventListener('input', () => {
+                // Show/hide clear button based on input content
+                clearButton.style.display = searchInput.value ? 'block' : 'none';
+                applyFiltersAndSort();
+            });
+            
+            // Clear search when clear button is clicked
+            clearButton.addEventListener('click', () => {
+                searchInput.value = '';
+                clearButton.style.display = 'none';
+                applyFiltersAndSort();
+                searchInput.focus();
+            });
             
             sortControls.addEventListener('click', (e) => {
                 if (e.target.tagName === 'BUTTON') {

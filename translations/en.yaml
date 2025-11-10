@@ -10,6 +10,9 @@ fetch_error: "Could not fetch services."
 # Label for the search function
 search: "Search"
 
+# Tooltip for the clear search button
+clear_search: "Clear search"
+
 # Placeholder text for the search field
 search_placeholder: "Filter services or search the web..."
 
