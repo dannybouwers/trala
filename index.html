@@ -337,7 +337,10 @@
                 
                 updateGreeting();
                 updateClock();
-                setInterval(updateClock, 6000);
+                setInterval(() => {
+                    updateClock();
+                    updateGreeting();
+                }, 6000);
 
                 await fetchAndProcessServices();
                 if (refreshIntervalId) clearInterval(refreshIntervalId);
