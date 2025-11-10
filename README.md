@@ -265,57 +265,103 @@ Each manual service can include:
 
 ---
 
-# 🔒 Secure Traefik API Access (Advanced)
+## 🔒 Traefik API Access and security (Advanced)
 
-## Dedicated Router Method
+Instead of using `--api.insecure=true` in your Traefik configuration, you can create a dedicated router for the API. This approach allows fine-grained control over API access and security.
 
-Instead of using `--api.insecure=true` in your Traefik configuration, you can create a dedicated router for the API. This approach is more secure as it allows fine-grained control over API access.
+ - Define a router rule for accessing the Traefik API from other services. This will not add security.
+ - Implement security features using middlewares such as allowlisting or basicAuth as described below. This doesn't require `--api.insecure=false`.
 
-### How It Works
+### Router rule
 
-If TraLa is deployed in the same Docker network as Traefik, the router should also work within the network. This can be accomplished by adding the internal Traefik hostname as a host in the router of Traefik.
+If TraLa is deployed in the same Docker network as Traefik, the router should also work within the network. This can be accomplished by adding the internal Traefik hostname as a host in the router of Traefik. TraLa will automatically ignore the service created for connecting to Traefik's API.
 
-### Example Configuration
+#### Example Configuration
 
 ```yaml
 version: '3.8'
 services:
   traefik:
     image: "traefik:v3.0"
-    hostname: traefik # <-- specify the hostname for this container
-    # ... your existing traefik configuration ...
+    # ... your existing Traefik configuration ...
     command:
       # ...
-      - --api # Secure API
+      - --api # Secure API (instead of --api.insecure=true)
       - --entrypoints.web.address=:80
       # - ...
     labels:
       # ...
       # Dashboard & API
       - traefik.http.routers.traefik-api.entrypoints=web
-      - traefik.http.routers.traefik-api.rule=Host(`traefik`) && PathPrefix(`/api`) # <-- use the container hostname in the router rule
+      - traefik.http.routers.traefik-api.rule=Host(`traefik`) && PathPrefix(`/api`) # Use container hostname for internal access
       - traefik.http.routers.traefik-api.service=api@internal
 
   trala:
-    # ... your existing traefik configuration ...
+    # ... your existing TraLa configuration ...
     environment:
-      - TRAEFIK_API_HOST=http://traefik # <-- specify the hostname of the traefik container and the port of the entrypoint (if not protocol default)
+      - TRAEFIK_API_HOST=http://traefik # Use service name of traefik container with entrypoint port (80 in this example)
 ```
-With this configuration, you can remove the `--api.insecure=true` flag from your Traefik configuration, making your setup more secure. TraLa will automatically ignore the service created for connecting to Traefik's API.
 
-## Basic Auth Method
+### Allowlisting Method
 
-To add basic auth to the Traefik API, insert a basic auth middleware into the router that exposes the API. To create the hashed credentials for the middleware, use `echo $(htpasswd -nB user) | sed -e s/\\$/\\$\\$/g`. Replace the resulting string with the `<REPLACE_ME>` tag:
+To add allowlisting to the Traefik API, the TraLa service must have a static IP. This is required because the IPAllowList middleware needs to know exactly which IP addresses are allowed to access the API. Define a network with a specific IP subnet and specify the internal IP address for TraLa:
 
 ```yaml
-- "traefik.http.routers.internal-api.entrypoints=traefik-internal"
-- "traefik.http.routers.internal-api.rule=PathPrefix(`/api`)"
-- "traefik.http.routers.internal-api.service=api@internal"
-- "traefik.http.routers.internal-api.middlewares=auth"
-- "traefik.http.middlewares.auth.basicauth.users=<REPLACE_ME>"
+networks:
+  traefik-proxy-network:
+    name: traefik-proxy-network
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16 # IP subnet for your Docker network
+
+services:
+  trala:
+    # ... your existing TraLa configuration ...
+    networks:
+      traefik-proxy-network:
+        ipv4_address: 172.20.30.40 # Static IP within the defined subnet
 ```
 
-**NOTE**: The Traefik API will be reachable on all routes that use the `api@internal` service. If you have a router that exposes the Traefik dashboard, the API will be reachable there as well. Ensure there is authentication in place on all routers!
+Insert an IPAllowList middleware to the router that exposes the API:
+
+```yaml
+services:
+  traefik:
+    # ... your existing Traefik configuration ...
+    networks:
+      - traefik-proxy-network
+    labels:
+      # Limit access to the dashboard and API to the IP of the TraLa container
+      - traefik.http.middlewares.traefik-api-allowlist.ipallowlist.sourcerange=172.20.30.40/32
+      # API
+      # ...
+      - traefik.http.routers.traefik-api.middlewares=traefik-api-allowlist
+```
+
+### Basic Auth Method
+
+To add basic auth to the Traefik API, insert a basic auth middleware into the router that exposes the API. Create the hashed credentials for the middleware:
+
+``` bash
+echo $(htpasswd -nbB <USERNAME> <PASSWORD>) | sed -e s/\\$/\\$\\$/g
+```
+
+Replace the `<REPLACE_ME>` tag with the resulting string:
+
+```yaml
+services:
+  traefik:
+    # ... your existing Traefik configuration ...
+    labels:
+      # Define the basic auth username and hashed password
+      - "traefik.http.middlewares.traefik-api-auth.basicauth.users=<REPLACE_ME>"
+      # API
+      # ...
+      - "traefik.http.routers.traefik-api.middlewares=traefik-api-auth"
+```
+
+> [!NOTE]
+> The Traefik API will be reachable on all routes that use the `api@internal` service. If you have a router that exposes the Traefik dashboard, the API will be reachable there as well. Ensure there is authentication in place on all routers!
 
 Enable basic auth in the configuration file with the `environment.traefik.enable_basic_auth` setting:
 
@@ -325,15 +371,16 @@ environment:
     enable_basic_auth: true
 ```
 
-There are three ways to specify the credentials for the basic auth scheme in Trala, where the lower number takes precedence over higher numbers:
+There are three ways to specify the credentials for the basic auth scheme in TraLa, where the lower number takes precedence over higher numbers:
 
-1. Docker Secret
+1. Docker Secret (Recommended)
 2. Environment Variable
 3. Configuration File
 
-Note that while we use the password hash for Traefik, the plain password has to be specified for all methods.
+> [!IMPORTANT]
+> Note that while we use the password hash for Traefik middleware, the plain password must be specified for TraLa using any of the methods below.
 
-### Docker Secret (Recommended)
+#### Docker Secret (Recommended)
 
 To use a Docker secret, create a credentials file:
 
@@ -346,7 +393,7 @@ Add the file as Docker secret in the Docker compose:
 ```yaml
 services:
   trala:
-    [...]
+    # ... your existing TraLa configuration ...
     secrets:
       - basic_auth_password
     
@@ -355,7 +402,7 @@ secrets:
     file: ./basic_auth_password.txt
 ```
 
-To point Trala to the secret, either specify the path in the configuration file:
+To point TraLa to the secret, either specify the path in the configuration file:
 
 ```yaml
 environment:
@@ -370,16 +417,26 @@ Or specify the path as environment variable:
 ```yaml
 services:
   trala:
-    [...]
+    # ... your existing TraLa configuration ...
     environment:
+      - TRAEFIK_BASIC_AUTH_USERNAME=<USERNAME>
       - TRAEFIK_BASIC_AUTH_PASSWORD_FILE=/run/secrets/basic_auth_password
 ```
 
-### Environment Variable
+#### Environment Variable
 
-To specify the credentials with environment variables, specify the `TRAEFIK_BASIC_AUTH_USERNAME` and `TRAEFIK_BASIC_AUTH_PASSWORD` variables.
+To specify the credentials with environment variables, add the `TRAEFIK_BASIC_AUTH_USERNAME` and `TRAEFIK_BASIC_AUTH_PASSWORD` variables to your Docker compose file:
 
-### Configuration File
+```yaml
+services:
+  trala:
+    # ... your existing TraLa configuration ...
+    environment:
+      - TRAEFIK_BASIC_AUTH_USERNAME=<USERNAME>
+      - TRAEFIK_BASIC_AUTH_PASSWORD=<PASSWORD>
+```
+
+#### Configuration File
 
 To store the credentials as part of the configuration file, specify the following settings:
 
@@ -393,7 +450,7 @@ environment:
 
 ---
 
-# 🛠️ Building Locally
+## 🛠️ Building Locally
 
 If you want to build the image yourself:
 

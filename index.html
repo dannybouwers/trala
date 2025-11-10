@@ -266,9 +266,12 @@
                     }
                     
                     // Update configuration status warning
-                    if (status.config && !status.config.isCompatible && configWarning) {
-                        configWarning.style.display = 'inline';
-                        configWarning.title = status.config.warningMessage || 'Configuration version mismatch detected';
+                    if (status.config && configWarning) {
+                        // Show warning if config is incompatible OR if there's a warning message
+                        if (!status.config.isCompatible || status.config.warningMessage) {
+                            configWarning.style.display = 'inline';
+                            configWarning.title = status.config.warningMessage || 'Configuration issue detected';
+                        }
                     }
                     
                     // Update frontend configuration
