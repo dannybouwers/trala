@@ -107,12 +107,13 @@ environment:
 services:
   # Services to exclude from the dashboard
   exclude:
-    - "traefik-api"  # Hide the Traefik API itself
-    - "admin-panel"  # Hide internal admin interface
-    - "api*" # Hide all routers starting with "api"
-    exclude_entrypoints:
-    - "*lan*"        # Hide services using entrypoints containing "lan"
-    - "internal"     # Hide services using the "internal" entrypoint
+    routers:
+      - "traefik-api"  # Hide the Traefik API itself
+      - "admin-panel"  # Hide internal admin interface
+      - "api*" # Hide all routers starting with "api"
+    entrypoints:
+      - "*lan*"        # Hide services using entrypoints containing "lan"
+      - "internal"     # Hide services using the "internal" entrypoint
 
   # Service overrides for display names and icons
   overrides:
@@ -183,15 +184,15 @@ Supported environment variables are shown below.
 
 ### Service Exclusion
 
-You can hide specific services from appearing in the dashboard by specifying their router names in the `configuration.yml` file with the `exclusions` key. Wildcard patterns (*, ?) are supported, allowing flexible matching of multiple services. This is useful for hiding administrative interfaces or services you don't want to be easily accessible through the dashboard.
+You can hide specific services from appearing in the dashboard by specifying their router names in the `configuration.yml` file under the `exclude` key (`exclude.routers`). Wildcard patterns (*, ?) are supported, allowing flexible matching of multiple services. This is useful for hiding administrative interfaces or services you don't want to be easily accessible through the dashboard.
 
-Additionally, you can exclude services based on their entrypoint names using the `exclude_entrypoints` key. This allows you to hide entire categories of services (e.g. internal-only or admin interfaces) by filtering on the Traefik entrypoint they use.
+Additionally, you can exclude services based on their entrypoint names using the `exclude.entrypoints` key. This allows you to hide entire categories of services (e.g. internal-only or admin interfaces) by filtering on the Traefik entrypoint they use.
 
 #### How It Works
 
-The application uses the **router name** from your Traefik configuration (the part before the `@`) to identify services. By adding router names to the exclusion list, those services will not be processed or displayed in the dashboard.
+The application uses the **router name** from your Traefik configuration (the part before the `@`) to identify services. By adding router names to the `exclude.routers`, those services will not be processed or displayed in the dashboard.
 
-Similarly, if a router uses an entrypoint that matches a pattern in the `exclude_entrypoints` list, it will also be excluded. Wildcard patterns are supported here as well.
+Similarly, if a router uses an entrypoint that matches a pattern in the `exclude.entrypoints` list, it will also be excluded. Wildcard patterns are supported here as well.
 
 ### Service Overrides
 
