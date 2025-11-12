@@ -7,12 +7,14 @@ A simple, modern, and dynamic dashboard for your Traefik services. This applicat
 ## ✨ Features
 
 - **Auto-Discovery:** Automatically fetches and displays all HTTP routers from your Traefik instance.
+- **Automatic Service Categorization:** Intelligently groups services by category using selfh.st tags database with manual override support.
 - **Manual Services:** Add custom services to your dashboard that aren't managed by Traefik (e.g., Reddit, GitHub, external websites).
 - **Advanced Icon Fetching:** Intelligently finds the best icon for each service using a robust, prioritized strategy.
 - **Icon Overrides:** Manually map router names to specific icons for perfect results every time.
 - **Custom Icon Directory:** Mount your own icon directory at `/icons` for ultimate customization with fuzzy matching.
 - **Modern UI:** Clean, responsive interface with automatic Light/Dark mode based on your OS settings.
 - **Live Search & Sort:** Instantly filter and sort your services by name, URL, or priority.
+- **Grouped & Flat Views:** Toggle between categorized sections and traditional grid layout.
 - **External Search:** Use the search bar to quickly search the web with your configured search engine.
 - **Lightweight & Multi-Arch:** Built with Go and a minimal Alpine base, the Docker image is small and compatible with `amd64` and `arm64` architectures.
 - **Service Exclusion:** Hide specific services from the dashboard using router name exclusions.
@@ -168,6 +170,12 @@ services:
     - name: "Hacker News"
       url: "https://news.ycombinator.com"
       priority: 90
+    
+    # Manual service with category override
+    - name: "Plex"
+      url: "https://plex.example.com"
+      icon: "plex.svg"
+      category: "Media"  # Manual category override
 ```
 
 Supported environment variables are shown below.
@@ -276,6 +284,54 @@ Each manual service can include:
 - `url`: The URL of the service (required)
 - `icon`: Custom icon (optional - full URL or filename from selfh.st)
 - `priority`: Priority for sorting (optional - higher numbers appear first, default: 50)
+
+### Service Categorization
+
+TraLa can automatically group your services by category using the selfh.st tags database. This feature provides intelligent categorization while allowing manual overrides for complete control.
+
+#### How It Works
+
+1. **Data Sources**: The system uses the selfh.st software and tags databases to determine categories
+2. **Tag Analysis**: Analyzes tag frequency across all services and excludes common tags (>80% by default)
+3. **Fuzzy Matching**: Matches your service names against the selfh.st database using fuzzy search
+4. **Manual Overrides**: You can manually specify categories for any service
+
+#### Configuration
+
+```yaml
+categorization:
+  enabled: true                    # Enable/disable categorization
+  exclude_common_tags: true        # Exclude tags appearing on >80% of services
+  common_tag_threshold: 0.8        # Threshold for excluding common tags (0.8 = 80%)
+  default_view_mode: "grouped"     # Default view: "flat" or "grouped"
+```
+
+#### Manual Category Overrides
+
+Add a `category` field to your service overrides:
+
+```yaml
+services:
+  overrides:
+    - service: "plex"
+      display_name: "Plex Media Server"
+      icon: "plex.svg"
+      category: "Media Management"  # Manual category override
+    
+    - service: "home-assistant"
+      display_name: "Home Assistant"
+      icon: "home-assistant.svg"
+      category: "Home Automation"  # Manual category override
+```
+
+#### Frontend Features
+
+- **View Modes**: Switch between flat (traditional grid) and grouped (by category) views
+- **Collapsible Categories**: Click category headers to expand/collapse service groups
+- **View Persistence**: Your preferred view mode is saved and restored on page reload
+- **Category Statistics**: See service count per category
+
+For detailed configuration options and examples, see [categorization-configuration.md](categorization-configuration.md).
 
 ---
 

@@ -38,6 +38,36 @@ const minimumConfigVersion = "3.0"
 
 // --- Structs ---
 
+// SelfHstSoftware represents an entry in the selfh.st software database
+type SelfHstSoftware struct {
+	ID        string `json:"0"` // Index 0
+	Name      string `json:"1"` // Index 1
+	Reference string `json:"2"` // Index 2
+	// ... other fields
+	TagIndices string `json:"18"` // Index 18 - comma-separated tag indices
+}
+
+// SelfHstTag represents a tag in the selfh.st tags database
+type SelfHstTag struct {
+	Tag        string   `json:"Tag"`
+	ValidTypes []string `json:"Valid Types"`
+}
+
+// ServiceCategory represents category information for a service
+type ServiceCategory struct {
+	Name        string `json:"name"`
+	DisplayName string `json:"displayName"`
+	IsManual    bool   `json:"isManual"`
+}
+
+// CategorizationConfig represents categorization settings
+type CategorizationConfig struct {
+	Enabled            bool    `yaml:"enabled"`
+	ExcludeCommonTags  bool    `yaml:"exclude_common_tags"`
+	CommonTagThreshold float64 `yaml:"common_tag_threshold"`
+	DefaultViewMode    string  `yaml:"default_view_mode"`
+}
+
 // TraefikRouter represents the essential fields from the Traefik API response.
 type TraefikRouter struct {
 	Name        string           `json:"name"`
@@ -59,10 +89,11 @@ type TraefikEntryPoint struct {
 
 // Service represents the final, processed data sent to the frontend.
 type Service struct {
-	Name     string `json:"Name"`
-	URL      string `json:"url"`
-	Priority int    `json:"priority"`
-	Icon     string `json:"icon"`
+	Name     string           `json:"Name"`
+	URL      string           `json:"url"`
+	Priority int              `json:"priority"`
+	Icon     string           `json:"icon"`
+	Category *ServiceCategory `json:"category,omitempty"`
 }
 
 // VersionInfo represents the application version information
@@ -96,6 +127,7 @@ type ServiceOverride struct {
 	Service     string `yaml:"service"`
 	DisplayName string `yaml:"display_name,omitempty"`
 	Icon        string `yaml:"icon,omitempty"`
+	Category    string `yaml:"category,omitempty"`
 }
 
 type ManualService struct {
@@ -103,6 +135,7 @@ type ManualService struct {
 	URL      string `yaml:"url"`
 	Icon     string `yaml:"icon,omitempty"`
 	Priority int    `yaml:"priority,omitempty"`
+	Category string `yaml:"category,omitempty"`
 }
 
 type ServiceConfiguration struct {
@@ -126,16 +159,18 @@ type EnvironmentConfiguration struct {
 }
 
 type TralaConfiguration struct {
-	Version     string                   `yaml:"version"`
-	Environment EnvironmentConfiguration `yaml:"environment"`
-	Services    ServiceConfiguration     `yaml:"services"`
+	Version        string                   `yaml:"version"`
+	Environment    EnvironmentConfiguration `yaml:"environment"`
+	Services       ServiceConfiguration     `yaml:"services"`
+	Categorization CategorizationConfig     `yaml:"categorization"`
 }
 
 // FrontendConfig represents the configuration data sent to the frontend
 type FrontendConfig struct {
-	SearchEngineURL        string `json:"searchEngineURL"`
-	SearchEngineIconURL    string `json:"searchEngineIconURL"`
-	RefreshIntervalSeconds int    `json:"refreshIntervalSeconds"`
+	SearchEngineURL        string               `json:"searchEngineURL"`
+	SearchEngineIconURL    string               `json:"searchEngineIconURL"`
+	RefreshIntervalSeconds int                  `json:"refreshIntervalSeconds"`
+	Categorization         CategorizationConfig `json:"categorization"`
 }
 
 // ApplicationStatus represents the combined status information for the application
@@ -182,10 +217,25 @@ var (
 	// Sorted user icon names for fuzzy matching
 	sortedUserIconNames    []string
 	sortedUserIconNamesMux sync.RWMutex
+
+	// Categorization system variables
+	selfhstSoftware      []SelfHstSoftware
+	selfhstTags          []SelfHstTag
+	selfhstDataCacheTime time.Time
+	selfhstDataCacheMux  sync.RWMutex
+	tagFrequencyMap      map[string]int
+	commonTags           map[string]bool
+	processedTags        map[string]string // Tag index to name mapping
+	serviceCategoryMap   map[string]string
+	categoryMutex        sync.RWMutex
 )
 
 const selfhstCacheTTL = 1 * time.Hour
 const selfhstAPIURL = "https://raw.githubusercontent.com/selfhst/icons/refs/heads/main/index.json"
+const selfhstSoftwareAPIURL = "https://raw.githubusercontent.com/selfhst/cdn/refs/heads/main/directory/software.json"
+const selfhstTagsAPIURL = "https://raw.githubusercontent.com/selfhst/cdn/refs/heads/main/directory/tags.json"
+const selfhstDataCacheTTL = 6 * time.Hour // Longer cache for static data
+const commonTagThreshold = 0.8            // 80% threshold for excluding common tags
 const configurationFilePath = "/config/configuration.yml"
 const defaultIcon = "" // Frontend will use a fallback if icon is empty.
 const translationDir = "/app/translations"
@@ -470,6 +520,11 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 	finalServices = append(finalServices, traefikServices...)
 	finalServices = append(finalServices, manualServices...)
 
+	// 8. Apply categorization based on user's actual services
+	if configuration.Categorization.Enabled {
+		finalServices = applyCategorizationToServices(finalServices)
+	}
+
 	// Sort by priority (higher priority first)
 	sort.Slice(finalServices, func(i, j int) bool {
 		return finalServices[i].Priority > finalServices[j].Priority
@@ -561,6 +616,7 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 		SearchEngineURL:        searchEngineURL,
 		SearchEngineIconURL:    searchEngineIconURL,
 		RefreshIntervalSeconds: refreshIntervalSeconds,
+		Categorization:         configuration.Categorization,
 	}
 
 	// Combine all status information
@@ -634,11 +690,29 @@ func processRouter(router TraefikRouter, entryPoints map[string]TraefikEntryPoin
 	debugf("Processing router: %s (display: %s), URL: %s", routerName, displayName, serviceURL)
 	iconURL := findBestIconURL(routerName, serviceURL, displayName)
 
+	// Get icon reference for categorization
+	iconReference := ""
+	if iconURL != "" {
+		// Extract reference from icon URL if it's a selfh.st icon
+		if strings.Contains(iconURL, configuration.Environment.SelfhstIconURL) {
+			// Extract reference from URL like ".../svg/radarr.svg" -> "radarr"
+			parts := strings.Split(iconURL, "/")
+			if len(parts) > 0 {
+				lastPart := parts[len(parts)-1]
+				iconReference = strings.TrimSuffix(lastPart, filepath.Ext(lastPart))
+			}
+		}
+	}
+
+	// Assign category if categorization is enabled
+	category := assignServiceCategory(displayName, iconReference)
+
 	ch <- Service{
 		Name:     displayName,
 		URL:      serviceURL,
 		Priority: router.Priority,
 		Icon:     iconURL,
+		Category: category,
 	}
 }
 
@@ -676,8 +750,8 @@ func findBestIconURL(routerName, serviceURL string, displayName string) string {
 	}
 
 	// Priority 3: Fuzzy search against selfh.st icons
-	if iconURL := findSelfHstIcon(displayNameReplaced); iconURL != "" {
-		debugf("[%s] Found icon via fuzzy search: %s", displayNameReplaced, iconURL)
+	if iconURL, iconReference := findSelfHstIcon(displayNameReplaced); iconURL != "" {
+		debugf("[%s] Found icon via fuzzy search: %s (reference: %s)", displayNameReplaced, iconURL, iconReference)
 		return iconURL
 	}
 
@@ -763,12 +837,12 @@ func isEntrypointExcluded(entryPoints []string) bool {
 	return false
 }
 
-// findSelfHstIcon performs a fuzzy search.
-func findSelfHstIcon(routerName string) string {
+// findSelfHstIcon performs a fuzzy search and returns both icon URL and reference
+func findSelfHstIcon(routerName string) (string, string) {
 	icons, err := getSelfHstIconNames()
 	if err != nil {
 		log.Printf("ERROR: Could not get selfh.st icon list for fuzzy search: %v", err)
-		return ""
+		return "", ""
 	}
 
 	// Extract reference names for fuzzy matching
@@ -784,14 +858,14 @@ func findSelfHstIcon(routerName string) string {
 			if icon.Reference == matches[0] {
 				// Prefer SVG if available
 				if icon.SVG == "Yes" {
-					return fmt.Sprintf(configuration.Environment.SelfhstIconURL+"svg/%s.svg", icon.Reference)
+					return fmt.Sprintf(configuration.Environment.SelfhstIconURL+"svg/%s.svg", icon.Reference), icon.Reference
 				}
 				// Fallback to PNG
-				return fmt.Sprintf(configuration.Environment.SelfhstIconURL+"png/%s.png", icon.Reference)
+				return fmt.Sprintf(configuration.Environment.SelfhstIconURL+"png/%s.png", icon.Reference), icon.Reference
 			}
 		}
 	}
-	return ""
+	return "", ""
 }
 
 // findFavicon checks for the existence of /favicon.ico.
@@ -942,6 +1016,510 @@ func findUserIcon(routerName string) string {
 	}
 
 	return ""
+}
+
+// --- Categorization Functions ---
+
+// getSelfhstData fetches and caches software and tags data from selfh.st
+func getSelfhstData() ([]SelfHstSoftware, []SelfHstTag, error) {
+	selfhstDataCacheMux.RLock()
+	if time.Since(selfhstDataCacheTime) < selfhstDataCacheTTL && len(selfhstSoftware) > 0 && len(selfhstTags) > 0 {
+		selfhstDataCacheMux.RUnlock()
+		return selfhstSoftware, selfhstTags, nil
+	}
+	selfhstDataCacheMux.RUnlock()
+
+	selfhstDataCacheMux.Lock()
+	defer selfhstDataCacheMux.Unlock()
+	// Double-check after acquiring the lock
+	if time.Since(selfhstDataCacheTime) < selfhstDataCacheTTL && len(selfhstSoftware) > 0 && len(selfhstTags) > 0 {
+		return selfhstSoftware, selfhstTags, nil
+	}
+
+	log.Println("Refreshing selfhst data cache...")
+
+	// Fetch software data
+	software, err := fetchSelfhstSoftware()
+	if err != nil {
+		log.Printf("Warning: Could not fetch selfhst software data: %v", err)
+		// Return cached data if available, even if expired
+		if len(selfhstSoftware) > 0 && len(selfhstTags) > 0 {
+			return selfhstSoftware, selfhstTags, nil
+		}
+		return nil, nil, err
+	}
+
+	// Fetch tags data
+	tags, err := fetchSelfhstTags()
+	if err != nil {
+		log.Printf("Warning: Could not fetch selfhst tags data: %v", err)
+		// Return cached data if available, even if expired
+		if len(selfhstSoftware) > 0 && len(selfhstTags) > 0 {
+			return selfhstSoftware, selfhstTags, nil
+		}
+		return nil, nil, err
+	}
+
+	// Process the data
+	if err := processSelfhstData(software, tags); err != nil {
+		log.Printf("Warning: Could not process selfhst data: %v", err)
+		return nil, nil, err
+	}
+
+	selfhstSoftware = software
+	selfhstTags = tags
+	selfhstDataCacheTime = time.Now()
+	log.Printf("Successfully cached %d software entries and %d tags.", len(software), len(tags))
+
+	return selfhstSoftware, selfhstTags, nil
+}
+
+// fetchSelfhstSoftware fetches software data from the selfh.st API
+func fetchSelfhstSoftware() ([]SelfHstSoftware, error) {
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", selfhstSoftwareAPIURL, nil)
+	req.Header.Set("User-Agent", "TraLa-Dashboard-App")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("received non-200 status: %s", resp.Status)
+	}
+
+	// The software.json is an array of arrays, not objects
+	var rawSoftware [][]json.RawMessage
+	if err := json.NewDecoder(resp.Body).Decode(&rawSoftware); err != nil {
+		return nil, err
+	}
+
+	software := make([]SelfHstSoftware, 0, len(rawSoftware))
+	for _, entry := range rawSoftware {
+		if len(entry) > 17 { // Ensure we have at least 18 fields (0-17)
+			var softwareEntry SelfHstSoftware
+			if err := json.Unmarshal(entry[0], &softwareEntry.ID); err == nil {
+				if err := json.Unmarshal(entry[1], &softwareEntry.Name); err == nil {
+					if err := json.Unmarshal(entry[2], &softwareEntry.Reference); err == nil {
+						if err := json.Unmarshal(entry[17], &softwareEntry.TagIndices); err == nil {
+							software = append(software, softwareEntry)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return software, nil
+}
+
+// fetchSelfhstTags fetches tags data from the selfh.st API
+func fetchSelfhstTags() ([]SelfHstTag, error) {
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", selfhstTagsAPIURL, nil)
+	req.Header.Set("User-Agent", "TraLa-Dashboard-App")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("received non-200 status: %s", resp.Status)
+	}
+
+	var tags []SelfHstTag
+	if err := json.NewDecoder(resp.Body).Decode(&tags); err != nil {
+		return nil, err
+	}
+
+	return tags, nil
+}
+
+// processSelfhstData analyzes tag frequencies and builds mappings
+func processSelfhstData(software []SelfHstSoftware, tags []SelfHstTag) error {
+	categoryMutex.Lock()
+	defer categoryMutex.Unlock()
+
+	debugf("Processing %d software entries and %d tags", len(software), len(tags))
+
+	// Build tag index to name mapping
+	processedTags = make(map[string]string)
+	for i, tag := range tags {
+		// Map numeric index to tag name (since software.json uses numeric indices)
+		processedTags[strconv.Itoa(i)] = tag.Tag
+		debugf("Tag mapping: %s -> %s", strconv.Itoa(i), tag.Tag)
+	}
+
+	// Build service to category mapping (without filtering common tags yet)
+	serviceCategoryMap = buildServiceCategoryMap(software, processedTags, make(map[string]bool))
+
+	debugf("Processed %d tags", len(processedTags))
+	debugf("Built category mapping for %d services", len(serviceCategoryMap))
+
+	// Log some sample mappings for debugging
+	count := 0
+	for ref, category := range serviceCategoryMap {
+		if count < 5 {
+			debugf("Sample mapping: %s -> %s", ref, category)
+			count++
+		}
+	}
+
+	return nil
+}
+
+// analyzeTagFrequency counts how many times each tag appears
+func analyzeTagFrequency(software []SelfHstSoftware) map[string]int {
+	frequency := make(map[string]int)
+
+	for _, sw := range software {
+		if sw.TagIndices != "" {
+			indices := strings.Split(sw.TagIndices, ",")
+			for _, index := range indices {
+				index = strings.TrimSpace(index)
+				if index != "" {
+					frequency[index]++
+				}
+			}
+		}
+	}
+
+	return frequency
+}
+
+// identifyCommonTags marks tags that appear on more than the threshold percentage of services
+func identifyCommonTags(frequency map[string]int, totalServices int) map[string]bool {
+	common := make(map[string]bool)
+
+	for tagIndex, count := range frequency {
+		percentage := float64(count) / float64(totalServices)
+		if percentage > commonTagThreshold {
+			common[tagIndex] = true
+			debugf("Marked tag %s as common (%.2f%% of services)", tagIndex, percentage*100)
+		}
+	}
+
+	return common
+}
+
+// buildServiceCategoryMap creates a mapping from service reference to category
+func buildServiceCategoryMap(software []SelfHstSoftware, tagMap map[string]string, commonTags map[string]bool) map[string]string {
+	serviceMap := make(map[string]string)
+
+	for _, sw := range software {
+		if sw.TagIndices != "" && sw.Reference != "" {
+			indices := strings.Split(sw.TagIndices, ",")
+			debugf("Processing software %s with tag indices: %s", sw.Reference, sw.TagIndices)
+
+			// Find the first non-common tag
+			for _, index := range indices {
+				index = strings.TrimSpace(index)
+				if index != "" && !commonTags[index] {
+					if tagName, exists := tagMap[index]; exists {
+						serviceMap[strings.ToLower(sw.Reference)] = tagName
+						debugf("Mapped %s -> %s (tag index: %s)", sw.Reference, tagName, index)
+						break
+					} else {
+						debugf("Tag index %s not found in tag map", index)
+					}
+				} else if index != "" {
+					debugf("Skipping common tag index: %s", index)
+				}
+			}
+
+			if _, exists := serviceMap[strings.ToLower(sw.Reference)]; !exists {
+				debugf("No category mapped for software: %s", sw.Reference)
+			}
+		}
+	}
+
+	return serviceMap
+}
+
+// assignServiceCategory determines the category for a service using icon reference
+func assignServiceCategory(serviceName string, iconReference string) *ServiceCategory {
+	// Check for manual override first
+	if category := getManualCategoryOverride(serviceName); category != nil {
+		debugf("Using manual category override for %s: %s", serviceName, category.Name)
+		return category
+	}
+
+	// Check for automatic categorization
+	if !configuration.Categorization.Enabled {
+		return nil
+	}
+
+	categoryMutex.RLock()
+	defer categoryMutex.RUnlock()
+
+	debugf("Assigning category for %s (icon reference: %s)", serviceName, iconReference)
+	debugf("Available service category map entries: %d", len(serviceCategoryMap))
+
+	// Try exact match using icon reference
+	if iconReference != "" {
+		if category, exists := serviceCategoryMap[strings.ToLower(iconReference)]; exists {
+			debugf("Found exact category match for %s: %s", iconReference, category)
+			return &ServiceCategory{
+				Name:        category,
+				DisplayName: toDisplayName(category),
+				IsManual:    false,
+			}
+		} else {
+			debugf("No exact match found for icon reference: %s", iconReference)
+		}
+	}
+
+	// Try fuzzy match against selfhst software database
+	if category := getAutomaticCategory(serviceName); category != nil {
+		debugf("Found fuzzy category match for %s: %s", serviceName, category.Name)
+		return category
+	}
+
+	debugf("No category found for %s", serviceName)
+	return nil
+}
+
+// getManualCategoryOverride checks for manual category override in configuration
+func getManualCategoryOverride(serviceName string) *ServiceCategory {
+	configurationMux.RLock()
+	defer configurationMux.RUnlock()
+
+	if override, ok := serviceOverrideMap[serviceName]; ok && override.Category != "" {
+		return &ServiceCategory{
+			Name:        override.Category,
+			DisplayName: toDisplayName(override.Category),
+			IsManual:    true,
+		}
+	}
+
+	return nil
+}
+
+// getManualServiceCategory checks for manual category in manual service configuration
+func getManualServiceCategory(serviceName string) *ServiceCategory {
+	configurationMux.RLock()
+	defer configurationMux.RUnlock()
+
+	for _, manualService := range configuration.Services.Manual {
+		if manualService.Name == serviceName && manualService.Category != "" {
+			return &ServiceCategory{
+				Name:        manualService.Category,
+				DisplayName: toDisplayName(manualService.Category),
+				IsManual:    true,
+			}
+		}
+	}
+
+	return nil
+}
+
+// getAutomaticCategory performs fuzzy matching against selfhst database
+func getAutomaticCategory(serviceName string) *ServiceCategory {
+	software, _, err := getSelfhstData()
+	if err != nil {
+		debugf("Error getting selfhst data for automatic categorization: %v", err)
+		return nil
+	}
+
+	debugf("Trying automatic categorization for %s with %d software entries", serviceName, len(software))
+
+	// Create a list of software names for fuzzy matching
+	names := make([]string, 0, len(software))
+	for _, sw := range software {
+		if sw.Reference != "" {
+			names = append(names, sw.Reference)
+		}
+	}
+
+	// Perform fuzzy search
+	matches := fuzzy.FindFold(strings.ToLower(serviceName), names)
+	debugf("Fuzzy matches for %s: %v", serviceName, matches)
+
+	if len(matches) > 0 {
+		// Find the matching software entry
+		for _, sw := range software {
+			if sw.Reference == matches[0] {
+				debugf("Found software match: %s -> %s", matches[0], sw.Reference)
+				// Get the category from our pre-built mapping
+				if category, exists := serviceCategoryMap[strings.ToLower(sw.Reference)]; exists {
+					debugf("Found category for %s: %s", sw.Reference, category)
+					return &ServiceCategory{
+						Name:        category,
+						DisplayName: toDisplayName(category),
+						IsManual:    false,
+					}
+				} else {
+					debugf("No category found in mapping for %s", sw.Reference)
+				}
+				break
+			}
+		}
+	}
+
+	return nil
+}
+
+// toDisplayName converts a tag name to a human-readable display name
+func toDisplayName(tagName string) string {
+	// Convert underscores and hyphens to spaces
+	displayName := strings.ReplaceAll(tagName, "_", " ")
+	displayName = strings.ReplaceAll(displayName, "-", " ")
+
+	// Capitalize each word
+	words := strings.Fields(displayName)
+	for i, word := range words {
+		if len(word) > 0 {
+			words[i] = strings.ToUpper(word[:1]) + strings.ToLower(word[1:])
+		}
+	}
+
+	return strings.Join(words, " ")
+}
+
+// applyCategorizationToServices analyzes the user's services and applies categorization
+func applyCategorizationToServices(services []Service) []Service {
+	debugf("Applying categorization to %d user services", len(services))
+
+	// Collect all icon references from user services
+	iconReferences := make([]string, 0, len(services))
+	for _, service := range services {
+		if service.Icon != "" && strings.Contains(service.Icon, configuration.Environment.SelfhstIconURL) {
+			// Extract reference from icon URL
+			parts := strings.Split(service.Icon, "/")
+			if len(parts) > 0 {
+				lastPart := parts[len(parts)-1]
+				reference := strings.TrimSuffix(lastPart, filepath.Ext(lastPart))
+				iconReferences = append(iconReferences, reference)
+			}
+		}
+	}
+
+	debugf("Found %d icon references from user services", len(iconReferences))
+
+	// Get selfhst data to analyze tag frequencies for these specific services
+	software, tags, err := getSelfhstData()
+	if err != nil {
+		debugf("Error getting selfhst data for categorization: %v", err)
+		return services
+	}
+
+	// Build tag index to name mapping
+	processedTags := make(map[string]string)
+	for i, tag := range tags {
+		processedTags[strconv.Itoa(i)] = tag.Tag
+	}
+
+	// Analyze tag frequency for user's services only
+	userTagFrequency := make(map[string]int)
+	totalUserServices := 0
+
+	for _, ref := range iconReferences {
+		// Find matching software entry
+		for _, sw := range software {
+			if strings.EqualFold(sw.Reference, ref) {
+				if sw.TagIndices != "" {
+					indices := strings.Split(sw.TagIndices, ",")
+					for _, index := range indices {
+						index = strings.TrimSpace(index)
+						if index != "" {
+							userTagFrequency[index]++
+						}
+					}
+					totalUserServices++
+				}
+				break
+			}
+		}
+	}
+
+	debugf("User tag frequency analysis: %v (total services: %d)", userTagFrequency, totalUserServices)
+
+	// Identify common tags based on user's services
+	userCommonTags := make(map[string]bool)
+	for tagIndex, count := range userTagFrequency {
+		percentage := float64(count) / float64(totalUserServices)
+		if percentage > configuration.Categorization.CommonTagThreshold {
+			userCommonTags[tagIndex] = true
+			debugf("Marked tag %s as common for user services (%.2f%% of %d services)",
+				tagIndex, percentage*100, totalUserServices)
+		}
+	}
+
+	// Build service category map for user services
+	userServiceCategoryMap := make(map[string]string)
+	for _, ref := range iconReferences {
+		for _, sw := range software {
+			if strings.EqualFold(sw.Reference, ref) && sw.TagIndices != "" {
+				indices := strings.Split(sw.TagIndices, ",")
+
+				// Find first non-common tag
+				for _, index := range indices {
+					index = strings.TrimSpace(index)
+					if index != "" && !userCommonTags[index] {
+						if tagName, exists := processedTags[index]; exists {
+							userServiceCategoryMap[strings.ToLower(ref)] = tagName
+							debugf("Mapped user service %s -> %s", ref, tagName)
+							break
+						}
+					}
+				}
+
+				// If no non-common tags found, don't assign a category
+				if _, exists := userServiceCategoryMap[strings.ToLower(ref)]; !exists {
+					debugf("No non-common tags found for %s, no category assigned", ref)
+				}
+				break
+			}
+		}
+	}
+
+	debugf("Built category mapping for %d user services", len(userServiceCategoryMap))
+
+	// Apply categories to services
+	categorizedServices := make([]Service, len(services))
+	for i, service := range services {
+		categorizedServices[i] = service
+
+		// Get icon reference for this service
+		iconReference := ""
+		if service.Icon != "" && strings.Contains(service.Icon, configuration.Environment.SelfhstIconURL) {
+			parts := strings.Split(service.Icon, "/")
+			if len(parts) > 0 {
+				lastPart := parts[len(parts)-1]
+				iconReference = strings.TrimSuffix(lastPart, filepath.Ext(lastPart))
+			}
+		}
+
+		// Check for manual override first (service overrides take precedence)
+		if category := getManualCategoryOverride(service.Name); category != nil {
+			categorizedServices[i].Category = category
+			continue
+		}
+
+		// Check for manual service category (for manual services)
+		if category := getManualServiceCategory(service.Name); category != nil {
+			categorizedServices[i].Category = category
+			continue
+		}
+
+		// Apply automatic categorization only if category exists
+		if iconReference != "" {
+			if category, exists := userServiceCategoryMap[strings.ToLower(iconReference)]; exists {
+				categorizedServices[i].Category = &ServiceCategory{
+					Name:        category,
+					DisplayName: toDisplayName(category),
+					IsManual:    false,
+				}
+				debugf("Applied category %s to service %s", category, service.Name)
+			} else {
+				debugf("No category found for service %s (icon reference: %s)", service.Name, iconReference)
+			}
+		}
+	}
+
+	return categorizedServices
 }
 
 // --- Caching & Utility ---
@@ -1292,6 +1870,12 @@ func loadConfiguration() {
 			Overrides: make([]ServiceOverride, 0),
 			Manual:    make([]ManualService, 0),
 		},
+		Categorization: CategorizationConfig{
+			Enabled:            true, // Enabled by default
+			ExcludeCommonTags:  true,
+			CommonTagThreshold: 0.9, // Increased to 90% as requested
+			DefaultViewMode:    "grouped",
+		},
 	}
 
 	// Step 2: configuration file
@@ -1436,6 +2020,17 @@ func main() {
 			log.Printf("Warning: Could not scan user icons directory: %v", err)
 		}
 	}() // Pre-warm the user icons cache
+
+	// Initialize categorization system if enabled
+	if configuration.Categorization.Enabled {
+		go func() {
+			if _, _, err := getSelfhstData(); err != nil {
+				log.Printf("Warning: Could not initialize categorization system: %v", err)
+			} else {
+				log.Println("Categorization system initialized successfully")
+			}
+		}()
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/services", servicesHandler)

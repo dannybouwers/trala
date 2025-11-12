@@ -23,7 +23,60 @@
         #service-grid > a { transition: opacity 0.3s ease, transform 0.3s ease; }
         .sort-btn { transition: background-color 0.2s, color 0.2s; }
         .sort-btn.active { background-color: #3b82f6; color: white; }
+        .view-btn { transition: background-color 0.2s, color 0.2s; }
+        .view-btn.active { background-color: #3b82f6; color: white; }
         .search-icon-greyscale { filter: grayscale(100%); }
+        .category-section { margin-bottom: 2rem; }
+        .category-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .dark .category-header {
+            background: linear-gradient(135deg, #374151 0%, #4b5563 100%);
+        }
+        .category-header:hover {
+            background: linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%);
+        }
+        .dark .category-header:hover {
+            background: linear-gradient(135deg, #4b5563 0%, #6b7280 100%);
+        }
+        .category-title {
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: #1f2937;
+        }
+        .dark .category-title {
+            color: #f9fafb;
+        }
+        .category-count {
+            background-color: #3b82f6;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        .category-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+        }
+        .category-content.collapsed {
+            display: none;
+        }
+        .collapse-icon {
+            transition: transform 0.2s ease;
+        }
+        .collapse-icon.rotated {
+            transform: rotate(180deg);
+        }
     </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 antialiased">
@@ -60,10 +113,14 @@
                 </div>
             </form>
         </div>
-        <div id="sort-controls" class="flex justify-center gap-2 mb-8">
+        <div id="sort-controls" class="flex justify-center gap-2 mb-4">
             <button data-sort="name" class="sort-btn active px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">{{ T .Localizer "name" }}</button>
             <button data-sort="url" class="sort-btn px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">{{ T .Localizer "url" }}</button>
             <button data-sort="priority" class="sort-btn px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">{{ T .Localizer "priority" }}</button>
+        </div>
+        <div id="view-controls" class="flex justify-center gap-2 mb-8" style="display: none;">
+            <button data-view="flat" class="view-btn active px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">Flat View</button>
+            <button data-view="grouped" class="view-btn px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">Grouped View</button>
         </div>
         <main id="service-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6"></main>
         <div id="error-page" class="hidden text-center py-16">
@@ -100,6 +157,7 @@
         const searchInput = document.getElementById('search-input');
         const clearButton = document.getElementById('clear-button');
         const sortControls = document.getElementById('sort-controls');
+        const viewControls = document.getElementById('view-controls');
         const searchForm = document.getElementById('search-form');
         const searchButton = document.getElementById('search-button');
         const searchIcon = document.getElementById('search-icon');
@@ -115,6 +173,8 @@
         let allServices = [];
         let refreshIntervalId = null;
         let currentSort = 'name';
+        let currentView = 'grouped';
+        let categorizationEnabled = true;
         const colors = ['bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-yellow-500', 'bg-lime-500', 'bg-green-500', 'bg-emerald-500', 'bg-teal-500', 'bg-cyan-500', 'bg-sky-500', 'bg-blue-500', 'bg-indigo-500', 'bg-violet-500', 'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500', 'bg-rose-500'];
         
         const getColorFromString = (str) => { let hash = 0; for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); } return colors[Math.abs(hash % colors.length)]; };
@@ -153,36 +213,153 @@
         };
 
         const renderServices = (servicesToRender) => {
+            if (categorizationEnabled && currentView === 'grouped') {
+                renderGroupedServices(servicesToRender);
+            } else {
+                renderFlatServices(servicesToRender);
+            }
+        };
+
+        const renderFlatServices = (servicesToRender) => {
             serviceGrid.innerHTML = '';
-            if (servicesToRender.length === 0 && searchInput.value) { serviceGrid.innerHTML = `<p class="col-span-full text-center text-gray-500 dark:text-gray-400">No services found for "${searchInput.value}".</p>`; return; }
+            if (servicesToRender.length === 0 && searchInput.value) {
+                serviceGrid.innerHTML = `<p class="col-span-full text-center text-gray-500 dark:text-gray-400">No services found for "${searchInput.value}".</p>`;
+                return;
+            }
             
             for (const service of servicesToRender) {
-                const card = document.createElement('a');
-                card.href = service.url;
-                card.target = '_blank';
-                card.rel = 'noopener noreferrer';
-                card.className = 'block p-4 rounded-lg bg-white dark:bg-gray-800 shadow-md hover:shadow-lg hover:-translate-y-1 transition-all duration-300';
-                
-                const firstLetter = service.Name.charAt(0).toUpperCase();
-                const bgColor = getColorFromString(service.Name);
-                
-                card.innerHTML = `<div class="flex flex-col items-center text-center"><div class="w-16 h-16 mb-4 flex items-center justify-center rounded-lg overflow-hidden"><img class="w-full h-full object-contain icon-img" src="${service.icon}" alt="Icon for ${service.Name}" style="display: block;" /><div class="fallback-icon w-full h-full ${bgColor}" style="display: none;">${firstLetter}</div></div><p class="font-semibold truncate w-full" title="${service.Name}">${service.Name}</p><p class="text-xs text-gray-500 dark:text-gray-400 truncate w-full" title="${service.url}">${service.url.replace('https://', '')}</p></div>`;
-                
-                serviceGrid.appendChild(card);
+                serviceGrid.appendChild(createServiceCard(service));
+            }
+        };
 
-                const img = card.querySelector('.icon-img');
-                const fallback = card.querySelector('.fallback-icon');
+        const renderGroupedServices = (servicesToRender) => {
+            serviceGrid.innerHTML = '';
+            
+            // Group services by category
+            const grouped = groupServicesByCategory(servicesToRender);
+            
+            if (Object.keys(grouped).length === 0) {
+                serviceGrid.innerHTML = `<p class="col-span-full text-center text-gray-500 dark:text-gray-400">No services found.</p>`;
+                return;
+            }
+            
+            // Create category sections
+            for (const [categoryName, services] of Object.entries(grouped)) {
+                const categorySection = createCategorySection(categoryName, services);
+                serviceGrid.appendChild(categorySection);
+            }
+        };
 
-                if (service.icon) {
-                    img.onerror = () => {
-                        img.style.display = 'none';
-                        fallback.style.display = 'flex';
-                    };
+        const groupServicesByCategory = (services) => {
+            const grouped = {};
+            const uncategorized = [];
+            
+            for (const service of services) {
+                if (service.category && service.category.name) {
+                    const categoryName = service.category.displayName || service.category.name;
+                    if (!grouped[categoryName]) {
+                        grouped[categoryName] = [];
+                    }
+                    grouped[categoryName].push(service);
                 } else {
-                    img.style.display = 'none';
-                    fallback.style.display = 'flex';
+                    uncategorized.push(service);
                 }
             }
+            
+            // Add uncategorized services if any
+            if (uncategorized.length > 0) {
+                grouped['Uncategorized'] = uncategorized;
+            }
+            
+            return grouped;
+        };
+
+        const createCategorySection = (categoryName, services) => {
+            const section = document.createElement('div');
+            section.className = 'category-section';
+            
+            const header = document.createElement('div');
+            header.className = 'category-header';
+            header.onclick = () => toggleCategory(categoryName);
+            
+            const titleContainer = document.createElement('div');
+            titleContainer.className = 'flex items-center';
+            
+            const title = document.createElement('h3');
+            title.className = 'category-title';
+            title.textContent = categoryName;
+            
+            const count = document.createElement('span');
+            count.className = 'category-count ml-2';
+            count.textContent = services.length;
+            
+            titleContainer.appendChild(title);
+            titleContainer.appendChild(count);
+            
+            const chevron = document.createElement('svg');
+            chevron.className = 'w-5 h-5 collapse-icon';
+            chevron.setAttribute('id', `chevron-${categoryName}`);
+            chevron.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>';
+            chevron.setAttribute('fill', 'none');
+            chevron.setAttribute('stroke', 'currentColor');
+            chevron.setAttribute('viewBox', '0 0 24 24');
+            
+            header.appendChild(titleContainer);
+            header.appendChild(chevron);
+            
+            const content = document.createElement('div');
+            content.className = 'category-content';
+            content.id = `category-${categoryName}`;
+            
+            for (const service of services) {
+                content.appendChild(createServiceCard(service));
+            }
+            
+            section.appendChild(header);
+            section.appendChild(content);
+            
+            return section;
+        };
+
+        const toggleCategory = (categoryName) => {
+            const content = document.getElementById(`category-${categoryName}`);
+            const chevron = document.getElementById(`chevron-${categoryName}`);
+            
+            if (content.classList.contains('collapsed')) {
+                content.classList.remove('collapsed');
+                chevron.classList.remove('rotated');
+            } else {
+                content.classList.add('collapsed');
+                chevron.classList.add('rotated');
+            }
+        };
+
+        const createServiceCard = (service) => {
+            const card = document.createElement('a');
+            card.href = service.url;
+            card.target = '_blank';
+            card.rel = 'noopener noreferrer';
+            card.className = 'block p-4 rounded-lg bg-white dark:bg-gray-800 shadow-md hover:shadow-lg hover:-translate-y-1 transition-all duration-300';
+            
+            const firstLetter = service.Name.charAt(0).toUpperCase();
+            const bgColor = getColorFromString(service.Name);
+            
+            card.innerHTML = `<div class="flex flex-col items-center text-center"><div class="w-16 h-16 mb-4 flex items-center justify-center rounded-lg overflow-hidden"><img class="w-full h-full object-contain icon-img" src="${service.icon}" alt="Icon for ${service.Name}" style="display: block;" /><div class="fallback-icon w-full h-full ${bgColor}" style="display: none;">${firstLetter}</div></div><p class="font-semibold truncate w-full" title="${service.Name}">${service.Name}</p><p class="text-xs text-gray-500 dark:text-gray-400 truncate w-full" title="${service.url}">${service.url.replace('https://', '')}</p></div>`;
+            
+            const img = card.querySelector('.icon-img');
+            const fallback = card.querySelector('.fallback-icon');
+
+            if (service.icon) {
+                img.onerror = () => {
+                    img.style.display = 'none';
+                    fallback.style.display = 'flex';
+                };
+            } else {
+                img.style.display = 'none';
+                fallback.style.display = 'flex';
+            }
+            
+            return card;
         };
 
         const applyFiltersAndSort = () => {
@@ -263,6 +440,16 @@
                 }
             });
             
+            viewControls.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON') {
+                    currentView = e.target.dataset.view;
+                    document.querySelectorAll('.view-btn').forEach(btn => btn.classList.remove('active'));
+                    e.target.classList.add('active');
+                    localStorage.setItem('viewMode', currentView);
+                    applyFiltersAndSort();
+                }
+            });
+            
             searchForm.addEventListener('submit', (e) => { e.preventDefault(); if (searchInput.value) { window.open(`${SEARCH_ENGINE_URL}${encodeURIComponent(searchInput.value)}`, '_blank'); } });
             
 
@@ -299,6 +486,25 @@
                         SEARCH_ENGINE_URL = status.frontend.searchEngineURL || SEARCH_ENGINE_URL;
                         SEARCH_ENGINE_ICON_URL = status.frontend.searchEngineIconURL || '';
                         REFRESH_INTERVAL_SECONDS = status.frontend.refreshIntervalSeconds || REFRESH_INTERVAL_SECONDS;
+                        
+                        // Update categorization settings
+                        if (status.frontend.categorization) {
+                            categorizationEnabled = status.frontend.categorization.Enabled;
+                            if (categorizationEnabled) {
+                                viewControls.style.display = 'flex';
+                                // Set default view mode
+                                currentView = status.frontend.categorization.DefaultViewMode || 'flat';
+                                // Restore from localStorage if available
+                                const savedView = localStorage.getItem('viewMode');
+                                if (savedView && (savedView === 'flat' || savedView === 'grouped')) {
+                                    currentView = savedView;
+                                }
+                                // Update button states
+                                document.querySelectorAll('.view-btn').forEach(btn => {
+                                    btn.classList.toggle('active', btn.dataset.view === currentView);
+                                });
+                            }
+                        }
                         
                         // Update search icon if available
                         if (SEARCH_ENGINE_ICON_URL) {
