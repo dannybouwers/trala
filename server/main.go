@@ -44,20 +44,13 @@ type SelfHstSoftware struct {
 	Name      string `json:"1"` // Index 1
 	Reference string `json:"2"` // Index 2
 	// ... other fields
-	TagIndices string `json:"18"` // Index 18 - comma-separated tag indices
+	TagIndices string `json:"17"` // Index 17 - comma-separated tag indices
 }
 
 // SelfHstTag represents a tag in the selfh.st tags database
 type SelfHstTag struct {
 	Tag        string   `json:"Tag"`
 	ValidTypes []string `json:"Valid Types"`
-}
-
-// ServiceCategory represents category information for a service
-type ServiceCategory struct {
-	Name        string `json:"name"`
-	DisplayName string `json:"displayName"`
-	IsManual    bool   `json:"isManual"`
 }
 
 // CategorizationConfig represents categorization settings
@@ -89,11 +82,11 @@ type TraefikEntryPoint struct {
 
 // Service represents the final, processed data sent to the frontend.
 type Service struct {
-	Name     string           `json:"Name"`
-	URL      string           `json:"url"`
-	Priority int              `json:"priority"`
-	Icon     string           `json:"icon"`
-	Category *ServiceCategory `json:"category,omitempty"`
+	Name     string `json:"Name"`
+	URL      string `json:"url"`
+	Priority int    `json:"priority"`
+	Icon     string `json:"icon"`
+	Category string `json:"category,omitempty"`
 }
 
 // VersionInfo represents the application version information
@@ -218,8 +211,6 @@ var (
 	selfhstTags          []SelfHstTag
 	selfhstDataCacheTime time.Time
 	selfhstDataCacheMux  sync.RWMutex
-	tagFrequencyMap      map[string]int
-	commonTags           map[string]bool
 	processedTags        map[string]string // Tag index to name mapping
 	serviceCategoryMap   map[string]string
 	categoryMutex        sync.RWMutex
@@ -1206,16 +1197,16 @@ func buildServiceCategoryMap(software []SelfHstSoftware, tagMap map[string]strin
 }
 
 // assignServiceCategory determines the category for a service using icon reference
-func assignServiceCategory(serviceName string, iconReference string) *ServiceCategory {
+func assignServiceCategory(serviceName string, iconReference string) string {
 	// Check for manual override first
-	if category := getManualCategoryOverride(serviceName); category != nil {
-		debugf("Using manual category override for %s: %s", serviceName, category.Name)
+	if category := getManualCategoryOverride(serviceName); category != "" {
+		debugf("Using manual category override for %s: %s", serviceName, category)
 		return category
 	}
 
 	// Check for automatic categorization
 	if !configuration.Categorization.Enabled {
-		return nil
+		return ""
 	}
 
 	categoryMutex.RLock()
@@ -1228,66 +1219,54 @@ func assignServiceCategory(serviceName string, iconReference string) *ServiceCat
 	if iconReference != "" {
 		if category, exists := serviceCategoryMap[strings.ToLower(iconReference)]; exists {
 			debugf("Found exact category match for %s: %s", iconReference, category)
-			return &ServiceCategory{
-				Name:        category,
-				DisplayName: toDisplayName(category),
-				IsManual:    false,
-			}
+			return category
 		} else {
 			debugf("No exact match found for icon reference: %s", iconReference)
 		}
 	}
 
 	// Try fuzzy match against selfhst software database
-	if category := getAutomaticCategory(serviceName); category != nil {
-		debugf("Found fuzzy category match for %s: %s", serviceName, category.Name)
+	if category := getAutomaticCategory(serviceName); category != "" {
+		debugf("Found fuzzy category match for %s: %s", serviceName, category)
 		return category
 	}
 
 	debugf("No category found for %s", serviceName)
-	return nil
+	return ""
 }
 
 // getManualCategoryOverride checks for manual category override in configuration
-func getManualCategoryOverride(serviceName string) *ServiceCategory {
+func getManualCategoryOverride(serviceName string) string {
 	configurationMux.RLock()
 	defer configurationMux.RUnlock()
 
 	if override, ok := serviceOverrideMap[serviceName]; ok && override.Category != "" {
-		return &ServiceCategory{
-			Name:        override.Category,
-			DisplayName: toDisplayName(override.Category),
-			IsManual:    true,
-		}
+		return override.Category
 	}
 
-	return nil
+	return ""
 }
 
 // getManualServiceCategory checks for manual category in manual service configuration
-func getManualServiceCategory(serviceName string) *ServiceCategory {
+func getManualServiceCategory(serviceName string) string {
 	configurationMux.RLock()
 	defer configurationMux.RUnlock()
 
 	for _, manualService := range configuration.Services.Manual {
 		if manualService.Name == serviceName && manualService.Category != "" {
-			return &ServiceCategory{
-				Name:        manualService.Category,
-				DisplayName: toDisplayName(manualService.Category),
-				IsManual:    true,
-			}
+			return manualService.Category
 		}
 	}
 
-	return nil
+	return ""
 }
 
 // getAutomaticCategory performs fuzzy matching against selfhst database
-func getAutomaticCategory(serviceName string) *ServiceCategory {
+func getAutomaticCategory(serviceName string) string {
 	software, _, err := getSelfhstData()
 	if err != nil {
 		debugf("Error getting selfhst data for automatic categorization: %v", err)
-		return nil
+		return ""
 	}
 
 	debugf("Trying automatic categorization for %s with %d software entries", serviceName, len(software))
@@ -1312,11 +1291,7 @@ func getAutomaticCategory(serviceName string) *ServiceCategory {
 				// Get the category from our pre-built mapping
 				if category, exists := serviceCategoryMap[strings.ToLower(sw.Reference)]; exists {
 					debugf("Found category for %s: %s", sw.Reference, category)
-					return &ServiceCategory{
-						Name:        category,
-						DisplayName: toDisplayName(category),
-						IsManual:    false,
-					}
+					return category
 				} else {
 					debugf("No category found in mapping for %s", sw.Reference)
 				}
@@ -1325,24 +1300,7 @@ func getAutomaticCategory(serviceName string) *ServiceCategory {
 		}
 	}
 
-	return nil
-}
-
-// toDisplayName converts a tag name to a human-readable display name
-func toDisplayName(tagName string) string {
-	// Convert underscores and hyphens to spaces
-	displayName := strings.ReplaceAll(tagName, "_", " ")
-	displayName = strings.ReplaceAll(displayName, "-", " ")
-
-	// Capitalize each word
-	words := strings.Fields(displayName)
-	for i, word := range words {
-		if len(word) > 0 {
-			words[i] = strings.ToUpper(word[:1]) + strings.ToLower(word[1:])
-		}
-	}
-
-	return strings.Join(words, " ")
+	return ""
 }
 
 // applyCategorizationToServices analyzes the user's services and applies categorization
@@ -1460,13 +1418,13 @@ func applyCategorizationToServices(services []Service) []Service {
 		}
 
 		// Check for manual override first (service overrides take precedence)
-		if category := getManualCategoryOverride(service.Name); category != nil {
+		if category := getManualCategoryOverride(service.Name); category != "" {
 			categorizedServices[i].Category = category
 			continue
 		}
 
 		// Check for manual service category (for manual services)
-		if category := getManualServiceCategory(service.Name); category != nil {
+		if category := getManualServiceCategory(service.Name); category != "" {
 			categorizedServices[i].Category = category
 			continue
 		}
@@ -1474,11 +1432,7 @@ func applyCategorizationToServices(services []Service) []Service {
 		// Apply automatic categorization only if category exists
 		if iconReference != "" {
 			if category, exists := userServiceCategoryMap[strings.ToLower(iconReference)]; exists {
-				categorizedServices[i].Category = &ServiceCategory{
-					Name:        category,
-					DisplayName: toDisplayName(category),
-					IsManual:    false,
-				}
+				categorizedServices[i].Category = category
 				debugf("Applied category %s to service %s", category, service.Name)
 			} else {
 				debugf("No category found for service %s (icon reference: %s)", service.Name, iconReference)
@@ -1837,7 +1791,7 @@ func loadConfiguration() {
 		Categorization: CategorizationConfig{
 			Enabled:            true, // Enabled by default
 			ExcludeCommonTags:  true,
-			CommonTagThreshold: 0.9, // Increased to 90% as requested
+			CommonTagThreshold: 0.9,
 			DefaultViewMode:    "grouped",
 		},
 	}

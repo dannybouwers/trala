@@ -253,10 +253,10 @@
         const groupServicesByCategory = (services) => {
             const grouped = {};
             const uncategorized = [];
-            
+
             for (const service of services) {
-                if (service.category && service.category.name) {
-                    const categoryName = service.category.displayName || service.category.name;
+                if (service.category) {
+                    const categoryName = service.category;
                     if (!grouped[categoryName]) {
                         grouped[categoryName] = [];
                     }
@@ -265,12 +265,12 @@
                     uncategorized.push(service);
                 }
             }
-            
+
             // Add uncategorized services if any
             if (uncategorized.length > 0) {
                 grouped['Uncategorized'] = uncategorized;
             }
-            
+
             return grouped;
         };
 
