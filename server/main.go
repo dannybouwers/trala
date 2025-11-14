@@ -34,7 +34,7 @@ var (
 )
 
 // Minimum supported configuration version
-const minimumConfigVersion = "2.0"
+const minimumConfigVersion = "3.0"
 
 // --- Structs ---
 
@@ -751,7 +751,7 @@ func isEntrypointExcluded(entryPoints []string) bool {
 		for _, exclude := range configuration.Services.Exclude.Entrypoints {
 			match, err := filepath.Match(exclude, ep)
 			if err != nil {
-				log.Printf("WARNING: invalid exclude_entrypoints pattern %q: %v", exclude, err)
+				log.Printf("WARNING: invalid exclude.entrypoints pattern %q: %v", exclude, err)
 				continue
 			}
 			if match {
