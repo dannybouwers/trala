@@ -34,7 +34,7 @@ var (
 )
 
 // Minimum supported configuration version
-const minimumConfigVersion = "2.0"
+const minimumConfigVersion = "3.0"
 
 // --- Structs ---
 
@@ -106,9 +106,14 @@ type ManualService struct {
 }
 
 type ServiceConfiguration struct {
-	Exclude   []string          `yaml:"exclude"`
+	Exclude   ExcludeConfig     `yaml:"exclude"`
 	Overrides []ServiceOverride `yaml:"overrides"`
 	Manual    []ManualService   `yaml:"manual"`
+}
+
+type ExcludeConfig struct {
+	Routers     []string `yaml:"routers"`
+	Entrypoints []string `yaml:"entrypoints"`
 }
 
 type EnvironmentConfiguration struct {
@@ -601,6 +606,12 @@ func processRouter(router TraefikRouter, entryPoints map[string]TraefikEntryPoin
 		return
 	}
 
+	// Check if this router should be excluded based on entrypoints
+	if isEntrypointExcluded(router.EntryPoints) {
+		debugf("Excluding router %s due to entrypoint exclusion", routerName)
+		return
+	}
+
 	// Check if this is the Traefik API service and exclude it
 	traefikAPIHost := configuration.Environment.Traefik.APIHost
 	if traefikAPIHost != "" {
@@ -716,7 +727,7 @@ func isExcluded(routerName string) bool {
 	configurationMux.RLock()
 	defer configurationMux.RUnlock()
 
-	for _, exclude := range configuration.Services.Exclude {
+	for _, exclude := range configuration.Services.Exclude.Routers {
 		match, err := filepath.Match(exclude, routerName)
 		if err != nil {
 			// Log invalid pattern so it is visible in docker logs
@@ -725,6 +736,28 @@ func isExcluded(routerName string) bool {
 		}
 		if match {
 			return true
+		}
+	}
+	return false
+}
+
+// isEntrypointExcluded checks if a entrypoint name is in the exclude list.
+// Supports wildcard patterns (*, ?) and logs invalid patterns.
+func isEntrypointExcluded(entryPoints []string) bool {
+	configurationMux.RLock()
+	defer configurationMux.RUnlock()
+
+	for _, ep := range entryPoints {
+		for _, exclude := range configuration.Services.Exclude.Entrypoints {
+			match, err := filepath.Match(exclude, ep)
+			if err != nil {
+				log.Printf("WARNING: invalid exclude.entrypoints pattern %q: %v", exclude, err)
+				continue
+			}
+			if match {
+				debugf("Excluding entrypoint: %s matched pattern %s", ep, exclude)
+				return true
+			}
 		}
 	}
 	return false
@@ -1252,7 +1285,10 @@ func loadConfiguration() {
 			},
 		},
 		Services: ServiceConfiguration{
-			Exclude:   make([]string, 0),
+			Exclude: ExcludeConfig{
+				Routers:     []string{},
+				Entrypoints: []string{},
+			},
 			Overrides: make([]ServiceOverride, 0),
 			Manual:    make([]ManualService, 0),
 		},
@@ -1357,7 +1393,8 @@ func loadConfiguration() {
 		serviceOverrideMap[o.Service] = o
 	}
 
-	log.Printf("Loaded %d service excludes from %s", len(config.Services.Exclude), configurationFilePath)
+	log.Printf("Loaded %d router excludes from %s", len(config.Services.Exclude.Routers), configurationFilePath)
+	log.Printf("Loaded %d entrypoint excludes from %s", len(config.Services.Exclude.Entrypoints), configurationFilePath)
 	log.Printf("Loaded %d service overrides from %s", len(config.Services.Overrides), configurationFilePath)
 
 	// Validate configuration version (without basic auth validation since we already did it above)
