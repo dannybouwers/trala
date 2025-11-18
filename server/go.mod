@@ -3,7 +3,7 @@ module server
 go 1.25.4
 
 require (
-	github.com/PuerkitoBio/goquery v1.10.3
+	github.com/PuerkitoBio/goquery v1.11.0
 	github.com/lithammer/fuzzysearch v1.1.8
 	github.com/nicksnyder/go-i18n/v2 v2.6.0
 	golang.org/x/text v0.31.0
@@ -12,5 +12,5 @@ require (
 
 require (
 	github.com/andybalholm/cascadia v1.3.3 // indirect
-	golang.org/x/net v0.39.0 // indirect
+	golang.org/x/net v0.47.0 // indirect
 )
