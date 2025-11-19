@@ -7,7 +7,7 @@ A simple, modern, and dynamic dashboard for your Traefik services. This applicat
 ## ✨ Features
 
 - **Auto-Discovery:** Automatically fetches and displays all HTTP routers from your Traefik instance.
-- **Automatic Service Categorization:** Intelligently groups services by category using selfh.st tags database with manual override support.
+- **Intelligent Service Grouping:** Automatically groups services by semantic similarity using Jaccard similarity on tags, with greedy clustering for optimal organization.
 - **Manual Services:** Add custom services to your dashboard that aren't managed by Traefik (e.g., Reddit, GitHub, external websites).
 - **Advanced Icon Fetching:** Intelligently finds the best icon for each service using a robust, prioritized strategy.
 - **Icon Overrides:** Manually map router names to specific icons for perfect results every time.
@@ -140,6 +140,7 @@ services:
     # Override only icon
     - service: "plex"
       icon: "plex.webp"
+      group: "Media"  # Force this service into the "Media" group
     - service: "unknown-service"
       icon: "https://selfh.st/content/images/2023/09/favicon-1.png"
     
@@ -235,6 +236,7 @@ Each service override can include:
 - `service`: The router name to match (required)
 - `display_name`: Custom display name (optional)
 - `icon`: Icon override (optional)
+- `group`: Group override (optional) - Forces the service into a specific group, overriding automatic grouping
 
 When using a filename from the selfh.st icon repository, you can specify files with the following extensions:
 
@@ -285,53 +287,31 @@ Each manual service can include:
 - `icon`: Custom icon (optional - full URL or filename from selfh.st)
 - `priority`: Priority for sorting (optional - higher numbers appear first, default: 50)
 
-### Service Categorization
+### Intelligent Service Grouping
 
-TraLa can automatically group your services by category using the selfh.st tags database. This feature provides intelligent categorization while allowing manual overrides for complete control.
+TraLa uses advanced clustering algorithms to automatically group your services based on semantic similarity. This feature analyzes service tags using Jaccard similarity and employs greedy clustering to create meaningful groups that prioritize cohesion over strict size balance.
 
 #### How It Works
 
-1. **Data Sources**: The system uses the selfh.st software and tags databases to determine categories
-2. **Tag Analysis**: Analyzes tag frequency across all services and excludes common tags (>80% by default)
-3. **Fuzzy Matching**: Matches your service names against the selfh.st database using fuzzy search
-4. **Manual Overrides**: You can manually specify categories for any service
+1. **Tag-Based Similarity**: Calculates Jaccard similarity between services based on their tags from the selfh.st database
+2. **Composite Scoring**: Combines similarity with relationship boosts and tag co-occurrence patterns
+3. **Greedy Clustering**: Uses connected components and greedy assignment to form optimal groups
+4. **Soft Balancing**: Allows larger groups when semantically coherent, with optional penalties for extreme imbalances
 
 #### Configuration
 
 ```yaml
-categorization:
-  enabled: true                    # Enable/disable categorization
-  exclude_common_tags: true        # Exclude tags appearing on >80% of services
-  common_tag_threshold: 0.8        # Threshold for excluding common tags (0.8 = 80%)
-  default_view_mode: "grouped"     # Default view: "flat" or "grouped"
-```
-
-#### Manual Category Overrides
-
-Add a `category` field to your service overrides:
-
-```yaml
-services:
-  overrides:
-    - service: "plex"
-      display_name: "Plex Media Server"
-      icon: "plex.svg"
-      category: "Media Management"  # Manual category override
-    
-    - service: "home-assistant"
-      display_name: "Home Assistant"
-      icon: "home-assistant.svg"
-      category: "Home Automation"  # Manual category override
+grouping:
+  enabled: true  # Enable/disable intelligent grouping
 ```
 
 #### Frontend Features
 
-- **View Modes**: Switch between flat (traditional grid) and grouped (by category) views
-- **Collapsible Categories**: Click category headers to expand/collapse service groups
-- **View Persistence**: Your preferred view mode is saved and restored on page reload
-- **Category Statistics**: See service count per category
+- **View Modes**: Switch between flat (traditional grid) and grouped (by semantic clusters) views
+- **Collapsible Groups**: Click group headers to expand/collapse service clusters
+- **Group Statistics**: See service count per group
 
-For detailed configuration options and examples, see [categorization-configuration.md](categorization-configuration.md).
+The grouping algorithm automatically adapts to your services and creates groups with names based on their common tags, such as "Arr", "Password Manager", or "Monitoring" based on tag patterns and relationships.
 
 ---
 

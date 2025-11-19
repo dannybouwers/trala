@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha1"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -53,12 +54,9 @@ type SelfHstTag struct {
 	ValidTypes []string `json:"Valid Types"`
 }
 
-// CategorizationConfig represents categorization settings
-type CategorizationConfig struct {
-	Enabled            bool    `yaml:"enabled"`
-	ExcludeCommonTags  bool    `yaml:"exclude_common_tags"`
-	CommonTagThreshold float64 `yaml:"common_tag_threshold"`
-	DefaultViewMode    string  `yaml:"default_view_mode"`
+// GroupingConfig represents grouping settings
+type GroupingConfig struct {
+	Enabled bool `yaml:"enabled"`
 }
 
 // TraefikRouter represents the essential fields from the Traefik API response.
@@ -82,11 +80,36 @@ type TraefikEntryPoint struct {
 
 // Service represents the final, processed data sent to the frontend.
 type Service struct {
-	Name     string `json:"Name"`
-	URL      string `json:"url"`
-	Priority int    `json:"priority"`
-	Icon     string `json:"icon"`
-	Category string `json:"category,omitempty"`
+	Name                string   `json:"Name"`
+	URL                 string   `json:"url"`
+	Priority            int      `json:"priority"`
+	Icon                string   `json:"icon"`
+	Category            string   `json:"category,omitempty"`
+	Group               string   `json:"group,omitempty"`
+	Tags                []string `json:"tags,omitempty"`
+	RelatedServiceNames []string `json:"relatedServiceNames,omitempty"`
+}
+
+// Group represents a cluster of services
+type Group struct {
+	ID       string   `json:"id"`
+	Name     string   `json:"name"`
+	Services []string `json:"services"`
+}
+
+// ServicesResponse represents the API response with services and groups
+type ServicesResponse struct {
+	Services []Service `json:"services"`
+	Groups   []Group   `json:"groups"`
+}
+
+// GroupConfig represents configuration for the grouping algorithm
+type GroupConfig struct {
+	SimilarityThreshold float64 `yaml:"similarityThreshold"`
+	RelatedBoost        float64 `yaml:"relatedBoost"`
+	CooccurrenceBoost   float64 `yaml:"cooccurrenceBoost"`
+	SoftBalanceFactor   float64 `yaml:"softBalanceFactor"`
+	SoftBalancePenalty  float64 `yaml:"softBalancePenalty"`
 }
 
 // VersionInfo represents the application version information
@@ -121,6 +144,7 @@ type ServiceOverride struct {
 	DisplayName string `yaml:"display_name,omitempty"`
 	Icon        string `yaml:"icon,omitempty"`
 	Category    string `yaml:"category,omitempty"`
+	Group       string `yaml:"group,omitempty"`
 }
 
 type ManualService struct {
@@ -152,18 +176,18 @@ type EnvironmentConfiguration struct {
 }
 
 type TralaConfiguration struct {
-	Version        string                   `yaml:"version"`
-	Environment    EnvironmentConfiguration `yaml:"environment"`
-	Services       ServiceConfiguration     `yaml:"services"`
-	Categorization CategorizationConfig     `yaml:"categorization"`
+	Version     string                   `yaml:"version"`
+	Environment EnvironmentConfiguration `yaml:"environment"`
+	Services    ServiceConfiguration     `yaml:"services"`
+	Grouping    GroupingConfig           `yaml:"grouping"`
 }
 
 // FrontendConfig represents the configuration data sent to the frontend
 type FrontendConfig struct {
-	SearchEngineURL        string               `json:"searchEngineURL"`
-	SearchEngineIconURL    string               `json:"searchEngineIconURL"`
-	RefreshIntervalSeconds int                  `json:"refreshIntervalSeconds"`
-	Categorization         CategorizationConfig `json:"categorization"`
+	SearchEngineURL        string         `json:"searchEngineURL"`
+	SearchEngineIconURL    string         `json:"searchEngineIconURL"`
+	RefreshIntervalSeconds int            `json:"refreshIntervalSeconds"`
+	Grouping               GroupingConfig `json:"grouping"`
 }
 
 // ApplicationStatus represents the combined status information for the application
@@ -211,14 +235,14 @@ var (
 	sortedUserIconNames    []string
 	sortedUserIconNamesMux sync.RWMutex
 
-	// Categorization system variables
+	// Grouping system variables
 	selfhstSoftware      []SelfHstSoftware
 	selfhstTags          []SelfHstTag
 	selfhstDataCacheTime time.Time
 	selfhstDataCacheMux  sync.RWMutex
-	processedTags        map[string]string // Tag index to name mapping
-	serviceCategoryMap   map[string]string
-	categoryMutex        sync.RWMutex
+	processedTags        map[string]string   // Tag index to name mapping
+	serviceTags          map[string][]string // Service reference to tags mapping
+	tagMutex             sync.RWMutex
 )
 
 const selfhstCacheTTL = 1 * time.Hour
@@ -511,9 +535,16 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 	finalServices = append(finalServices, traefikServices...)
 	finalServices = append(finalServices, manualServices...)
 
-	// 8. Apply categorization based on user's actual services
-	if configuration.Categorization.Enabled {
-		finalServices = applyCategorizationToServices(finalServices)
+	// 8. Apply grouping based on user's actual services
+	var groups []Group
+	if configuration.Grouping.Enabled {
+		groups = GroupServices(finalServices, GroupConfig{
+			SimilarityThreshold: 0.25,
+			RelatedBoost:        0.2,
+			CooccurrenceBoost:   0.1,
+			SoftBalanceFactor:   2.0,
+			SoftBalancePenalty:  0.0,
+		})
 	}
 
 	// Sort by priority (higher priority first)
@@ -521,8 +552,13 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 		return finalServices[i].Priority > finalServices[j].Priority
 	})
 
+	response := ServicesResponse{
+		Services: finalServices,
+		Groups:   groups,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(finalServices)
+	json.NewEncoder(w).Encode(response)
 }
 
 func IsValidUrl(str string) bool {
@@ -607,7 +643,7 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 		SearchEngineURL:        searchEngineURL,
 		SearchEngineIconURL:    searchEngineIconURL,
 		RefreshIntervalSeconds: refreshIntervalSeconds,
-		Categorization:         configuration.Categorization,
+		Grouping:               configuration.Grouping,
 	}
 
 	// Combine all status information
@@ -678,6 +714,9 @@ func processRouter(router TraefikRouter, entryPoints map[string]TraefikEntryPoin
 		displayName = routerName
 	}
 
+	// Get group override if available
+	groupOverride := getGroupOverride(routerName)
+
 	debugf("Processing router: %s (display: %s), URL: %s", routerName, displayName, serviceURL)
 	iconURL := findBestIconURL(routerName, serviceURL, displayName)
 
@@ -695,15 +734,19 @@ func processRouter(router TraefikRouter, entryPoints map[string]TraefikEntryPoin
 		}
 	}
 
-	// Assign category if categorization is enabled
-	category := assignServiceCategory(displayName, iconReference)
+	tags := getServiceTags(iconReference)
+
+	debugf("[%s] Found tags for reference '%s': %v", displayName, iconReference, tags)
 
 	ch <- Service{
-		Name:     displayName,
-		URL:      serviceURL,
-		Priority: router.Priority,
-		Icon:     iconURL,
-		Category: category,
+		Name:                displayName,
+		URL:                 serviceURL,
+		Priority:            router.Priority,
+		Icon:                iconURL,
+		Category:            "", // Will be set by grouping adapter
+		Group:               groupOverride,
+		Tags:                tags,
+		RelatedServiceNames: []string{}, // TODO: implement if needed
 	}
 }
 
@@ -782,6 +825,17 @@ func getDisplayNameOverride(routerName string) string {
 
 	if override, ok := serviceOverrideMap[routerName]; ok {
 		return override.DisplayName
+	}
+	return ""
+}
+
+// getGroupOverride looks for a group override in the loaded config file.
+func getGroupOverride(serviceName string) string {
+	configurationMux.RLock()
+	defer configurationMux.RUnlock()
+
+	if override, ok := serviceOverrideMap[serviceName]; ok {
+		return override.Group
 	}
 	return ""
 }
@@ -1130,8 +1184,8 @@ func fetchSelfhstTags() ([]SelfHstTag, error) {
 
 // processSelfhstData analyzes tag frequencies and builds mappings
 func processSelfhstData(software []SelfHstSoftware, tags []SelfHstTag) error {
-	categoryMutex.Lock()
-	defer categoryMutex.Unlock()
+	tagMutex.Lock()
+	defer tagMutex.Unlock()
 
 	debugf("Processing %d software entries and %d tags", len(software), len(tags))
 
@@ -1143,337 +1197,304 @@ func processSelfhstData(software []SelfHstSoftware, tags []SelfHstTag) error {
 		debugf("Tag mapping: %s -> %s", strconv.Itoa(i), tag.Tag)
 	}
 
-	// Build service to category mapping (without filtering common tags yet)
-	serviceCategoryMap = buildServiceCategoryMap(software, processedTags, make(map[string]bool))
-
-	debugf("Processed %d tags", len(processedTags))
-	debugf("Built category mapping for %d services", len(serviceCategoryMap))
-
-	// Log some sample mappings for debugging
-	count := 0
-	for ref, category := range serviceCategoryMap {
-		if count < 5 {
-			debugf("Sample mapping: %s -> %s", ref, category)
-			count++
+	// Build service to tags mapping
+	serviceTags = make(map[string][]string)
+	for _, sw := range software {
+		if sw.TagIndices != "" {
+			indices := strings.Split(sw.TagIndices, ",")
+			tags := make([]string, 0, len(indices))
+			for _, index := range indices {
+				index = strings.TrimSpace(index)
+				if index != "" {
+					if tagName, exists := processedTags[index]; exists {
+						tags = append(tags, tagName)
+					}
+				}
+			}
+			serviceTags[strings.ToLower(sw.Reference)] = tags
 		}
 	}
+
+	debugf("Processed %d tags", len(processedTags))
+	debugf("Built tags mapping for %d services", len(serviceTags))
 
 	return nil
 }
 
-// analyzeTagFrequency counts how many times each tag appears
-func analyzeTagFrequency(software []SelfHstSoftware) map[string]int {
-	frequency := make(map[string]int)
+// getServiceTags returns the tags for a given icon reference
+func getServiceTags(iconReference string) []string {
+	tagMutex.RLock()
+	defer tagMutex.RUnlock()
 
-	for _, sw := range software {
-		if sw.TagIndices != "" {
-			indices := strings.Split(sw.TagIndices, ",")
-			for _, index := range indices {
-				index = strings.TrimSpace(index)
-				if index != "" {
-					frequency[index]++
+	if tags, exists := serviceTags[strings.ToLower(iconReference)]; exists {
+		return tags
+	}
+	return []string{}
+}
+
+// --- Grouping Functions ---
+
+// GroupServices implements a greedy clustering algorithm for grouping services based on tag similarity using Jaccard index.
+// It prioritizes semantic cohesion over exact size balance, with configurable boosts for related services and tag co-occurrence.
+// Configuration parameters:
+// - SimilarityThreshold (default 0.25): Minimum composite score for connecting services in the initial graph.
+// - RelatedBoost (default 0.2): Additional score boost when services are explicitly related.
+// - CooccurrenceBoost (default 0.1): Boost scaling factor for each shared tag pair that co-occurs across services.
+// - SoftBalanceFactor (default 2.0): Multiplier for average cluster size to trigger soft balance penalty.
+// - SoftBalancePenalty (default 0.0): Penalty subtracted from cohesion for oversized clusters (set >0 to encourage balance).
+// Trade-offs:
+// - Lower SimilarityThreshold: More connections, potentially larger clusters with looser cohesion.
+// - Higher RelatedBoost/CooccurrenceBoost: Stronger grouping for related/co-occurring services.
+// - SoftBalancePenalty >0: Nudges distribution towards balance but may split semantically coherent groups.
+func GroupServices(services []Service, cfg GroupConfig) []Group {
+	n := len(services)
+	if n == 0 {
+		return []Group{}
+	}
+
+	// Compute tag pair co-occurrence
+	tagPairCount := make(map[string]map[string]int)
+	for _, svc := range services {
+		for i, tag1 := range svc.Tags {
+			for j := i + 1; j < len(svc.Tags); j++ {
+				tag2 := svc.Tags[j]
+				if tagPairCount[tag1] == nil {
+					tagPairCount[tag1] = make(map[string]int)
 				}
+				tagPairCount[tag1][tag2]++
+				if tagPairCount[tag2] == nil {
+					tagPairCount[tag2] = make(map[string]int)
+				}
+				tagPairCount[tag2][tag1]++
 			}
 		}
 	}
 
-	return frequency
-}
-
-// identifyCommonTags marks tags that appear on more than the threshold percentage of services
-func identifyCommonTags(frequency map[string]int, totalServices int) map[string]bool {
-	common := make(map[string]bool)
-
-	for tagIndex, count := range frequency {
-		percentage := float64(count) / float64(totalServices)
-		if percentage > commonTagThreshold {
-			common[tagIndex] = true
-			debugf("Marked tag %s as common (%.2f%% of services)", tagIndex, percentage*100)
-		}
+	// Compute pairwise scores
+	scores := make([][]float64, n)
+	for i := range scores {
+		scores[i] = make([]float64, n)
 	}
-
-	return common
-}
-
-// buildServiceCategoryMap creates a mapping from service reference to category
-func buildServiceCategoryMap(software []SelfHstSoftware, tagMap map[string]string, commonTags map[string]bool) map[string]string {
-	serviceMap := make(map[string]string)
-
-	for _, sw := range software {
-		if sw.TagIndices != "" && sw.Reference != "" {
-			indices := strings.Split(sw.TagIndices, ",")
-			debugf("Processing software %s with tag indices: %s", sw.Reference, sw.TagIndices)
-
-			// Find the first non-common tag
-			for _, index := range indices {
-				index = strings.TrimSpace(index)
-				if index != "" && !commonTags[index] {
-					if tagName, exists := tagMap[index]; exists {
-						serviceMap[strings.ToLower(sw.Reference)] = tagName
-						debugf("Mapped %s -> %s (tag index: %s)", sw.Reference, tagName, index)
-						break
-					} else {
-						debugf("Tag index %s not found in tag map", index)
+	for i := 0; i < n; i++ {
+		for j := i + 1; j < n; j++ {
+			jaccard := JaccardSimilarity(services[i].Tags, services[j].Tags)
+			relatedBoost := 0.0
+			if Contains(services[i].RelatedServiceNames, services[j].Name) || Contains(services[j].RelatedServiceNames, services[i].Name) {
+				relatedBoost = cfg.RelatedBoost
+			}
+			cooccurBoost := 0.0
+			sharedTags := make(map[string]bool)
+			for _, tag := range services[i].Tags {
+				for _, tagB := range services[j].Tags {
+					if tag == tagB {
+						sharedTags[tag] = true
 					}
-				} else if index != "" {
-					debugf("Skipping common tag index: %s", index)
 				}
 			}
-
-			if _, exists := serviceMap[strings.ToLower(sw.Reference)]; !exists {
-				debugf("No category mapped for software: %s", sw.Reference)
-			}
-		}
-	}
-
-	return serviceMap
-}
-
-// assignServiceCategory determines the category for a service using icon reference
-func assignServiceCategory(serviceName string, iconReference string) string {
-	// Check for manual override first
-	if category := getManualCategoryOverride(serviceName); category != "" {
-		debugf("Using manual category override for %s: %s", serviceName, category)
-		return category
-	}
-
-	// Check for automatic categorization
-	if !configuration.Categorization.Enabled {
-		return ""
-	}
-
-	categoryMutex.RLock()
-	defer categoryMutex.RUnlock()
-
-	debugf("Assigning category for %s (icon reference: %s)", serviceName, iconReference)
-	debugf("Available service category map entries: %d", len(serviceCategoryMap))
-
-	// Try exact match using icon reference
-	if iconReference != "" {
-		if category, exists := serviceCategoryMap[strings.ToLower(iconReference)]; exists {
-			debugf("Found exact category match for %s: %s", iconReference, category)
-			return category
-		} else {
-			debugf("No exact match found for icon reference: %s", iconReference)
-		}
-	}
-
-	// Try fuzzy match against selfhst software database
-	if category := getAutomaticCategory(serviceName); category != "" {
-		debugf("Found fuzzy category match for %s: %s", serviceName, category)
-		return category
-	}
-
-	debugf("No category found for %s", serviceName)
-	return ""
-}
-
-// getManualCategoryOverride checks for manual category override in configuration
-func getManualCategoryOverride(serviceName string) string {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-
-	if override, ok := serviceOverrideMap[serviceName]; ok && override.Category != "" {
-		return override.Category
-	}
-
-	return ""
-}
-
-// getManualServiceCategory checks for manual category in manual service configuration
-func getManualServiceCategory(serviceName string) string {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-
-	for _, manualService := range configuration.Services.Manual {
-		if manualService.Name == serviceName && manualService.Category != "" {
-			return manualService.Category
-		}
-	}
-
-	return ""
-}
-
-// getAutomaticCategory performs fuzzy matching against selfhst database
-func getAutomaticCategory(serviceName string) string {
-	software, _, err := getSelfhstData()
-	if err != nil {
-		debugf("Error getting selfhst data for automatic categorization: %v", err)
-		return ""
-	}
-
-	debugf("Trying automatic categorization for %s with %d software entries", serviceName, len(software))
-
-	// Create a list of software names for fuzzy matching
-	names := make([]string, 0, len(software))
-	for _, sw := range software {
-		if sw.Reference != "" {
-			names = append(names, sw.Reference)
-		}
-	}
-
-	// Perform fuzzy search
-	matches := fuzzy.FindFold(strings.ToLower(serviceName), names)
-	debugf("Fuzzy matches for %s: %v", serviceName, matches)
-
-	if len(matches) > 0 {
-		// Find the matching software entry
-		for _, sw := range software {
-			if sw.Reference == matches[0] {
-				debugf("Found software match: %s -> %s", matches[0], sw.Reference)
-				// Get the category from our pre-built mapping
-				if category, exists := serviceCategoryMap[strings.ToLower(sw.Reference)]; exists {
-					debugf("Found category for %s: %s", sw.Reference, category)
-					return category
-				} else {
-					debugf("No category found in mapping for %s", sw.Reference)
-				}
-				break
-			}
-		}
-	}
-
-	return ""
-}
-
-// applyCategorizationToServices analyzes the user's services and applies categorization
-func applyCategorizationToServices(services []Service) []Service {
-	debugf("Applying categorization to %d user services", len(services))
-
-	// Collect all icon references from user services
-	iconReferences := make([]string, 0, len(services))
-	for _, service := range services {
-		if service.Icon != "" && strings.Contains(service.Icon, configuration.Environment.SelfhstIconURL) {
-			// Extract reference from icon URL
-			parts := strings.Split(service.Icon, "/")
-			if len(parts) > 0 {
-				lastPart := parts[len(parts)-1]
-				reference := strings.TrimSuffix(lastPart, filepath.Ext(lastPart))
-				iconReferences = append(iconReferences, reference)
-			}
-		}
-	}
-
-	debugf("Found %d icon references from user services", len(iconReferences))
-
-	// Get selfhst data to analyze tag frequencies for these specific services
-	software, tags, err := getSelfhstData()
-	if err != nil {
-		debugf("Error getting selfhst data for categorization: %v", err)
-		return services
-	}
-
-	// Build tag index to name mapping
-	processedTags := make(map[string]string)
-	for i, tag := range tags {
-		processedTags[strconv.Itoa(i)] = tag.Tag
-	}
-
-	// Analyze tag frequency for user's services only
-	userTagFrequency := make(map[string]int)
-	totalUserServices := 0
-
-	for _, ref := range iconReferences {
-		// Find matching software entry
-		for _, sw := range software {
-			if strings.EqualFold(sw.Reference, ref) {
-				if sw.TagIndices != "" {
-					indices := strings.Split(sw.TagIndices, ",")
-					for _, index := range indices {
-						index = strings.TrimSpace(index)
-						if index != "" {
-							userTagFrequency[index]++
-						}
-					}
-					totalUserServices++
-				}
-				break
-			}
-		}
-	}
-
-	debugf("User tag frequency analysis: %v (total services: %d)", userTagFrequency, totalUserServices)
-
-	// Identify common tags based on user's services
-	userCommonTags := make(map[string]bool)
-	for tagIndex, count := range userTagFrequency {
-		percentage := float64(count) / float64(totalUserServices)
-		if percentage > configuration.Categorization.CommonTagThreshold {
-			userCommonTags[tagIndex] = true
-			debugf("Marked tag %s as common for user services (%.2f%% of %d services)",
-				tagIndex, percentage*100, totalUserServices)
-		}
-	}
-
-	// Build service category map for user services
-	userServiceCategoryMap := make(map[string]string)
-	for _, ref := range iconReferences {
-		for _, sw := range software {
-			if strings.EqualFold(sw.Reference, ref) && sw.TagIndices != "" {
-				indices := strings.Split(sw.TagIndices, ",")
-
-				// Find first non-common tag
-				for _, index := range indices {
-					index = strings.TrimSpace(index)
-					if index != "" && !userCommonTags[index] {
-						if tagName, exists := processedTags[index]; exists {
-							userServiceCategoryMap[strings.ToLower(ref)] = tagName
-							debugf("Mapped user service %s -> %s", ref, tagName)
-							break
+			for tag1 := range sharedTags {
+				for tag2 := range sharedTags {
+					if tag1 < tag2 {
+						if tagPairCount[tag1] != nil && tagPairCount[tag1][tag2] > 0 {
+							cooccurBoost += cfg.CooccurrenceBoost
 						}
 					}
 				}
+			}
+			score := jaccard + relatedBoost + cooccurBoost
+			scores[i][j] = score
+			scores[j][i] = score
+		}
+	}
 
-				// If no non-common tags found, don't assign a category
-				if _, exists := userServiceCategoryMap[strings.ToLower(ref)]; !exists {
-					debugf("No non-common tags found for %s, no category assigned", ref)
-				}
-				break
+	// Build graph with edges >= threshold
+	graph := make([][]int, n)
+	for i := 0; i < n; i++ {
+		for j := i + 1; j < n; j++ {
+			if scores[i][j] >= cfg.SimilarityThreshold {
+				graph[i] = append(graph[i], j)
+				graph[j] = append(graph[j], i)
 			}
 		}
 	}
 
-	debugf("Built category mapping for %d user services", len(userServiceCategoryMap))
-
-	// Apply categories to services
-	categorizedServices := make([]Service, len(services))
-	for i, service := range services {
-		categorizedServices[i] = service
-
-		// Get icon reference for this service
-		iconReference := ""
-		if service.Icon != "" && strings.Contains(service.Icon, configuration.Environment.SelfhstIconURL) {
-			parts := strings.Split(service.Icon, "/")
-			if len(parts) > 0 {
-				lastPart := parts[len(parts)-1]
-				iconReference = strings.TrimSuffix(lastPart, filepath.Ext(lastPart))
-			}
-		}
-
-		// Check for manual override first (service overrides take precedence)
-		if category := getManualCategoryOverride(service.Name); category != "" {
-			categorizedServices[i].Category = category
-			continue
-		}
-
-		// Check for manual service category (for manual services)
-		if category := getManualServiceCategory(service.Name); category != "" {
-			categorizedServices[i].Category = category
-			continue
-		}
-
-		// Apply automatic categorization only if category exists
-		if iconReference != "" {
-			if category, exists := userServiceCategoryMap[strings.ToLower(iconReference)]; exists {
-				categorizedServices[i].Category = category
-				debugf("Applied category %s to service %s", category, service.Name)
-			} else {
-				debugf("No category found for service %s (icon reference: %s)", service.Name, iconReference)
+	// Find connected components
+	visited := make([]bool, n)
+	clusters := [][]int{}
+	for i := 0; i < n; i++ {
+		if !visited[i] {
+			component := []int{}
+			DFS(graph, visited, i, &component)
+			if len(component) > 1 { // Only clusters with more than 1 service
+				clusters = append(clusters, component)
 			}
 		}
 	}
 
-	return categorizedServices
+	// Collect unassigned
+	unassigned := []int{}
+	assigned := make([]bool, n)
+	for _, cluster := range clusters {
+		for _, idx := range cluster {
+			assigned[idx] = true
+		}
+	}
+	for i := 0; i < n; i++ {
+		if !assigned[i] {
+			unassigned = append(unassigned, i)
+		}
+	}
+
+	// Greedy assignment
+	for _, idx := range unassigned {
+		bestCluster := -1
+		bestIncrease := -1.0
+		for c, cluster := range clusters {
+			// Calculate current cohesion
+			currentCohesion := CalculateCohesion(cluster, scores)
+			// Calculate new cohesion
+			newCluster := append([]int{}, cluster...)
+			newCluster = append(newCluster, idx)
+			newCohesion := CalculateCohesion(newCluster, scores)
+			// Apply soft balance penalty
+			avgSize := float64(n) / float64(len(clusters))
+			if len(clusters) > 0 && float64(len(newCluster)) > avgSize*cfg.SoftBalanceFactor {
+				newCohesion -= cfg.SoftBalancePenalty
+			}
+			increase := newCohesion - currentCohesion
+			if increase > 0 && increase > bestIncrease {
+				bestIncrease = increase
+				bestCluster = c
+			}
+		}
+		if bestCluster >= 0 {
+			clusters[bestCluster] = append(clusters[bestCluster], idx)
+		}
+		// If not assigned, leave unclustered
+	}
+
+	// Create Groups
+	groups := make([]Group, 0, len(clusters))
+	for _, cluster := range clusters {
+		if len(cluster) == 0 {
+			continue
+		}
+		// Sort service names
+		serviceNames := make([]string, len(cluster))
+		for j, idx := range cluster {
+			serviceNames[j] = services[idx].Name
+		}
+		sort.Strings(serviceNames)
+		// ID: sha1 of sorted names
+		h := sha1.New()
+		for _, name := range serviceNames {
+			h.Write([]byte(name))
+		}
+		id := fmt.Sprintf("%x", h.Sum(nil))
+		// Name: determine group name based on common tags
+		name := determineGroupName(cluster, services)
+		debugf("Group determined: %s with services %v", name, serviceNames)
+		groups = append(groups, Group{
+			ID:       id,
+			Name:     name,
+			Services: serviceNames,
+		})
+	}
+	return groups
+}
+
+func Contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
+func JaccardSimilarity(a, b []string) float64 {
+	if len(a) == 0 && len(b) == 0 {
+		return 1.0
+	}
+	setA := make(map[string]bool)
+	for _, tag := range a {
+		setA[tag] = true
+	}
+	intersection := 0
+	for _, tag := range b {
+		if setA[tag] {
+			intersection++
+		}
+	}
+	union := len(a) + len(b) - intersection
+	if union == 0 {
+		return 0.0
+	}
+	return float64(intersection) / float64(union)
+}
+
+func DFS(graph [][]int, visited []bool, node int, component *[]int) {
+	visited[node] = true
+	*component = append(*component, node)
+	for _, neighbor := range graph[node] {
+		if !visited[neighbor] {
+			DFS(graph, visited, neighbor, component)
+		}
+	}
+}
+
+func CalculateCohesion(cluster []int, scores [][]float64) float64 {
+	if len(cluster) < 2 {
+		return 0.0
+	}
+	sum := 0.0
+	count := 0
+	for i := 0; i < len(cluster); i++ {
+		for j := i + 1; j < len(cluster); j++ {
+			sum += scores[cluster[i]][cluster[j]]
+			count++
+		}
+	}
+	if count == 0 {
+		return 0.0
+	}
+	return sum / float64(count)
+}
+
+func determineGroupName(cluster []int, services []Service) string {
+	if len(cluster) == 0 {
+		return "Empty Group"
+	}
+
+	// Count tag frequencies in the cluster
+	tagCount := make(map[string]int)
+	for _, idx := range cluster {
+		for _, tag := range services[idx].Tags {
+			tagCount[tag]++
+		}
+	}
+
+	// Find the most common tag, preferring lexicographically smallest on ties
+	maxCount := 0
+	bestTag := ""
+	for tag, count := range tagCount {
+		if count > maxCount || (count == maxCount && (bestTag == "" || tag < bestTag)) {
+			maxCount = count
+			bestTag = tag
+		}
+	}
+
+	// If we found a tag that appears in all services, use it
+	if bestTag != "" && maxCount == len(cluster) {
+		return strings.Title(bestTag) // Capitalize first letter
+	}
+
+	// Otherwise, use the most common tag
+	if bestTag != "" {
+		return strings.Title(bestTag)
+	}
+
+	// Fallback to first service name
+	return services[cluster[0]].Name
 }
 
 // --- Caching & Utility ---
@@ -1679,11 +1700,15 @@ func getManualServices() []Service {
 			priority = 50 // Default priority for manual services
 		}
 
+		// Get group override if available
+		groupOverride := getGroupOverride(manualService.Name)
+
 		service := Service{
 			Name:     manualService.Name,
 			URL:      manualService.URL,
 			Priority: priority,
 			Icon:     iconURL,
+			Group:    groupOverride,
 		}
 
 		manualServices = append(manualServices, service)
@@ -1824,11 +1849,8 @@ func loadConfiguration() {
 			Overrides: make([]ServiceOverride, 0),
 			Manual:    make([]ManualService, 0),
 		},
-		Categorization: CategorizationConfig{
-			Enabled:            true, // Enabled by default
-			ExcludeCommonTags:  true,
-			CommonTagThreshold: 0.9,
-			DefaultViewMode:    "grouped",
+		Grouping: GroupingConfig{
+			Enabled: true,
 		},
 	}
 
@@ -1975,13 +1997,13 @@ func main() {
 		}
 	}() // Pre-warm the user icons cache
 
-	// Initialize categorization system if enabled
-	if configuration.Categorization.Enabled {
+	// Initialize grouping system if enabled
+	if configuration.Grouping.Enabled {
 		go func() {
 			if _, _, err := getSelfhstData(); err != nil {
-				log.Printf("Warning: Could not initialize categorization system: %v", err)
+				log.Printf("Warning: Could not initialize grouping system: %v", err)
 			} else {
-				log.Println("Categorization system initialized successfully")
+				log.Println("Grouping system initialized successfully")
 			}
 		}()
 	}

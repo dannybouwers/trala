@@ -174,7 +174,7 @@
         let refreshIntervalId = null;
         let currentSort = 'name';
         let currentView = 'grouped';
-        let categorizationEnabled = true;
+        let groupingEnabled = true;
         const colors = ['bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-yellow-500', 'bg-lime-500', 'bg-green-500', 'bg-emerald-500', 'bg-teal-500', 'bg-cyan-500', 'bg-sky-500', 'bg-blue-500', 'bg-indigo-500', 'bg-violet-500', 'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500', 'bg-rose-500'];
         
         const getColorFromString = (str) => { let hash = 0; for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); } return colors[Math.abs(hash % colors.length)]; };
@@ -202,6 +202,22 @@
             clock.textContent = now.toLocaleTimeString(navigator.language, { hour: 'numeric', minute: '2-digit' });
         };
 
+        const mapGroupsToUI = (groups, services) => {
+            const serviceMap = new Map();
+            for (const service of services) {
+                serviceMap.set(service.Name, service);
+            }
+            for (const group of groups) {
+                for (const name of group.services) {
+                    const service = serviceMap.get(name);
+                    if (service) {
+                        // Use group override if specified, otherwise use the determined group name
+                        service.category = service.group || group.name;
+                    }
+                }
+            }
+        };
+
 
         const startRefreshBarAnimation = () => {
             refreshProgressBar.style.transition = 'none';
@@ -213,7 +229,7 @@
         };
 
         const renderServices = (servicesToRender) => {
-            if (categorizationEnabled && currentView === 'grouped') {
+            if (groupingEnabled && currentView === 'grouped') {
                 renderGroupedServices(servicesToRender);
             } else {
                 renderFlatServices(servicesToRender);
@@ -386,20 +402,21 @@
             hideErrorPage();
             try {
                 const response = await fetch(API_URL);
-                if (!response.ok) { 
+                if (!response.ok) {
                     const errorText = await response.text();
-                    throw new Error(`API request failed: ${response.status} - ${errorText}`); 
+                    throw new Error(`API request failed: ${response.status} - ${errorText}`);
                 }
                 let data = await response.json();
-                if (!Array.isArray(data)) { 
-                    showErrorPage("Invalid data from API."); 
-                    allServices = []; 
-                } else { 
-                    const currentHref = window.location.href.replace(/\/$/, ""); 
-                    allServices = data.filter(service => {
+                if (!data.services || !Array.isArray(data.services)) {
+                    showErrorPage("Invalid data from API.");
+                    allServices = [];
+                } else {
+                    const currentHref = window.location.href.replace(/\/$/, "");
+                    allServices = data.services.filter(service => {
                         const serviceHref = service.url.replace(/\/$/, "");
                         return serviceHref !== currentHref;
                     });
+                    mapGroupsToUI(data.groups || [], allServices);
                 }
                 applyFiltersAndSort();
             } catch (error) {
@@ -487,13 +504,13 @@
                         SEARCH_ENGINE_ICON_URL = status.frontend.searchEngineIconURL || '';
                         REFRESH_INTERVAL_SECONDS = status.frontend.refreshIntervalSeconds || REFRESH_INTERVAL_SECONDS;
                         
-                        // Update categorization settings
-                        if (status.frontend.categorization) {
-                            categorizationEnabled = status.frontend.categorization.Enabled;
-                            if (categorizationEnabled) {
+                        // Update grouping settings
+                        if (status.frontend.grouping) {
+                            groupingEnabled = status.frontend.grouping.Enabled;
+                            if (groupingEnabled) {
                                 viewControls.style.display = 'flex';
                                 // Set default view mode
-                                currentView = status.frontend.categorization.DefaultViewMode || 'flat';
+                                currentView = 'grouped'; // Default to grouped for new grouping
                                 // Restore from localStorage if available
                                 const savedView = localStorage.getItem('viewMode');
                                 if (savedView && (savedView === 'flat' || savedView === 'grouped')) {
