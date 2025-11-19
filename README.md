@@ -28,8 +28,6 @@ The easiest way to get started is by using the pre-built Docker image from the G
 This is the recommended approach. Add this service to your existing `docker-compose.yml` file.
 
 ```yaml
-version: '3.8'
-
 services:
   traefik:
     image: "traefik:v3.0"
