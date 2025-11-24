@@ -36,3 +36,9 @@ greeting_afternoon: "Goedemiddag"
 
 # Greeting for the evening (18:00 - 23:59)
 greeting_evening: "Goedenavond"
+
+# Button label for grouping toggle
+grouping: "Groepering"
+
+# Button label for expand/collapse all groups
+expand_collapse_all: "Alles uit-/samenvouwen"

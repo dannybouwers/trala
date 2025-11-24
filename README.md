@@ -16,6 +16,7 @@ A simple, modern, and dynamic dashboard for your Traefik services. This applicat
 - **External Search:** Use the search bar to quickly search the web with your configured search engine.
 - **Lightweight & Multi-Arch:** Built with Go and a minimal Alpine base, the Docker image is small and compatible with `amd64` and `arm64` architectures.
 - **Service Exclusion:** Hide specific services from the dashboard using router name exclusions.
+- **Smart Grouping:** Automatically group services based on service tags, with manual overrides and frontend toggle for collapse/expand.
 
 ---
 
@@ -94,6 +95,7 @@ environment:
   refresh_interval_seconds: 30
   log_level: info
   language: de  # change Language (Default "en").
+  grouping_enabled: true
   traefik:
     api_host: http://traefik:8080
     enable_basic_auth: true
@@ -123,6 +125,7 @@ services:
     - service: "unifi-controller"
       display_name: "UniFi Network"
       icon: "ubiquiti-unifi.svg"
+      group: "Network"
     - service: "home-assistant"
       display_name: "Home Assistant"
       icon: "home-assistant.svg"
@@ -177,6 +180,7 @@ Supported environment variables are shown below.
 | `REFRESH_INTERVAL_SECONDS` | The interval in seconds at which the service list automatically refreshes.                                | `30`                                   | No       |
 | `SEARCH_ENGINE_URL`        | The URL for the external search engine. The search query will be appended to this URL.                    | `https://www.google.com/search?q=`     | No       |
 | `LOG_LEVEL`                | Set to `debug` for verbose logging of the icon-finding process. Any other value is silent.              | `info`                                 | No       |
+| `GROUPING_ENABLED`         | Enable or disable the smart grouping feature.                                                            | `true`                                 | No       |
 | `TRAEFIK_BASIC_AUTH_USERNAME`      | Sets the username for the Traefik basic auth scheme if enabled.                                                                                   | `(none)`                                     | No       |
 | `TRAEFIK_BASIC_AUTH_PASSWORD`      | Sets the password for the Traefik basic auth scheme if enabled.                                                                                   | `(none)`                                     | No       |
 | `TRAEFIK_BASIC_AUTH_PASSWORD_FILE` | Sets the file path from where to load the password for the Traefik basic auth scheme if enabled. Takes precedence over setting password directly. | `(none)`                                     | No       |
@@ -233,6 +237,21 @@ When using a filename from the selfh.st icon repository, you can specify files w
 - `.webp`
 
 The application will automatically construct the appropriate URL based on the file extension
+
+### Smart Grouping
+
+Smart Grouping allows you to organize services into collapsible groups for better dashboard organization.
+
+#### How It Works
+
+- **Automatic Grouping:** Services are automatically grouped based on Selfh.st/apps tags. If a service has tags, they are used to create group names.
+- **Manual Overrides:** You can manually assign services to specific groups using the `group` field in service overrides.
+- **Frontend Toggle:** Enable or disable grouping via the frontend toggle. When enabled, groups can be collapsed or expanded individually.
+
+#### Configuration Options
+
+- `grouping_enabled`: Set to `true` to enable smart grouping (default: `true`).
+- In service overrides, add `group: "Group Name"` to assign a service to a specific group.
 
 ### Custom Icon Directory
 

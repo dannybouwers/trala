@@ -36,3 +36,9 @@ greeting_afternoon: "Guten Tag"
 
 # Greeting for the evening (18:00 - 23:59)
 greeting_evening: "Guten Abend"
+
+# Button label for grouping toggle
+grouping: "Gruppierung"
+
+# Button label for expand/collapse all groups
+expand_collapse_all: "Alle aus-/einklappen"
