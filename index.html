@@ -69,7 +69,7 @@
             <button id="group-toggle" class="sort-btn px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">{{ T .Localizer "grouping" }}</button>
             <button id="expand-collapse-all" class="sort-btn px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">{{ T .Localizer "expand_collapse_all" }}</button>
         </div>
-        <main id="service-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6"></main>
+        <main id="service-grid"></main>
         <div id="error-page" class="hidden text-center py-16">
             <svg class="mx-auto h-12 w-12 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
             <h2 class="mt-4 text-2xl font-bold">{{ T .Localizer "error" }}</h2>
@@ -190,6 +190,7 @@
         };
 
         const renderServices = (servicesToRender) => {
+            serviceGrid.className = groupingEnabled ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4' : 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6';
             if (!groupingEnabled) {
                 serviceGrid.innerHTML = '';
                 if (servicesToRender.length === 0 && searchInput.value) { serviceGrid.innerHTML = `<p class="col-span-full text-center text-gray-500 dark:text-gray-400">No services found for "${searchInput.value}".</p>`; return; }
@@ -224,8 +225,7 @@
                     });
                     groupDiv.appendChild(header);
                     const content = document.createElement('div');
-                    content.className = 'group-content grid gap-4 md:gap-6';
-                    content.style.gridTemplateColumns = 'repeat(auto-fit, minmax(150px, 1fr))';
+                    content.className = 'group-content grid grid-cols-2 gap-4';
                     content.style.display = allExpanded ? 'grid' : 'none';
                     grouped[group].sort((a, b) => b.priority - a.priority).forEach(service => {
                         const card = createServiceCard(service);

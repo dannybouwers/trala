@@ -1459,6 +1459,8 @@ func calculateGroups(services []Service) []Service {
 		}
 	}
 
+	sort.Strings(validTags)
+
 	targetSize := math.Sqrt(float64(len(remaining)))
 
 	for len(remaining) > 0 && len(validTags) > 0 {
