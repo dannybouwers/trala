@@ -333,6 +333,7 @@
 
             groupToggle.addEventListener('click', () => {
                 groupingEnabled = !groupingEnabled;
+                localStorage.setItem('groupingEnabled', groupingEnabled);
                 groupToggle.classList.toggle('active');
                 if (groupingEnabled) allExpanded = true;
                 applyFiltersAndSort();
@@ -401,6 +402,11 @@
                         if (status.frontend.groupingEnabled !== undefined) {
                             groupingEnabled = status.frontend.groupingEnabled;
                             groupControls.style.display = status.frontend.groupingEnabled ? 'flex' : 'none';
+                            // Load persisted toggle state if available
+                            const storedGrouping = localStorage.getItem('groupingEnabled');
+                            if (storedGrouping !== null) {
+                                groupingEnabled = storedGrouping === 'true';
+                            }
                             groupToggle.classList.toggle('active', groupingEnabled);
                         }
                     }

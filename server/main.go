@@ -134,6 +134,7 @@ type EnvironmentConfiguration struct {
 	Traefik                TraefikConfig `yaml:"traefik"`
 	Language               string        `yaml:"language"`
 	GroupingEnabled        bool          `yaml:"grouping_enabled"`
+	TagFrequencyThreshold  float64       `yaml:"tag_frequency_threshold"`
 }
 
 type TralaConfiguration struct {
@@ -224,7 +225,6 @@ const tagDefinitionsURL = "https://raw.githubusercontent.com/selfhst/cdn/refs/he
 const configurationFilePath = "/config/configuration.yml"
 const defaultIcon = "" // Frontend will use a fallback if icon is empty.
 const translationDir = "/app/translations"
-const tagFrequencyThreshold = 0.9 // Threshold for excluding tags present in more than 90% of services to avoid overly broad groups
 
 // Global variable to track configuration compatibility status
 var configCompatibilityStatus ConfigStatus
@@ -1419,12 +1419,12 @@ func calculateTagFrequencies(remaining []Service) (map[string]int, map[string]in
 }
 
 // filterValidTags filters tags based on frequency thresholds and ensures single-tag services are included.
-// Tags present in more than 90% of services are excluded to avoid overly broad groups.
+// Tags present in more than the configured threshold of services are excluded to avoid overly broad groups.
 // For tags with count == 1, only include if there's a service with exactly that single tag.
 func filterValidTags(remaining []Service, tagCount map[string]int) []string {
 	validTags := make([]string, 0)
 	total := len(remaining)
-	threshold := int(tagFrequencyThreshold * float64(total))
+	threshold := int(configuration.Environment.TagFrequencyThreshold * float64(total))
 	for tag, count := range tagCount {
 		if count > threshold && count != 1 {
 			continue
@@ -1675,7 +1675,8 @@ func loadConfiguration() {
 					PasswordFile: "",
 				},
 			},
-			GroupingEnabled: true,
+			GroupingEnabled:       true,
+			TagFrequencyThreshold: 0.9,
 		},
 		Services: ServiceConfiguration{
 			Exclude: ExcludeConfig{
@@ -1740,6 +1741,13 @@ func loadConfiguration() {
 	}
 	if v := os.Getenv("LANGUAGE"); v != "" {
 		config.Environment.Language = v
+	}
+	if v := os.Getenv("TAG_FREQUENCY_THRESHOLD"); v != "" {
+		if num, err := strconv.ParseFloat(v, 64); err == nil && num > 0 && num <= 1 {
+			config.Environment.TagFrequencyThreshold = num
+		} else {
+			log.Printf("Warning: Invalid TAG_FREQUENCY_THRESHOLD '%s', using %f", v, config.Environment.TagFrequencyThreshold)
+		}
 	}
 
 	// Step 5: post-processing / validation

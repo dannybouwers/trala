@@ -8,7 +8,7 @@ A simple, modern, and dynamic dashboard for your Traefik services. This applicat
 
 - **Auto-Discovery:** Automatically fetches and displays all HTTP routers from your Traefik instance.
 - **Manual Services:** Add custom services to your dashboard that aren't managed by Traefik (e.g., Reddit, GitHub, external websites).
-- **Advanced Icon Fetching:** Intelligently finds the best icon for each service using a robust, prioritized strategy.
+- **Advanced Icon Fetching:** Intelligently finds the best icon for each service using a robust, prioritized strategy from selfh.st/icons.
 - **Icon Overrides:** Manually map router names to specific icons for perfect results every time.
 - **Custom Icon Directory:** Mount your own icon directory at `/icons` for ultimate customization with fuzzy matching.
 - **Modern UI:** Clean, responsive interface with automatic Light/Dark mode based on your OS settings.
@@ -16,7 +16,7 @@ A simple, modern, and dynamic dashboard for your Traefik services. This applicat
 - **External Search:** Use the search bar to quickly search the web with your configured search engine.
 - **Lightweight & Multi-Arch:** Built with Go and a minimal Alpine base, the Docker image is small and compatible with `amd64` and `arm64` architectures.
 - **Service Exclusion:** Hide specific services from the dashboard using router name exclusions.
-- **Smart Grouping:** Automatically group services based on service tags, with manual overrides and frontend toggle for collapse/expand.
+- **Smart Grouping:** Automatically group services based on tags from selfh.st/apps, with manual overrides and frontend toggle for collapse/expand.
 
 ---
 
@@ -96,6 +96,7 @@ environment:
   log_level: info
   language: de  # change Language (Default "en").
   grouping_enabled: true
+  tag_frequency_threshold: 0.9  # Threshold for excluding tags present in more than 90% of services
   traefik:
     api_host: http://traefik:8080
     enable_basic_auth: true
@@ -244,7 +245,7 @@ Smart Grouping allows you to organize services into collapsible groups for bette
 
 #### How It Works
 
-- **Automatic Grouping:** Services are automatically grouped based on Selfh.st/apps tags. If a service has tags, they are used to create group names.
+- **Automatic Grouping:** Services are automatically grouped based on tags from the selfh.st icon metadata. If a service has tags, they are used to create group names.
 - **Manual Overrides:** You can manually assign services to specific groups using the `group` field in service overrides.
 - **Frontend Toggle:** Enable or disable grouping via the frontend toggle. When enabled, groups can be collapsed or expanded individually.
 
