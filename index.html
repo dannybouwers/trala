@@ -100,6 +100,11 @@
         let SEARCH_ENGINE_ICON_URL = '';
         let REFRESH_INTERVAL_SECONDS = 30;
 
+        // Constants for hardcoded strings and CSS classes
+        const FALLBACK_GROUP_NAME = '{{ T .Localizer "uncategorized" }}';
+        const GRID_CLASSES_GROUPED = 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4';
+        const GRID_CLASSES_UNGROUPED = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6';
+
         const serviceGrid = document.getElementById('service-grid');
         const searchInput = document.getElementById('search-input');
         const clearButton = document.getElementById('clear-button');
@@ -189,51 +194,62 @@
             return card;
         };
 
-        const renderServices = (servicesToRender) => {
-            serviceGrid.className = groupingEnabled ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4' : 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6';
-            if (!groupingEnabled) {
-                serviceGrid.innerHTML = '';
-                if (servicesToRender.length === 0 && searchInput.value) { serviceGrid.innerHTML = `<p class="col-span-full text-center text-gray-500 dark:text-gray-400">No services found for "${searchInput.value}".</p>`; return; }
+        // In ungrouped mode, services are displayed in a single flat grid
+        const renderUngroupedView = (servicesToRender) => {
+            serviceGrid.className = GRID_CLASSES_UNGROUPED;
+            serviceGrid.innerHTML = '';
+            if (servicesToRender.length === 0 && searchInput.value) { serviceGrid.innerHTML = `<p class="col-span-full text-center text-gray-500 dark:text-gray-400">No services found for "${searchInput.value}".</p>`; return; }
 
-                for (const service of servicesToRender) {
-                    const card = createServiceCard(service);
-                    serviceGrid.appendChild(card);
-                }
-            } else {
-                if (servicesToRender.length === 0) {
-                    serviceGrid.innerHTML = searchInput.value ? `<p class="text-center text-gray-500 dark:text-gray-400">No services found for "${searchInput.value}".</p>` : '';
-                    return;
-                }
-                serviceGrid.innerHTML = '';
-                const grouped = servicesToRender.reduce((acc, service) => {
-                    const group = service.group || 'Ungrouped';
-                    if (!acc[group]) acc[group] = [];
-                    acc[group].push(service);
-                    return acc;
-                }, {});
-                const sortedGroups = Object.keys(grouped).sort();
-                sortedGroups.forEach(group => {
-                    const groupDiv = document.createElement('div');
-                    groupDiv.className = 'group-section mb-8';
-                    const header = document.createElement('h2');
-                    header.className = 'text-xl font-bold mb-4 cursor-pointer border-b border-gray-300 dark:border-gray-700 pb-2';
-                    header.textContent = group;
-                    let isExpanded = true;
-                    header.addEventListener('click', () => {
-                        isExpanded = !isExpanded;
-                        content.style.display = isExpanded ? 'grid' : 'none';
-                    });
-                    groupDiv.appendChild(header);
-                    const content = document.createElement('div');
-                    content.className = 'group-content grid grid-cols-2 gap-4';
-                    content.style.display = allExpanded ? 'grid' : 'none';
-                    grouped[group].sort((a, b) => b.priority - a.priority).forEach(service => {
-                        const card = createServiceCard(service);
-                        content.appendChild(card);
-                    });
-                    groupDiv.appendChild(content);
-                    serviceGrid.appendChild(groupDiv);
+            for (const service of servicesToRender) {
+                const card = createServiceCard(service);
+                serviceGrid.appendChild(card);
+            }
+        };
+
+        // In grouped mode, services are organized into collapsible sections with headers, each containing a grid of services
+        const renderGroupedView = (servicesToRender) => {
+            serviceGrid.className = GRID_CLASSES_GROUPED;
+            if (servicesToRender.length === 0) {
+                serviceGrid.innerHTML = searchInput.value ? `<p class="text-center text-gray-500 dark:text-gray-400">No services found for "${searchInput.value}".</p>` : '';
+                return;
+            }
+            serviceGrid.innerHTML = '';
+            const grouped = servicesToRender.reduce((acc, service) => {
+                const group = service.group || FALLBACK_GROUP_NAME;
+                if (!acc[group]) acc[group] = [];
+                acc[group].push(service);
+                return acc;
+            }, {});
+            const sortedGroups = Object.keys(grouped).sort();
+            sortedGroups.forEach(group => {
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'group-section mb-8';
+                const header = document.createElement('h2');
+                header.className = 'text-xl font-bold mb-4 cursor-pointer border-b border-gray-300 dark:border-gray-700 pb-2';
+                header.textContent = group;
+                let isExpanded = true;
+                header.addEventListener('click', () => {
+                    isExpanded = !isExpanded;
+                    content.style.display = isExpanded ? 'grid' : 'none';
                 });
+                groupDiv.appendChild(header);
+                const content = document.createElement('div');
+                content.className = 'group-content grid grid-cols-2 gap-4';
+                content.style.display = allExpanded ? 'grid' : 'none';
+                grouped[group].sort((a, b) => b.priority - a.priority).forEach(service => {
+                    const card = createServiceCard(service);
+                    content.appendChild(card);
+                });
+                groupDiv.appendChild(content);
+                serviceGrid.appendChild(groupDiv);
+            });
+        };
+
+        const renderServices = (servicesToRender) => {
+            if (!groupingEnabled) {
+                renderUngroupedView(servicesToRender);
+            } else {
+                renderGroupedView(servicesToRender);
             }
         };
 

@@ -224,9 +224,11 @@ const tagDefinitionsURL = "https://raw.githubusercontent.com/selfhst/cdn/refs/he
 const configurationFilePath = "/config/configuration.yml"
 const defaultIcon = "" // Frontend will use a fallback if icon is empty.
 const translationDir = "/app/translations"
+const tagFrequencyThreshold = 0.9 // Threshold for excluding tags present in more than 90% of services to avoid overly broad groups
 
 // Global variable to track configuration compatibility status
 var configCompatibilityStatus ConfigStatus
+var fallbackGroupName string
 
 // --- Logging ---
 
@@ -425,6 +427,9 @@ func initI18n() {
 // T is a helper function for localization. It takes a message ID and returns the localized string.
 // If the localization fails, it returns the message ID as a fallback.
 func T(id string) string {
+	if localizer == nil {
+		return id
+	}
 	msg, err := localizer.Localize(&i18n.LocalizeConfig{MessageID: id})
 	if err != nil {
 		// If localization fails, return the message ID as a fallback.
@@ -1399,6 +1404,88 @@ func getManualServices() []Service {
 	return manualServices
 }
 
+// calculateTagFrequencies calculates the frequency of each tag and the number of tags per service.
+// It returns tagCount (map of tag to count) and serviceTagCount (map of service name to tag count).
+func calculateTagFrequencies(remaining []Service) (map[string]int, map[string]int) {
+	tagCount := make(map[string]int)
+	serviceTagCount := make(map[string]int)
+	for _, s := range remaining {
+		serviceTagCount[s.Name] = len(s.Tags)
+		for _, tag := range s.Tags {
+			tagCount[tag]++
+		}
+	}
+	return tagCount, serviceTagCount
+}
+
+// filterValidTags filters tags based on frequency thresholds and ensures single-tag services are included.
+// Tags present in more than 90% of services are excluded to avoid overly broad groups.
+// For tags with count == 1, only include if there's a service with exactly that single tag.
+func filterValidTags(remaining []Service, tagCount map[string]int) []string {
+	validTags := make([]string, 0)
+	total := len(remaining)
+	threshold := int(tagFrequencyThreshold * float64(total))
+	for tag, count := range tagCount {
+		if count > threshold && count != 1 {
+			continue
+		}
+		if count == 1 {
+			for _, s := range remaining {
+				if len(s.Tags) == 1 && s.Tags[0] == tag {
+					validTags = append(validTags, tag)
+					break
+				}
+			}
+		} else {
+			validTags = append(validTags, tag)
+		}
+	}
+	sort.Strings(validTags)
+	return validTags
+}
+
+// selectBestTag selects the best tag from validTags based on group size proximity to targetSize.
+// It calculates a score where smaller groups closer to targetSize are preferred.
+func selectBestTag(validTags []string, tagCount map[string]int, targetSize float64) string {
+	bestTag := ""
+	bestScore := -1e9
+	for _, tag := range validTags {
+		groupSize := tagCount[tag]
+		var score float64
+		if float64(groupSize) <= targetSize {
+			score = targetSize - float64(groupSize)
+		} else {
+			score = -float64(groupSize)
+		}
+		if score > bestScore {
+			bestScore = score
+			bestTag = tag
+		}
+	}
+	return bestTag
+}
+
+// assignGroupToServices assigns the groupName to services that have the bestTag and returns the updated remainingIndices.
+func assignGroupToServices(services []Service, remainingIndices []int, bestTag, groupName string) []int {
+	newRemainingIndices := make([]int, 0, len(remainingIndices))
+	for _, idx := range remainingIndices {
+		s := &services[idx]
+		hasTag := false
+		for _, t := range s.Tags {
+			if t == bestTag {
+				hasTag = true
+				break
+			}
+		}
+		if hasTag {
+			s.Group = groupName
+		} else {
+			newRemainingIndices = append(newRemainingIndices, idx)
+		}
+	}
+	return newRemainingIndices
+}
+
 // calculateGroups implements the grouping algorithm for services
 func calculateGroups(services []Service) []Service {
 	if !configuration.Environment.GroupingEnabled {
@@ -1430,81 +1517,27 @@ func calculateGroups(services []Service) []Service {
 	}
 
 	// Preprocessing: calculate tag frequencies
-	tagCount := make(map[string]int)
-	serviceTagCount := make(map[string]int)
-	for _, s := range remaining {
-		serviceTagCount[s.Name] = len(s.Tags)
-		for _, tag := range s.Tags {
-			tagCount[tag]++
-		}
-	}
+	tagCount, _ := calculateTagFrequencies(remaining)
 
 	// Filter tags
-	validTags := make([]string, 0)
-	total := len(remaining)
-	threshold := int(0.9 * float64(total))
-	for tag, count := range tagCount {
-		if count > threshold {
-			continue
-		}
-		if count == 1 {
-			for _, s := range remaining {
-				if len(s.Tags) == 1 && s.Tags[0] == tag {
-					validTags = append(validTags, tag)
-					break
-				}
-			}
-		} else {
-			validTags = append(validTags, tag)
-		}
-	}
-
-	sort.Strings(validTags)
+	validTags := filterValidTags(remaining, tagCount)
 
 	targetSize := math.Sqrt(float64(len(remaining)))
 
 	for len(remaining) > 0 && len(validTags) > 0 {
-		bestTag := ""
-		bestScore := -1e9
-		for _, tag := range validTags {
-			groupSize := tagCount[tag]
-			var score float64
-			if float64(groupSize) <= targetSize {
-				score = targetSize - float64(groupSize)
-			} else {
-				score = -float64(groupSize)
-			}
-			if score > bestScore {
-				bestScore = score
-				bestTag = tag
-			}
-		}
+		bestTag := selectBestTag(validTags, tagCount, targetSize)
 		if bestTag == "" {
 			break
 		}
 		groupName := bestTag
-		newRemainingIndices := make([]int, 0, len(remainingIndices))
-		for _, idx := range remainingIndices {
-			s := &services[idx]
-			hasTag := false
-			for _, t := range s.Tags {
-				if t == bestTag {
-					hasTag = true
-					break
-				}
-			}
-			if hasTag {
-				s.Group = groupName
-			} else {
-				newRemainingIndices = append(newRemainingIndices, idx)
-			}
-		}
-		remainingIndices = newRemainingIndices
+		remainingIndices = assignGroupToServices(services, remainingIndices, bestTag, groupName)
+
 		// Update remaining
 		remaining = make([]Service, len(remainingIndices))
 		for i, idx := range remainingIndices {
 			remaining[i] = services[idx]
 		}
+
 		// Remove bestTag from validTags
 		newValidTags := make([]string, 0, len(validTags))
 		for _, t := range validTags {
@@ -1513,18 +1546,9 @@ func calculateGroups(services []Service) []Service {
 			}
 		}
 		validTags = newValidTags
-		// Update tagCount
-		tagCount = make(map[string]int)
-		for _, s := range remaining {
-			for _, tag := range s.Tags {
-				tagCount[tag]++
-			}
-		}
-	}
 
-	// Fallback
-	for _, idx := range remainingIndices {
-		services[idx].Group = "Uncategorized"
+		// Update tagCount
+		tagCount, _ = calculateTagFrequencies(remaining)
 	}
 
 	return services

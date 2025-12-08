@@ -42,3 +42,6 @@ grouping: "Groepering"
 
 # Button label for expand/collapse all groups
 expand_collapse_all: "Alles uit-/samenvouwen"
+
+# Fallback group name for uncategorized services
+uncategorized: "Niet gecategoriseerd"

@@ -42,3 +42,6 @@ grouping: "Grouping"
 
 # Button label for expand/collapse all groups
 expand_collapse_all: "Expand/Collapse All"
+
+# Fallback group name for uncategorized services
+uncategorized: "Uncategorized"
