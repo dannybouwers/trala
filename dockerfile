@@ -13,7 +13,7 @@ RUN npm install tailwindcss @tailwindcss/cli
 RUN npx @tailwindcss/cli -i /app/src/input.css -o /app/src/output.css
 
 ### STAGE 2: Build Go Application ###
-FROM golang:1.25.4-alpine AS builder
+FROM golang:1.25.5-alpine AS builder
 
 # Install build essentials for static compilation
 RUN apk add --no-cache build-base
@@ -38,7 +38,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags "-X main.ve
 
 ### STAGE 3: Production ###
 # Start with a minimal Alpine image
-FROM alpine:3.22
+FROM alpine:3.23
 
 # Set a working directory
 WORKDIR /app
