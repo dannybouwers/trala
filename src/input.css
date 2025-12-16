@@ -1,1 +1,2 @@
 @import "tailwindcss";
+@source inline("{sm:,md:,lg:,xl:,2xl:}grid-cols-{1,2,3,4,5,6}");

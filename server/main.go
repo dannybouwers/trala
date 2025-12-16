@@ -135,6 +135,7 @@ type EnvironmentConfiguration struct {
 	Language               string        `yaml:"language"`
 	GroupingEnabled        bool          `yaml:"grouping_enabled"`
 	TagFrequencyThreshold  float64       `yaml:"tag_frequency_threshold"`
+	GroupedColumns         int           `yaml:"grouped_columns"`
 }
 
 type TralaConfiguration struct {
@@ -149,6 +150,7 @@ type FrontendConfig struct {
 	SearchEngineIconURL    string `json:"searchEngineIconURL"`
 	RefreshIntervalSeconds int    `json:"refreshIntervalSeconds"`
 	GroupingEnabled        bool   `json:"groupingEnabled"`
+	GroupedColumns         int    `json:"groupedColumns"`
 }
 
 // ApplicationStatus represents the combined status information for the application
@@ -606,6 +608,7 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 		SearchEngineIconURL:    searchEngineIconURL,
 		RefreshIntervalSeconds: refreshIntervalSeconds,
 		GroupingEnabled:        configuration.Environment.GroupingEnabled,
+		GroupedColumns:         configuration.Environment.GroupedColumns,
 	}
 
 	// Combine all status information
@@ -1677,6 +1680,7 @@ func loadConfiguration() {
 			},
 			GroupingEnabled:       true,
 			TagFrequencyThreshold: 0.9,
+			GroupedColumns:        3,
 		},
 		Services: ServiceConfiguration{
 			Exclude: ExcludeConfig{
@@ -1747,6 +1751,13 @@ func loadConfiguration() {
 			config.Environment.TagFrequencyThreshold = num
 		} else {
 			log.Printf("Warning: Invalid TAG_FREQUENCY_THRESHOLD '%s', using %f", v, config.Environment.TagFrequencyThreshold)
+		}
+	}
+	if v := os.Getenv("GROUPED_COLUMNS"); v != "" {
+		if num, err := strconv.Atoi(v); err == nil && num >= 1 && num <= 6 {
+			config.Environment.GroupedColumns = num
+		} else {
+			log.Printf("Warning: Invalid GROUPED_COLUMNS '%s', must be between 1 and 6, using %d", v, config.Environment.GroupedColumns)
 		}
 	}
 

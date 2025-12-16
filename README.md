@@ -96,6 +96,7 @@ environment:
   log_level: info
   language: de  # change Language (Default "en").
   grouping_enabled: true
+  grouped_columns: 3  # Number of columns in grouped view (1-6), default: 3
   tag_frequency_threshold: 0.9  # Threshold for excluding tags present in more than 90% of services
   traefik:
     api_host: http://traefik:8080
@@ -182,6 +183,7 @@ Supported environment variables are shown below.
 | `SEARCH_ENGINE_URL`        | The URL for the external search engine. The search query will be appended to this URL.                    | `https://www.google.com/search?q=`     | No       |
 | `LOG_LEVEL`                | Set to `debug` for verbose logging of the icon-finding process. Any other value is silent.              | `info`                                 | No       |
 | `GROUPING_ENABLED`         | Enable or disable the smart grouping feature.                                                            | `true`                                 | No       |
+| `GROUPED_COLUMNS`          | Number of columns in grouped view for xl screen size (1-6).                                              | `3`                                    | No       |
 | `TRAEFIK_BASIC_AUTH_USERNAME`      | Sets the username for the Traefik basic auth scheme if enabled.                                                                                   | `(none)`                                     | No       |
 | `TRAEFIK_BASIC_AUTH_PASSWORD`      | Sets the password for the Traefik basic auth scheme if enabled.                                                                                   | `(none)`                                     | No       |
 | `TRAEFIK_BASIC_AUTH_PASSWORD_FILE` | Sets the file path from where to load the password for the Traefik basic auth scheme if enabled. Takes precedence over setting password directly. | `(none)`                                     | No       |
@@ -241,18 +243,19 @@ The application will automatically construct the appropriate URL based on the fi
 
 ### Smart Grouping
 
-Smart Grouping allows you to organize services into collapsible groups for better dashboard organization.
-
-#### How It Works
-
-- **Automatic Grouping:** Services are automatically grouped based on tags from the selfh.st icon metadata. If a service has tags, they are used to create group names.
-- **Manual Overrides:** You can manually assign services to specific groups using the `group` field in service overrides.
-- **Frontend Toggle:** Enable or disable grouping via the frontend toggle. When enabled, groups can be collapsed or expanded individually.
+Smart Grouping allows you to organize services into collapsible groups for better dashboard organization. This feature provides both automatic grouping based on service tags and manual control over group assignments.
 
 #### Configuration Options
 
-- `grouping_enabled`: Set to `true` to enable smart grouping (default: `true`).
-- In service overrides, add `group: "Group Name"` to assign a service to a specific group.
+- `grouping_enabled`: Enable or disable the smart grouping feature (default: `true`). When enabled, services are automatically grouped based on tags from selfh.st icon metadata, and groups can be collapsed or expanded individually via the frontend toggle.
+
+- `grouped_columns`: Control the number of columns displayed in grouped view for extra-large screens (1-6 columns, default: 3). The grouped view always shows 1 column on mobile devices and 2 columns on medium screens (tablets), with the configured number applying only to xl screen sizes.
+
+- `tag_frequency_threshold`: Control which tags are used for automatic grouping by setting a threshold (0.0-1.0, default: 0.9). Tags present in more than this percentage of services are excluded to avoid overly broad groups. For example, a threshold of 0.9 excludes tags found in more than 90% of services, preventing common tags from creating unhelpful groupings.
+
+- `group`: In service overrides, use the `group` field to manually assign services to specific groups, overriding automatic tag-based grouping.
+
+These settings can be configured via the YAML configuration file or environment variables (`GROUPING_ENABLED`, `GROUPED_COLUMNS`, `TAG_FREQUENCY_THRESHOLD`).
 
 ### Custom Icon Directory
 
