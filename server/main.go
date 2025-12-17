@@ -153,7 +153,7 @@ type FrontendConfig struct {
 	SearchEngineIconURL    string `json:"searchEngineIconURL"`
 	RefreshIntervalSeconds int    `json:"refreshIntervalSeconds"`
 	GroupingEnabled        bool   `json:"groupingEnabled"`
-	GroupedColumns         int    `json:"groupedColumns"`
+	GroupingColumns        int    `json:"groupingColumns"`
 }
 
 // ApplicationStatus represents the combined status information for the application
@@ -611,7 +611,7 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 		SearchEngineIconURL:    searchEngineIconURL,
 		RefreshIntervalSeconds: refreshIntervalSeconds,
 		GroupingEnabled:        configuration.Environment.Grouping.Enabled,
-		GroupedColumns:         configuration.Environment.Grouping.Columns,
+		GroupingColumns:        configuration.Environment.Grouping.Columns,
 	}
 
 	// Combine all status information
@@ -1369,7 +1369,7 @@ func getManualServices() []Service {
 		if iconURL == "" {
 			// If no icon is specified, try to find one automatically
 			iconURL = findIcon(manualService.Name, manualService.URL, displayNameReplaced, reference)
-		} else {
+		} else if iconURL != "" {
 			if !strings.HasPrefix(iconURL, "http://") && !strings.HasPrefix(iconURL, "https://") {
 				// If icon is specified, check if it's a full URL or just a filename
 				// Check if it's a filename with valid extension

@@ -43,7 +43,7 @@
             </h1>
         </header>
         <div class="mb-4">
-            <form id="search-form" class="flex-grow">
+            <form id="search-form" class="grow">
                 <div class="relative">
                     <input type="search" id="search-input" placeholder="{{ T .Localizer "search_placeholder" }}" class="w-full p-3 pr-12 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition">
                     <button type="button" id="clear-button" class="absolute right-10 top-1/2 transform -translate-y-1/2 p-1 rounded transition-colors" style="display: none;" title="{{ T .Localizer "clear_search" }}">
@@ -99,7 +99,7 @@
         let SEARCH_ENGINE_URL = 'https://www.google.com/search?q=';
         let SEARCH_ENGINE_ICON_URL = '';
         let REFRESH_INTERVAL_SECONDS = 30;
-        let GROUPED_COLUMNS = 3;
+        let GROUPING_COLUMNS = 3;
 
         // Constants for hardcoded strings and CSS classes
         const FALLBACK_GROUP_NAME = '{{ T .Localizer "uncategorized" }}';
@@ -242,7 +242,7 @@
 
         // In grouped mode, services are organized into collapsible sections with headers, each containing a grid of services
         const renderGroupedView = (servicesToRender) => {
-            serviceGrid.className = getGroupedGridClasses(GROUPED_COLUMNS);
+            serviceGrid.className = getGroupedGridClasses(GROUPING_COLUMNS);
             if (servicesToRender.length === 0) {
                 serviceGrid.innerHTML = searchInput.value ? `<p class="text-center text-gray-500 dark:text-gray-400">No services found for "${searchInput.value}".</p>` : '';
                 return;
@@ -268,7 +268,7 @@
                 });
                 groupDiv.appendChild(header);
                 const content = document.createElement('div');
-                content.className = getCardGridClasses(GROUPED_COLUMNS);
+                content.className = getCardGridClasses(GROUPING_COLUMNS);
                 content.style.display = allExpanded ? 'grid' : 'none';
                 grouped[group].sort((a, b) => b.priority - a.priority).forEach(service => {
                     const card = createServiceCard(service);
@@ -445,8 +445,8 @@
                         }
                         
                         // Update grouped columns configuration
-                        if (status.frontend.groupedColumns !== undefined) {
-                            GROUPED_COLUMNS = status.frontend.groupedColumns;
+                        if (status.frontend.groupingColumns !== undefined) {
+                            GROUPING_COLUMNS = status.frontend.groupingColumns;
                         }
                     }
                     
