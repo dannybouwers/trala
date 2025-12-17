@@ -134,9 +134,11 @@ type EnvironmentConfiguration struct {
 	LogLevel               string        `yaml:"log_level"`
 	Traefik                TraefikConfig `yaml:"traefik"`
 	Language               string        `yaml:"language"`
-	GroupingEnabled        bool          `yaml:"grouping_enabled"`
-	TagFrequencyThreshold  float64       `yaml:"tag_frequency_threshold"`
-	GroupedColumns         int           `yaml:"grouped_columns"`
+	Grouping               struct {
+		Enabled               bool    `yaml:"enabled"`
+		Columns               int     `yaml:"columns"`
+		TagFrequencyThreshold float64 `yaml:"tag_frequency_threshold"`
+	} `yaml:"grouping"`
 }
 
 type TralaConfiguration struct {
@@ -608,8 +610,8 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 		SearchEngineURL:        searchEngineURL,
 		SearchEngineIconURL:    searchEngineIconURL,
 		RefreshIntervalSeconds: refreshIntervalSeconds,
-		GroupingEnabled:        configuration.Environment.GroupingEnabled,
-		GroupedColumns:         configuration.Environment.GroupedColumns,
+		GroupingEnabled:        configuration.Environment.Grouping.Enabled,
+		GroupedColumns:         configuration.Environment.Grouping.Columns,
 	}
 
 	// Combine all status information
@@ -1427,7 +1429,7 @@ func calculateTagFrequencies(remaining []Service) (map[string]int, map[string]in
 func filterValidTags(remaining []Service, tagCount map[string]int) []string {
 	validTags := make([]string, 0)
 	total := len(remaining)
-	threshold := int(configuration.Environment.TagFrequencyThreshold * float64(total))
+	threshold := int(configuration.Environment.Grouping.TagFrequencyThreshold * float64(total))
 	for tag, count := range tagCount {
 		if count > threshold && count != 1 {
 			continue
@@ -1491,7 +1493,7 @@ func assignGroupToServices(services []Service, remainingIndices []int, bestTag, 
 
 // calculateGroups implements the grouping algorithm for services
 func calculateGroups(services []Service) []Service {
-	if !configuration.Environment.GroupingEnabled {
+	if !configuration.Environment.Grouping.Enabled {
 		for i := range services {
 			services[i].Group = ""
 		}
@@ -1680,9 +1682,15 @@ func loadConfiguration() {
 					PasswordFile: "",
 				},
 			},
-			GroupingEnabled:       true,
-			TagFrequencyThreshold: 0.9,
-			GroupedColumns:        3,
+			Grouping: struct {
+				Enabled               bool    `yaml:"enabled"`
+				Columns               int     `yaml:"columns"`
+				TagFrequencyThreshold float64 `yaml:"tag_frequency_threshold"`
+			}{
+				Enabled:               true,
+				Columns:               3,
+				TagFrequencyThreshold: 0.9,
+			},
 		},
 		Services: ServiceConfiguration{
 			Exclude: ExcludeConfig{
@@ -1748,18 +1756,25 @@ func loadConfiguration() {
 	if v := os.Getenv("LANGUAGE"); v != "" {
 		config.Environment.Language = v
 	}
-	if v := os.Getenv("TAG_FREQUENCY_THRESHOLD"); v != "" {
-		if num, err := strconv.ParseFloat(v, 64); err == nil && num > 0 && num <= 1 {
-			config.Environment.TagFrequencyThreshold = num
+	if v := os.Getenv("GROUPING_ENABLED"); v != "" {
+		if enabled, err := strconv.ParseBool(v); err == nil {
+			config.Environment.Grouping.Enabled = enabled
 		} else {
-			log.Printf("Warning: Invalid TAG_FREQUENCY_THRESHOLD '%s', using %f", v, config.Environment.TagFrequencyThreshold)
+			log.Printf("Warning: Invalid GROUPING_ENABLED '%s', using %t", v, config.Environment.Grouping.Enabled)
+		}
+	}
+	if v := os.Getenv("GROUPING_TAG_FREQUENCY_THRESHOLD"); v != "" {
+		if num, err := strconv.ParseFloat(v, 64); err == nil && num > 0 && num <= 1 {
+			config.Environment.Grouping.TagFrequencyThreshold = num
+		} else {
+			log.Printf("Warning: Invalid GROUPING_TAG_FREQUENCY_THRESHOLD '%s', using %f", v, config.Environment.Grouping.TagFrequencyThreshold)
 		}
 	}
 	if v := os.Getenv("GROUPED_COLUMNS"); v != "" {
 		if num, err := strconv.Atoi(v); err == nil && num >= 1 && num <= 6 {
-			config.Environment.GroupedColumns = num
+			config.Environment.Grouping.Columns = num
 		} else {
-			log.Printf("Warning: Invalid GROUPED_COLUMNS '%s', must be between 1 and 6, using %d", v, config.Environment.GroupedColumns)
+			log.Printf("Warning: Invalid GROUPED_COLUMNS '%s', must be between 1 and 6, using %d", v, config.Environment.Grouping.Columns)
 		}
 	}
 
