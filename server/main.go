@@ -113,6 +113,7 @@ type ManualService struct {
 	URL      string `yaml:"url"`
 	Icon     string `yaml:"icon,omitempty"`
 	Priority int    `yaml:"priority,omitempty"`
+	Group    string `yaml:"group,omitempty"`
 }
 
 type ServiceConfiguration struct {
@@ -230,7 +231,6 @@ const translationDir = "/app/translations"
 
 // Global variable to track configuration compatibility status
 var configCompatibilityStatus ConfigStatus
-var fallbackGroupName string
 
 // --- Logging ---
 
@@ -598,8 +598,9 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 	if searchEngineURL != "" {
 		serviceName := extractServiceNameFromURL(searchEngineURL)
 		if serviceName != "" {
-			result := findIconAndTags(serviceName, searchEngineURL, serviceName)
-			searchEngineIconURL = result.Icon
+			displayNameReplaced := strings.ReplaceAll(serviceName, " ", "-")
+			reference := resolveSelfHstReference(displayNameReplaced)
+			searchEngineIconURL = findIcon(serviceName, searchEngineURL, serviceName, reference)
 		}
 	}
 
@@ -676,31 +677,37 @@ func processRouter(router TraefikRouter, entryPoints map[string]TraefikEntryPoin
 	// Get display name override if available
 	displayName := getDisplayNameOverride(routerName)
 	if displayName == "" {
-		displayName = routerName
+		routerNameReplaced := strings.ReplaceAll(routerName, "-", " ")
+		displayName = routerNameReplaced
 	}
 
 	debugf("Processing router: %s (display: %s), URL: %s", routerName, displayName, serviceURL)
-	result := findIconAndTags(routerName, serviceURL, displayName)
+	displayNameReplaced := strings.ReplaceAll(displayName, " ", "-")
+	reference := resolveSelfHstReference(displayNameReplaced)
+	iconURL := findIcon(routerName, serviceURL, displayNameReplaced, reference)
+	tags := findTags(routerName, reference)
+
+	// get group override if available
+	group := getGroupOverride(routerName)
 
 	ch <- Service{
 		Name:     displayName,
 		URL:      serviceURL,
 		Priority: router.Priority,
-		Icon:     result.Icon,
-		Tags:     result.Tags,
+		Icon:     iconURL,
+		Tags:     tags,
+		Group:    group,
 	}
 }
 
-// findIconAndTags tries all icon-finding methods in order of priority and returns icon and tags.
-func findIconAndTags(routerName, serviceURL string, displayName string) IconAndTags {
-	displayNameReplaced := strings.ReplaceAll(displayName, " ", "-")
-
+// findIcon tries all icon-finding methods in order of priority and returns the icon URL.
+func findIcon(routerName, serviceURL string, displayNameReplaced string, reference string) string {
 	// Priority 1: Check user-defined overrides.
-	if iconValue := checkOverrides(routerName); iconValue != "" {
+	if iconValue := getIconOverride(routerName); iconValue != "" {
 		// Check if it's a full URL
 		if strings.HasPrefix(iconValue, "http://") || strings.HasPrefix(iconValue, "https://") {
 			debugf("[%s] Found icon via override (full URL): %s", routerName, iconValue)
-			return IconAndTags{Icon: iconValue, Tags: []string{}}
+			return iconValue
 		}
 
 		// Check if it's a filename with valid extension
@@ -708,51 +715,61 @@ func findIconAndTags(routerName, serviceURL string, displayName string) IconAndT
 		if ext == ".png" || ext == ".svg" || ext == ".webp" {
 			url := configuration.Environment.SelfhstIconURL + strings.TrimPrefix(ext, ".") + "/" + strings.ToLower(iconValue)
 			debugf("[%s] Found icon via override (filename): %s", routerName, url)
-			return IconAndTags{Icon: url, Tags: []string{}}
+			return url
 		}
 
 		// Fallback to default behavior if extension is not valid
 		url := configuration.Environment.SelfhstIconURL + "png/" + iconValue
 		debugf("[%s] Found icon via override (fallback): %s", routerName, url)
-		return IconAndTags{Icon: url, Tags: []string{}}
+		return url
 	}
 
 	// Priority 2: Check user icons
 	if iconPath := findUserIcon(displayNameReplaced); iconPath != "" {
 		// For user icons, we return the URL that can be served by the application
 		debugf("[%s] Found icon via user icons (fuzzy search): %s", displayNameReplaced, iconPath)
-		return IconAndTags{Icon: iconPath, Tags: []string{}}
+		return iconPath
 	}
 
 	// Priority 3: Fuzzy search against selfh.st icons
-	reference := resolveSelfHstReference(displayNameReplaced)
 	if reference != "" {
 		iconURL := getSelfHstIconURL(reference)
-		tags := getServiceTags(reference)
-		debugf("[%s] Found icon and tags via fuzzy search: %s, tags: %v", displayNameReplaced, iconURL, tags)
-		return IconAndTags{Icon: iconURL, Tags: tags}
+		debugf("[%s] Found icon via fuzzy search: %s", displayNameReplaced, iconURL)
+		return iconURL
 	}
 
 	// Priority 4: Check for /favicon.ico.
 	if iconURL := findFavicon(serviceURL); iconURL != "" {
 		debugf("[%s] Found icon via /favicon.ico: %s", routerName, iconURL)
-		return IconAndTags{Icon: iconURL, Tags: []string{}}
+		return iconURL
 	}
 
 	// Priority 5: Parse service's HTML for a <link> tag.
 	if iconURL := findHTMLIcon(serviceURL); iconURL != "" {
 		debugf("[%s] Found icon via HTML parsing: %s", routerName, iconURL)
-		return IconAndTags{Icon: iconURL, Tags: []string{}}
+		return iconURL
 	}
 
 	debugf("[%s] No icon found, will use fallback.", routerName)
-	return IconAndTags{Icon: defaultIcon, Tags: []string{}}
+	return defaultIcon
+}
+
+// findTags finds tags for a service using the provided selfh.st reference.
+func findTags(routerName string, reference string) []string {
+	if reference != "" {
+		tags := getServiceTags(reference)
+		debugf("[%s] Found tags via fuzzy search: %v", routerName, tags)
+		return tags
+	}
+
+	debugf("[%s] No tags found.", routerName)
+	return []string{}
 }
 
 // --- Icon Finding Helper Methods ---
 
-// checkOverrides looks for a router name in the loaded config file.
-func checkOverrides(routerName string) string {
+// getIconOverride looks for a router name in the loaded config file.
+func getIconOverride(routerName string) string {
 	configurationMux.RLock()
 	defer configurationMux.RUnlock()
 
@@ -769,6 +786,17 @@ func getDisplayNameOverride(routerName string) string {
 
 	if override, ok := serviceOverrideMap[routerName]; ok {
 		return override.DisplayName
+	}
+	return ""
+}
+
+// getGroupOverride looks for a router name in the loaded config file.
+func getGroupOverride(routerName string) string {
+	configurationMux.RLock()
+	defer configurationMux.RUnlock()
+
+	if override, ok := serviceOverrideMap[routerName]; ok {
+		return override.Group
 	}
 	return ""
 }
@@ -813,37 +841,6 @@ func isEntrypointExcluded(entryPoints []string) bool {
 		}
 	}
 	return false
-}
-
-// findSelfHstIcon performs a fuzzy search.
-func findSelfHstIcon(routerName string) string {
-	icons, err := getSelfHstIconNames()
-	if err != nil {
-		log.Printf("ERROR: Could not get selfh.st icon list for fuzzy search: %v", err)
-		return ""
-	}
-
-	// Extract reference names for fuzzy matching
-	references := make([]string, len(icons))
-	for i, icon := range icons {
-		references[i] = icon.Reference
-	}
-
-	matches := fuzzy.FindFold(routerName, references)
-	if len(matches) > 0 {
-		// Find the matching icon to determine the best extension
-		for _, icon := range icons {
-			if icon.Reference == matches[0] {
-				// Prefer SVG if available
-				if icon.SVG == "Yes" {
-					return fmt.Sprintf(configuration.Environment.SelfhstIconURL+"svg/%s.svg", icon.Reference)
-				}
-				// Fallback to PNG
-				return fmt.Sprintf(configuration.Environment.SelfhstIconURL+"png/%s.png", icon.Reference)
-			}
-		}
-	}
-	return ""
 }
 
 // resolveSelfHstReference performs fuzzy search to find the matching selfh.st reference for a service name.
@@ -1362,16 +1359,15 @@ func getManualServices() []Service {
 			continue
 		}
 
+		displayNameReplaced := strings.ReplaceAll(manualService.Name, " ", "-")
+		reference := resolveSelfHstReference(displayNameReplaced)
+
 		// Find icon using the same logic as for Traefik services
 		iconURL := manualService.Icon
-		var tags []string
 		if iconURL == "" {
 			// If no icon is specified, try to find one automatically
-			result := findIconAndTags(manualService.Name, manualService.URL, manualService.Name)
-			iconURL = result.Icon
-			tags = result.Tags
+			iconURL = findIcon(manualService.Name, manualService.URL, displayNameReplaced, reference)
 		} else {
-			tags = []string{}
 			if !strings.HasPrefix(iconURL, "http://") && !strings.HasPrefix(iconURL, "https://") {
 				// If icon is specified, check if it's a full URL or just a filename
 				// Check if it's a filename with valid extension
@@ -1385,6 +1381,9 @@ func getManualServices() []Service {
 			}
 		}
 
+		// get tags from manual service
+		tags := findTags(manualService.Name, reference)
+
 		// Default priority if not specified
 		priority := manualService.Priority
 		if priority == 0 {
@@ -1397,11 +1396,12 @@ func getManualServices() []Service {
 			Priority: priority,
 			Icon:     iconURL,
 			Tags:     tags,
+			Group:    manualService.Group,
 		}
 
 		manualServices = append(manualServices, service)
-		debugf("Added manual service: %s (URL: %s, Icon: %s, Priority: %d)",
-			manualService.Name, manualService.URL, iconURL, priority)
+		debugf("Added manual service: %s (URL: %s, Icon: %s, Priority: %d, Group: %s)",
+			manualService.Name, manualService.URL, iconURL, priority, manualService.Group)
 	}
 
 	return manualServices
@@ -1498,11 +1498,13 @@ func calculateGroups(services []Service) []Service {
 		return services
 	}
 
-	// First, assign from overrides
+	// First, assign from overrides by checking if service.Group is already set
 	remainingIndices := make([]int, 0, len(services))
 	for i, s := range services {
-		if override, ok := serviceOverrideMap[s.Name]; ok && override.Group != "" {
-			services[i].Group = override.Group
+		// Check if the service already has a group set (from override)
+		if s.Group != "" {
+			// Service already has a group assigned, keep it
+			services[i].Group = s.Group
 		} else {
 			remainingIndices = append(remainingIndices, i)
 		}
