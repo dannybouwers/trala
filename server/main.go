@@ -1369,17 +1369,15 @@ func getManualServices() []Service {
 		if iconURL == "" {
 			// If no icon is specified, try to find one automatically
 			iconURL = findIcon(manualService.Name, manualService.URL, displayNameReplaced, reference)
-		} else if iconURL != "" {
-			if !strings.HasPrefix(iconURL, "http://") && !strings.HasPrefix(iconURL, "https://") {
-				// If icon is specified, check if it's a full URL or just a filename
-				// Check if it's a filename with valid extension
-				ext := filepath.Ext(iconURL)
-				if ext == ".png" || ext == ".svg" || ext == ".webp" {
-					iconURL = configuration.Environment.SelfhstIconURL + strings.TrimPrefix(ext, ".") + "/" + strings.ToLower(iconURL)
-				} else {
-					// Fallback to default behavior if extension is not valid
-					iconURL = configuration.Environment.SelfhstIconURL + "png/" + iconURL
-				}
+		} else if !strings.HasPrefix(iconURL, "http://") && !strings.HasPrefix(iconURL, "https://") {
+			// If icon is specified, check if it's a full URL or just a filename
+			// Check if it's a filename with valid extension
+			ext := filepath.Ext(iconURL)
+			if ext == ".png" || ext == ".svg" || ext == ".webp" {
+				iconURL = configuration.Environment.SelfhstIconURL + strings.TrimPrefix(ext, ".") + "/" + strings.ToLower(iconURL)
+			} else {
+				// Fallback to default behavior if extension is not valid
+				iconURL = configuration.Environment.SelfhstIconURL + "png/" + iconURL
 			}
 		}
 
