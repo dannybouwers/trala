@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -59,10 +60,18 @@ type TraefikEntryPoint struct {
 
 // Service represents the final, processed data sent to the frontend.
 type Service struct {
-	Name     string `json:"Name"`
-	URL      string `json:"url"`
-	Priority int    `json:"priority"`
-	Icon     string `json:"icon"`
+	Name     string   `json:"Name"`
+	URL      string   `json:"url"`
+	Priority int      `json:"priority"`
+	Icon     string   `json:"icon"`
+	Tags     []string `json:"tags"`
+	Group    string   `json:"group"`
+}
+
+// IconAndTags represents the icon URL and associated tags for a service
+type IconAndTags struct {
+	Icon string
+	Tags []string
 }
 
 // VersionInfo represents the application version information
@@ -96,6 +105,7 @@ type ServiceOverride struct {
 	Service     string `yaml:"service"`
 	DisplayName string `yaml:"display_name,omitempty"`
 	Icon        string `yaml:"icon,omitempty"`
+	Group       string `yaml:"group,omitempty"`
 }
 
 type ManualService struct {
@@ -103,6 +113,7 @@ type ManualService struct {
 	URL      string `yaml:"url"`
 	Icon     string `yaml:"icon,omitempty"`
 	Priority int    `yaml:"priority,omitempty"`
+	Group    string `yaml:"group,omitempty"`
 }
 
 type ServiceConfiguration struct {
@@ -123,6 +134,11 @@ type EnvironmentConfiguration struct {
 	LogLevel               string        `yaml:"log_level"`
 	Traefik                TraefikConfig `yaml:"traefik"`
 	Language               string        `yaml:"language"`
+	Grouping               struct {
+		Enabled               bool    `yaml:"enabled"`
+		Columns               int     `yaml:"columns"`
+		TagFrequencyThreshold float64 `yaml:"tag_frequency_threshold"`
+	} `yaml:"grouping"`
 }
 
 type TralaConfiguration struct {
@@ -136,6 +152,8 @@ type FrontendConfig struct {
 	SearchEngineURL        string `json:"searchEngineURL"`
 	SearchEngineIconURL    string `json:"searchEngineIconURL"`
 	RefreshIntervalSeconds int    `json:"refreshIntervalSeconds"`
+	GroupingEnabled        bool   `json:"groupingEnabled"`
+	GroupingColumns        int    `json:"groupingColumns"`
 }
 
 // ApplicationStatus represents the combined status information for the application
@@ -157,6 +175,17 @@ type SelfHstIcon struct {
 	Category  string `json:"Category"`
 	Tags      string `json:"Tags"`
 	CreatedAt string `json:"CreatedAt"`
+}
+
+// SoftwareEntry represents an entry in the software data.
+type SoftwareEntry struct {
+	Reference string
+	TagIDs    []int
+}
+
+// TagDefinition represents a tag definition.
+type TagDefinition struct {
+	Tag string `json:"Tag"`
 }
 
 // --- Global Variables & Constants ---
@@ -182,10 +211,22 @@ var (
 	// Sorted user icon names for fuzzy matching
 	sortedUserIconNames    []string
 	sortedUserIconNamesMux sync.RWMutex
+	// Software data cache
+	softwareData      []SoftwareEntry
+	softwareCacheTime time.Time
+	softwareCacheMux  sync.RWMutex
+	// Tag definitions cache
+	tagDefinitions          []TagDefinition
+	tagDefinitionsCacheTime time.Time
+	tagDefinitionsCacheMux  sync.RWMutex
 )
 
 const selfhstCacheTTL = 1 * time.Hour
 const selfhstAPIURL = "https://raw.githubusercontent.com/selfhst/icons/refs/heads/main/index.json"
+const softwareCacheTTL = 24 * time.Hour
+const tagDefinitionsCacheTTL = 24 * time.Hour
+const softwareDataURL = "https://raw.githubusercontent.com/selfhst/cdn/refs/heads/main/directory/software.json"
+const tagDefinitionsURL = "https://raw.githubusercontent.com/selfhst/cdn/refs/heads/main/directory/tags.json"
 const configurationFilePath = "/config/configuration.yml"
 const defaultIcon = "" // Frontend will use a fallback if icon is empty.
 const translationDir = "/app/translations"
@@ -390,6 +431,9 @@ func initI18n() {
 // T is a helper function for localization. It takes a message ID and returns the localized string.
 // If the localization fails, it returns the message ID as a fallback.
 func T(id string) string {
+	if localizer == nil {
+		return id
+	}
 	msg, err := localizer.Localize(&i18n.LocalizeConfig{MessageID: id})
 	if err != nil {
 		// If localization fails, return the message ID as a fallback.
@@ -465,12 +509,15 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 	// 6. Add manual services
 	manualServices := getManualServices()
 
-	// 7. Merge and sort all services by priority
+	// 7. Merge all services
 	finalServices := make([]Service, 0, len(traefikServices)+len(manualServices))
 	finalServices = append(finalServices, traefikServices...)
 	finalServices = append(finalServices, manualServices...)
 
-	// Sort by priority (higher priority first)
+	// 8. Calculate groups
+	finalServices = calculateGroups(finalServices)
+
+	// 9. Sort by priority (higher priority first)
 	sort.Slice(finalServices, func(i, j int) bool {
 		return finalServices[i].Priority > finalServices[j].Priority
 	})
@@ -553,7 +600,9 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 	if searchEngineURL != "" {
 		serviceName := extractServiceNameFromURL(searchEngineURL)
 		if serviceName != "" {
-			searchEngineIconURL = findBestIconURL(serviceName, searchEngineURL, serviceName)
+			displayNameReplaced := strings.ReplaceAll(serviceName, " ", "-")
+			reference := resolveSelfHstReference(displayNameReplaced)
+			searchEngineIconURL = findIcon(serviceName, searchEngineURL, serviceName, reference)
 		}
 	}
 
@@ -561,6 +610,8 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 		SearchEngineURL:        searchEngineURL,
 		SearchEngineIconURL:    searchEngineIconURL,
 		RefreshIntervalSeconds: refreshIntervalSeconds,
+		GroupingEnabled:        configuration.Environment.Grouping.Enabled,
+		GroupingColumns:        configuration.Environment.Grouping.Columns,
 	}
 
 	// Combine all status information
@@ -628,26 +679,33 @@ func processRouter(router TraefikRouter, entryPoints map[string]TraefikEntryPoin
 	// Get display name override if available
 	displayName := getDisplayNameOverride(routerName)
 	if displayName == "" {
-		displayName = routerName
+		routerNameReplaced := strings.ReplaceAll(routerName, "-", " ")
+		displayName = routerNameReplaced
 	}
 
 	debugf("Processing router: %s (display: %s), URL: %s", routerName, displayName, serviceURL)
-	iconURL := findBestIconURL(routerName, serviceURL, displayName)
+	displayNameReplaced := strings.ReplaceAll(displayName, " ", "-")
+	reference := resolveSelfHstReference(displayNameReplaced)
+	iconURL := findIcon(routerName, serviceURL, displayNameReplaced, reference)
+	tags := findTags(routerName, reference)
+
+	// get group override if available
+	group := getGroupOverride(routerName)
 
 	ch <- Service{
 		Name:     displayName,
 		URL:      serviceURL,
 		Priority: router.Priority,
 		Icon:     iconURL,
+		Tags:     tags,
+		Group:    group,
 	}
 }
 
-// findBestIconURL tries all icon-finding methods in order of priority.
-func findBestIconURL(routerName, serviceURL string, displayName string) string {
-	displayNameReplaced := strings.ReplaceAll(displayName, " ", "-")
-
+// findIcon tries all icon-finding methods in order of priority and returns the icon URL.
+func findIcon(routerName, serviceURL string, displayNameReplaced string, reference string) string {
 	// Priority 1: Check user-defined overrides.
-	if iconValue := checkOverrides(routerName); iconValue != "" {
+	if iconValue := getIconOverride(routerName); iconValue != "" {
 		// Check if it's a full URL
 		if strings.HasPrefix(iconValue, "http://") || strings.HasPrefix(iconValue, "https://") {
 			debugf("[%s] Found icon via override (full URL): %s", routerName, iconValue)
@@ -676,7 +734,8 @@ func findBestIconURL(routerName, serviceURL string, displayName string) string {
 	}
 
 	// Priority 3: Fuzzy search against selfh.st icons
-	if iconURL := findSelfHstIcon(displayNameReplaced); iconURL != "" {
+	if reference != "" {
+		iconURL := getSelfHstIconURL(reference)
 		debugf("[%s] Found icon via fuzzy search: %s", displayNameReplaced, iconURL)
 		return iconURL
 	}
@@ -697,10 +756,22 @@ func findBestIconURL(routerName, serviceURL string, displayName string) string {
 	return defaultIcon
 }
 
+// findTags finds tags for a service using the provided selfh.st reference.
+func findTags(routerName string, reference string) []string {
+	if reference != "" {
+		tags := getServiceTags(reference)
+		debugf("[%s] Found tags via fuzzy search: %v", routerName, tags)
+		return tags
+	}
+
+	debugf("[%s] No tags found.", routerName)
+	return []string{}
+}
+
 // --- Icon Finding Helper Methods ---
 
-// checkOverrides looks for a router name in the loaded config file.
-func checkOverrides(routerName string) string {
+// getIconOverride looks for a router name in the loaded config file.
+func getIconOverride(routerName string) string {
 	configurationMux.RLock()
 	defer configurationMux.RUnlock()
 
@@ -717,6 +788,17 @@ func getDisplayNameOverride(routerName string) string {
 
 	if override, ok := serviceOverrideMap[routerName]; ok {
 		return override.DisplayName
+	}
+	return ""
+}
+
+// getGroupOverride looks for a router name in the loaded config file.
+func getGroupOverride(routerName string) string {
+	configurationMux.RLock()
+	defer configurationMux.RUnlock()
+
+	if override, ok := serviceOverrideMap[routerName]; ok {
+		return override.Group
 	}
 	return ""
 }
@@ -763,35 +845,88 @@ func isEntrypointExcluded(entryPoints []string) bool {
 	return false
 }
 
-// findSelfHstIcon performs a fuzzy search.
-func findSelfHstIcon(routerName string) string {
+// resolveSelfHstReference performs fuzzy search to find the matching selfh.st reference for a service name.
+func resolveSelfHstReference(serviceName string) string {
 	icons, err := getSelfHstIconNames()
 	if err != nil {
-		log.Printf("ERROR: Could not get selfh.st icon list for fuzzy search: %v", err)
+		log.Printf("ERROR: Could not get selfh.st icon list for reference resolution: %v", err)
 		return ""
 	}
 
-	// Extract reference names for fuzzy matching
 	references := make([]string, len(icons))
 	for i, icon := range icons {
 		references[i] = icon.Reference
 	}
 
-	matches := fuzzy.FindFold(routerName, references)
+	matches := fuzzy.FindFold(serviceName, references)
 	if len(matches) > 0 {
-		// Find the matching icon to determine the best extension
-		for _, icon := range icons {
-			if icon.Reference == matches[0] {
-				// Prefer SVG if available
-				if icon.SVG == "Yes" {
-					return fmt.Sprintf(configuration.Environment.SelfhstIconURL+"svg/%s.svg", icon.Reference)
-				}
-				// Fallback to PNG
-				return fmt.Sprintf(configuration.Environment.SelfhstIconURL+"png/%s.png", icon.Reference)
+		return matches[0]
+	}
+	return ""
+}
+
+// getSelfHstIconURL generates the icon URL for a given selfh.st reference.
+func getSelfHstIconURL(reference string) string {
+	if reference == "" {
+		return ""
+	}
+
+	icons, err := getSelfHstIconNames()
+	if err != nil {
+		log.Printf("ERROR: Could not get selfh.st icon list for URL generation: %v", err)
+		return ""
+	}
+
+	for _, icon := range icons {
+		if icon.Reference == reference {
+			// Prefer SVG if available
+			if icon.SVG == "Yes" {
+				return fmt.Sprintf(configuration.Environment.SelfhstIconURL+"svg/%s.svg", icon.Reference)
 			}
+			// Fallback to PNG
+			return fmt.Sprintf(configuration.Environment.SelfhstIconURL+"png/%s.png", icon.Reference)
 		}
 	}
 	return ""
+}
+
+// getServiceTags retrieves the tags for a given selfh.st reference.
+func getServiceTags(reference string) []string {
+	if reference == "" {
+		return []string{}
+	}
+
+	software, err := getSoftwareData()
+	if err != nil {
+		log.Printf("ERROR: Could not get software data for tags: %v", err)
+		return []string{}
+	}
+
+	var tagIDs []int
+	for _, entry := range software {
+		if entry.Reference == reference {
+			tagIDs = entry.TagIDs
+			break
+		}
+	}
+
+	if len(tagIDs) == 0 {
+		return []string{}
+	}
+
+	tags, err := getTagDefinitions()
+	if err != nil {
+		log.Printf("ERROR: Could not get tag definitions: %v", err)
+		return []string{}
+	}
+
+	tagNames := make([]string, 0, len(tagIDs))
+	for _, id := range tagIDs {
+		if id >= 0 && id < len(tags) {
+			tagNames = append(tagNames, tags[id].Tag)
+		}
+	}
+	return tagNames
 }
 
 // findFavicon checks for the existence of /favicon.ico.
@@ -996,6 +1131,108 @@ func getSelfHstIconNames() ([]SelfHstIcon, error) {
 	return selfhstIcons, nil
 }
 
+// getSoftwareData fetches the software data from the selfhst CDN and caches it.
+func getSoftwareData() ([]SoftwareEntry, error) {
+	softwareCacheMux.RLock()
+	if time.Since(softwareCacheTime) < softwareCacheTTL && len(softwareData) > 0 {
+		softwareCacheMux.RUnlock()
+		return softwareData, nil
+	}
+	softwareCacheMux.RUnlock()
+
+	softwareCacheMux.Lock()
+	defer softwareCacheMux.Unlock()
+	// Double-check after acquiring the lock
+	if time.Since(softwareCacheTime) < softwareCacheTTL && len(softwareData) > 0 {
+		return softwareData, nil
+	}
+
+	log.Println("Refreshing software data cache...")
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", softwareDataURL, nil)
+	req.Header.Set("User-Agent", "TraLa-Dashboard-App")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var rawData [][]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&rawData); err != nil {
+		return nil, err
+	}
+
+	// Convert to SoftwareEntry
+	data := make([]SoftwareEntry, len(rawData))
+	for i, item := range rawData {
+		if len(item) > 18 {
+			ref, ok := item[2].(string)
+			if !ok {
+				continue
+			}
+			tagsStr, ok := item[17].(string)
+			if !ok {
+				continue
+			}
+			tagIDs := []int{}
+			if tagsStr != "" {
+				parts := strings.Split(tagsStr, ",")
+				for _, p := range parts {
+					if id, err := strconv.Atoi(strings.TrimSpace(p)); err == nil {
+						tagIDs = append(tagIDs, id)
+					}
+				}
+			}
+			data[i] = SoftwareEntry{
+				Reference: ref,
+				TagIDs:    tagIDs,
+			}
+		}
+	}
+
+	softwareData = data
+	softwareCacheTime = time.Now()
+	log.Printf("Successfully cached %d software entries.", len(softwareData))
+	return softwareData, nil
+}
+
+// getTagDefinitions fetches the tag definitions from the selfhst CDN and caches it.
+func getTagDefinitions() ([]TagDefinition, error) {
+	tagDefinitionsCacheMux.RLock()
+	if time.Since(tagDefinitionsCacheTime) < tagDefinitionsCacheTTL && len(tagDefinitions) > 0 {
+		tagDefinitionsCacheMux.RUnlock()
+		return tagDefinitions, nil
+	}
+	tagDefinitionsCacheMux.RUnlock()
+
+	tagDefinitionsCacheMux.Lock()
+	defer tagDefinitionsCacheMux.Unlock()
+	// Double-check after acquiring the lock
+	if time.Since(tagDefinitionsCacheTime) < tagDefinitionsCacheTTL && len(tagDefinitions) > 0 {
+		return tagDefinitions, nil
+	}
+
+	log.Println("Refreshing tag definitions cache...")
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", tagDefinitionsURL, nil)
+	req.Header.Set("User-Agent", "TraLa-Dashboard-App")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var data []TagDefinition
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return nil, err
+	}
+
+	tagDefinitions = data
+	tagDefinitionsCacheTime = time.Now()
+	log.Printf("Successfully cached %d tag definitions.", len(tagDefinitions))
+	return tagDefinitions, nil
+}
+
 // determineProtocol determines the correct protocol (http/https) for a service
 // based on TLS configuration in both router and entrypoint.
 func determineProtocol(router TraefikRouter, entryPoint TraefikEntryPoint) string {
@@ -1124,11 +1361,14 @@ func getManualServices() []Service {
 			continue
 		}
 
+		displayNameReplaced := strings.ReplaceAll(manualService.Name, " ", "-")
+		reference := resolveSelfHstReference(displayNameReplaced)
+
 		// Find icon using the same logic as for Traefik services
 		iconURL := manualService.Icon
 		if iconURL == "" {
 			// If no icon is specified, try to find one automatically
-			iconURL = findBestIconURL(manualService.Name, manualService.URL, manualService.Name)
+			iconURL = findIcon(manualService.Name, manualService.URL, displayNameReplaced, reference)
 		} else if !strings.HasPrefix(iconURL, "http://") && !strings.HasPrefix(iconURL, "https://") {
 			// If icon is specified, check if it's a full URL or just a filename
 			// Check if it's a filename with valid extension
@@ -1141,6 +1381,9 @@ func getManualServices() []Service {
 			}
 		}
 
+		// get tags from manual service
+		tags := findTags(manualService.Name, reference)
+
 		// Default priority if not specified
 		priority := manualService.Priority
 		if priority == 0 {
@@ -1152,14 +1395,168 @@ func getManualServices() []Service {
 			URL:      manualService.URL,
 			Priority: priority,
 			Icon:     iconURL,
+			Tags:     tags,
+			Group:    manualService.Group,
 		}
 
 		manualServices = append(manualServices, service)
-		debugf("Added manual service: %s (URL: %s, Icon: %s, Priority: %d)",
-			manualService.Name, manualService.URL, iconURL, priority)
+		debugf("Added manual service: %s (URL: %s, Icon: %s, Priority: %d, Group: %s)",
+			manualService.Name, manualService.URL, iconURL, priority, manualService.Group)
 	}
 
 	return manualServices
+}
+
+// calculateTagFrequencies calculates the frequency of each tag and the number of tags per service.
+// It returns tagCount (map of tag to count) and serviceTagCount (map of service name to tag count).
+func calculateTagFrequencies(remaining []Service) (map[string]int, map[string]int) {
+	tagCount := make(map[string]int)
+	serviceTagCount := make(map[string]int)
+	for _, s := range remaining {
+		serviceTagCount[s.Name] = len(s.Tags)
+		for _, tag := range s.Tags {
+			tagCount[tag]++
+		}
+	}
+	return tagCount, serviceTagCount
+}
+
+// filterValidTags filters tags based on frequency thresholds and ensures single-tag services are included.
+// Tags present in more than the configured threshold of services are excluded to avoid overly broad groups.
+// For tags with count == 1, only include if there's a service with exactly that single tag.
+func filterValidTags(remaining []Service, tagCount map[string]int) []string {
+	validTags := make([]string, 0)
+	total := len(remaining)
+	threshold := int(configuration.Environment.Grouping.TagFrequencyThreshold * float64(total))
+	for tag, count := range tagCount {
+		if count > threshold && count != 1 {
+			continue
+		}
+		if count == 1 {
+			for _, s := range remaining {
+				if len(s.Tags) == 1 && s.Tags[0] == tag {
+					validTags = append(validTags, tag)
+					break
+				}
+			}
+		} else {
+			validTags = append(validTags, tag)
+		}
+	}
+	sort.Strings(validTags)
+	return validTags
+}
+
+// selectBestTag selects the best tag from validTags based on group size proximity to targetSize.
+// It calculates a score where smaller groups closer to targetSize are preferred.
+func selectBestTag(validTags []string, tagCount map[string]int, targetSize float64) string {
+	bestTag := ""
+	bestScore := -1e9
+	for _, tag := range validTags {
+		groupSize := tagCount[tag]
+		var score float64
+		if float64(groupSize) <= targetSize {
+			score = targetSize - float64(groupSize)
+		} else {
+			score = -float64(groupSize)
+		}
+		if score > bestScore {
+			bestScore = score
+			bestTag = tag
+		}
+	}
+	return bestTag
+}
+
+// assignGroupToServices assigns the groupName to services that have the bestTag and returns the updated remainingIndices.
+func assignGroupToServices(services []Service, remainingIndices []int, bestTag, groupName string) []int {
+	newRemainingIndices := make([]int, 0, len(remainingIndices))
+	for _, idx := range remainingIndices {
+		s := &services[idx]
+		hasTag := false
+		for _, t := range s.Tags {
+			if t == bestTag {
+				hasTag = true
+				break
+			}
+		}
+		if hasTag {
+			s.Group = groupName
+		} else {
+			newRemainingIndices = append(newRemainingIndices, idx)
+		}
+	}
+	return newRemainingIndices
+}
+
+// calculateGroups implements the grouping algorithm for services
+func calculateGroups(services []Service) []Service {
+	if !configuration.Environment.Grouping.Enabled {
+		for i := range services {
+			services[i].Group = ""
+		}
+		return services
+	}
+
+	// First, assign from overrides by checking if service.Group is already set
+	remainingIndices := make([]int, 0, len(services))
+	for i, s := range services {
+		// Check if the service already has a group set (from override)
+		if s.Group != "" {
+			// Service already has a group assigned, keep it
+			services[i].Group = s.Group
+		} else {
+			remainingIndices = append(remainingIndices, i)
+		}
+	}
+
+	// Now, for remaining, do the grouping
+	if len(remainingIndices) == 0 {
+		return services
+	}
+
+	// Get remaining services
+	remaining := make([]Service, len(remainingIndices))
+	for i, idx := range remainingIndices {
+		remaining[i] = services[idx]
+	}
+
+	// Preprocessing: calculate tag frequencies
+	tagCount, _ := calculateTagFrequencies(remaining)
+
+	// Filter tags
+	validTags := filterValidTags(remaining, tagCount)
+
+	targetSize := math.Sqrt(float64(len(remaining)))
+
+	for len(remaining) > 0 && len(validTags) > 0 {
+		bestTag := selectBestTag(validTags, tagCount, targetSize)
+		if bestTag == "" {
+			break
+		}
+		groupName := bestTag
+		remainingIndices = assignGroupToServices(services, remainingIndices, bestTag, groupName)
+
+		// Update remaining
+		remaining = make([]Service, len(remainingIndices))
+		for i, idx := range remainingIndices {
+			remaining[i] = services[idx]
+		}
+
+		// Remove bestTag from validTags
+		newValidTags := make([]string, 0, len(validTags))
+		for _, t := range validTags {
+			if t != bestTag {
+				newValidTags = append(newValidTags, t)
+			}
+		}
+		validTags = newValidTags
+
+		// Update tagCount
+		tagCount, _ = calculateTagFrequencies(remaining)
+	}
+
+	return services
 }
 
 // compareVersions compares two version strings using semantic versioning
@@ -1283,6 +1680,15 @@ func loadConfiguration() {
 					PasswordFile: "",
 				},
 			},
+			Grouping: struct {
+				Enabled               bool    `yaml:"enabled"`
+				Columns               int     `yaml:"columns"`
+				TagFrequencyThreshold float64 `yaml:"tag_frequency_threshold"`
+			}{
+				Enabled:               true,
+				Columns:               3,
+				TagFrequencyThreshold: 0.9,
+			},
 		},
 		Services: ServiceConfiguration{
 			Exclude: ExcludeConfig{
@@ -1347,6 +1753,27 @@ func loadConfiguration() {
 	}
 	if v := os.Getenv("LANGUAGE"); v != "" {
 		config.Environment.Language = v
+	}
+	if v := os.Getenv("GROUPING_ENABLED"); v != "" {
+		if enabled, err := strconv.ParseBool(v); err == nil {
+			config.Environment.Grouping.Enabled = enabled
+		} else {
+			log.Printf("Warning: Invalid GROUPING_ENABLED '%s', using %t", v, config.Environment.Grouping.Enabled)
+		}
+	}
+	if v := os.Getenv("GROUPING_TAG_FREQUENCY_THRESHOLD"); v != "" {
+		if num, err := strconv.ParseFloat(v, 64); err == nil && num > 0 && num <= 1 {
+			config.Environment.Grouping.TagFrequencyThreshold = num
+		} else {
+			log.Printf("Warning: Invalid GROUPING_TAG_FREQUENCY_THRESHOLD '%s', using %f", v, config.Environment.Grouping.TagFrequencyThreshold)
+		}
+	}
+	if v := os.Getenv("GROUPED_COLUMNS"); v != "" {
+		if num, err := strconv.Atoi(v); err == nil && num >= 1 && num <= 6 {
+			config.Environment.Grouping.Columns = num
+		} else {
+			log.Printf("Warning: Invalid GROUPED_COLUMNS '%s', must be between 1 and 6, using %d", v, config.Environment.Grouping.Columns)
+		}
 	}
 
 	// Step 5: post-processing / validation

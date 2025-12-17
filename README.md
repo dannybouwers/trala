@@ -8,7 +8,7 @@ A simple, modern, and dynamic dashboard for your Traefik services. This applicat
 
 - **Auto-Discovery:** Automatically fetches and displays all HTTP routers from your Traefik instance.
 - **Manual Services:** Add custom services to your dashboard that aren't managed by Traefik (e.g., Reddit, GitHub, external websites).
-- **Advanced Icon Fetching:** Intelligently finds the best icon for each service using a robust, prioritized strategy.
+- **Advanced Icon Fetching:** Intelligently finds the best icon for each service using a robust, prioritized strategy from selfh.st/icons.
 - **Icon Overrides:** Manually map router names to specific icons for perfect results every time.
 - **Custom Icon Directory:** Mount your own icon directory at `/icons` for ultimate customization with fuzzy matching.
 - **Modern UI:** Clean, responsive interface with automatic Light/Dark mode based on your OS settings.
@@ -16,6 +16,7 @@ A simple, modern, and dynamic dashboard for your Traefik services. This applicat
 - **External Search:** Use the search bar to quickly search the web with your configured search engine.
 - **Lightweight & Multi-Arch:** Built with Go and a minimal Alpine base, the Docker image is small and compatible with `amd64` and `arm64` architectures.
 - **Service Exclusion:** Hide specific services from the dashboard using router name exclusions.
+- **Smart Grouping:** Automatically group services based on tags from selfh.st/apps, with manual overrides and frontend toggle for collapse/expand.
 
 ---
 
@@ -83,9 +84,9 @@ A sample configuration file is shown below:
 
 ```yaml
 # TraLa Configuration File
-# Version 3.0
+# Version 3.1
 
-version: 3.0
+version: 3.1
 
 # Environment settings (optional, environment variables take precedence)
 environment:
@@ -94,6 +95,10 @@ environment:
   refresh_interval_seconds: 30
   log_level: info
   language: de  # change Language (Default "en").
+  grouping:
+    enabled: true
+    columns: 3  # Number of columns in grouped view (1-6), default: 3
+    tag_frequency_threshold: 0.9  # Threshold for excluding tags present in more than 90% of services
   traefik:
     api_host: http://traefik:8080
     enable_basic_auth: true
@@ -123,6 +128,7 @@ services:
     - service: "unifi-controller"
       display_name: "UniFi Network"
       icon: "ubiquiti-unifi.svg"
+      group: "Network"
     - service: "home-assistant"
       display_name: "Home Assistant"
       icon: "home-assistant.svg"
@@ -177,6 +183,9 @@ Supported environment variables are shown below.
 | `REFRESH_INTERVAL_SECONDS` | The interval in seconds at which the service list automatically refreshes.                                | `30`                                   | No       |
 | `SEARCH_ENGINE_URL`        | The URL for the external search engine. The search query will be appended to this URL.                    | `https://www.google.com/search?q=`     | No       |
 | `LOG_LEVEL`                | Set to `debug` for verbose logging of the icon-finding process. Any other value is silent.              | `info`                                 | No       |
+| `GROUPING_ENABLED`         | Enable or disable the smart grouping feature.                                                            | `true`                                 | No       |
+| `GROUPED_COLUMNS`          | Number of columns in grouped view for xl screen size (1-6).                                              | `3`                                    | No       |
+| `GROUPING_TAG_FREQUENCY_THRESHOLD` | Threshold for excluding tags present in more than this percentage of services (0.0-1.0). | `0.9`                                 | No       |
 | `TRAEFIK_BASIC_AUTH_USERNAME`      | Sets the username for the Traefik basic auth scheme if enabled.                                                                                   | `(none)`                                     | No       |
 | `TRAEFIK_BASIC_AUTH_PASSWORD`      | Sets the password for the Traefik basic auth scheme if enabled.                                                                                   | `(none)`                                     | No       |
 | `TRAEFIK_BASIC_AUTH_PASSWORD_FILE` | Sets the file path from where to load the password for the Traefik basic auth scheme if enabled. Takes precedence over setting password directly. | `(none)`                                     | No       |
@@ -233,6 +242,22 @@ When using a filename from the selfh.st icon repository, you can specify files w
 - `.webp`
 
 The application will automatically construct the appropriate URL based on the file extension
+
+### Smart Grouping
+
+Smart Grouping allows you to organize services into collapsible groups for better dashboard organization. This feature provides both automatic grouping based on service tags and manual control over group assignments.
+
+#### Configuration Options
+
+- `grouping.enabled`: Enable or disable the smart grouping feature (default: `true`). When enabled, services are automatically grouped based on tags from selfh.st icon metadata, and groups can be collapsed or expanded individually via the frontend toggle.
+
+- `grouping.columns`: Control the number of columns displayed in grouped view for extra-large screens (1-6 columns, default: 3). The grouped view always shows 1 column on mobile devices and 2 columns on medium screens (tablets), with the configured number applying only to xl screen sizes.
+
+- `grouping.tag_frequency_threshold`: Control which tags are used for automatic grouping by setting a threshold (0.0-1.0, default: 0.9). Tags present in more than this percentage of services are excluded to avoid overly broad groups. For example, a threshold of 0.9 excludes tags found in more than 90% of services, preventing common tags from creating unhelpful groupings.
+
+- `group`: In service overrides, use the `group` field to manually assign services to specific groups, overriding automatic tag-based grouping.
+
+These settings can be configured via the YAML configuration file or environment variables (`GROUPING_ENABLED`, `GROUPED_COLUMNS`, `GROUPING_TAG_FREQUENCY_THRESHOLD`).
 
 ### Custom Icon Directory
 

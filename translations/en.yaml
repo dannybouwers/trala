@@ -36,3 +36,12 @@ greeting_afternoon: "Good afternoon"
 
 # Greeting for the evening (18:00 - 23:59)
 greeting_evening: "Good evening"
+
+# Button label for grouping toggle
+grouping: "Grouping"
+
+# Button label for expand/collapse all groups
+expand_collapse_all: "Expand/Collapse All"
+
+# Fallback group name for uncategorized services
+uncategorized: "Uncategorized"
