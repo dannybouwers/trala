@@ -177,15 +177,11 @@ type SelfHstIcon struct {
 	CreatedAt string `json:"CreatedAt"`
 }
 
-// SoftwareEntry represents an entry in the software data.
-type SoftwareEntry struct {
-	Reference string
-	TagIDs    []int
-}
-
-// TagDefinition represents a tag definition.
-type TagDefinition struct {
-	Tag string `json:"Tag"`
+// SelfHstApp represents an entry in the selfh.st apps CDN integrations/trala.json.
+type SelfHstApp struct {
+	Reference string   `json:"reference"`
+	Name      string   `json:"name"`
+	Tags      []string `json:"tags"`
 }
 
 // --- Global Variables & Constants ---
@@ -211,22 +207,16 @@ var (
 	// Sorted user icon names for fuzzy matching
 	sortedUserIconNames    []string
 	sortedUserIconNamesMux sync.RWMutex
-	// Software data cache
-	softwareData      []SoftwareEntry
-	softwareCacheTime time.Time
-	softwareCacheMux  sync.RWMutex
-	// Tag definitions cache
-	tagDefinitions          []TagDefinition
-	tagDefinitionsCacheTime time.Time
-	tagDefinitionsCacheMux  sync.RWMutex
+	// Apps data cache
+	selfhstApps          []SelfHstApp
+	selfhstAppsCacheTime time.Time
+	selfhstAppsCacheMux  sync.RWMutex
 )
 
 const selfhstCacheTTL = 1 * time.Hour
 const selfhstAPIURL = "https://raw.githubusercontent.com/selfhst/icons/refs/heads/main/index.json"
-const softwareCacheTTL = 24 * time.Hour
-const tagDefinitionsCacheTTL = 24 * time.Hour
-const softwareDataURL = "https://raw.githubusercontent.com/selfhst/cdn/refs/heads/main/directory/software.json"
-const tagDefinitionsURL = "https://raw.githubusercontent.com/selfhst/cdn/refs/heads/main/directory/tags.json"
+const selfhstAppsCacheTTL = 24 * time.Hour
+const selfhstAppsURL = "https://raw.githubusercontent.com/selfhst/cdn/refs/heads/main/directory/integrations/trala.json"
 const configurationFilePath = "/config/configuration.yml"
 const defaultIcon = "" // Frontend will use a fallback if icon is empty.
 const translationDir = "/app/translations"
@@ -896,37 +886,19 @@ func getServiceTags(reference string) []string {
 		return []string{}
 	}
 
-	software, err := getSoftwareData()
+	data, err := getSelfHstAppTags()
 	if err != nil {
-		log.Printf("ERROR: Could not get software data for tags: %v", err)
+		log.Printf("ERROR: Could not get integration data for tags: %v", err)
 		return []string{}
 	}
 
-	var tagIDs []int
-	for _, entry := range software {
+	for _, entry := range data {
 		if entry.Reference == reference {
-			tagIDs = entry.TagIDs
-			break
+			return entry.Tags
 		}
 	}
 
-	if len(tagIDs) == 0 {
-		return []string{}
-	}
-
-	tags, err := getTagDefinitions()
-	if err != nil {
-		log.Printf("ERROR: Could not get tag definitions: %v", err)
-		return []string{}
-	}
-
-	tagNames := make([]string, 0, len(tagIDs))
-	for _, id := range tagIDs {
-		if id >= 0 && id < len(tags) {
-			tagNames = append(tagNames, tags[id].Tag)
-		}
-	}
-	return tagNames
+	return []string{}
 }
 
 // findFavicon checks for the existence of /favicon.ico.
@@ -1131,24 +1103,24 @@ func getSelfHstIconNames() ([]SelfHstIcon, error) {
 	return selfhstIcons, nil
 }
 
-// getSoftwareData fetches the software data from the selfhst CDN and caches it.
-func getSoftwareData() ([]SoftwareEntry, error) {
-	softwareCacheMux.RLock()
-	if time.Since(softwareCacheTime) < softwareCacheTTL && len(softwareData) > 0 {
-		softwareCacheMux.RUnlock()
-		return softwareData, nil
+// getSelfHstAppTags fetches the integration data from the selfhst CDN and caches it.
+func getSelfHstAppTags() ([]SelfHstApp, error) {
+	selfhstAppsCacheMux.RLock()
+	if time.Since(selfhstAppsCacheTime) < selfhstAppsCacheTTL && len(selfhstApps) > 0 {
+		selfhstAppsCacheMux.RUnlock()
+		return selfhstApps, nil
 	}
-	softwareCacheMux.RUnlock()
+	selfhstAppsCacheMux.RUnlock()
 
-	softwareCacheMux.Lock()
-	defer softwareCacheMux.Unlock()
+	selfhstAppsCacheMux.Lock()
+	defer selfhstAppsCacheMux.Unlock()
 	// Double-check after acquiring the lock
-	if time.Since(softwareCacheTime) < softwareCacheTTL && len(softwareData) > 0 {
-		return softwareData, nil
+	if time.Since(selfhstAppsCacheTime) < selfhstAppsCacheTTL && len(selfhstApps) > 0 {
+		return selfhstApps, nil
 	}
 
-	log.Println("Refreshing software data cache...")
-	req, _ := http.NewRequestWithContext(context.Background(), "GET", softwareDataURL, nil)
+	log.Println("Refreshing Selfh.st apps cache from trala.json...")
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", selfhstAppsURL, nil)
 	req.Header.Set("User-Agent", "TraLa-Dashboard-App")
 
 	resp, err := httpClient.Do(req)
@@ -1157,80 +1129,28 @@ func getSoftwareData() ([]SoftwareEntry, error) {
 	}
 	defer resp.Body.Close()
 
-	var rawData [][]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&rawData); err != nil {
-		return nil, err
-	}
-
-	// Convert to SoftwareEntry
-	data := make([]SoftwareEntry, len(rawData))
-	for i, item := range rawData {
-		if len(item) > 18 {
-			ref, ok := item[2].(string)
-			if !ok {
-				continue
-			}
-			tagsStr, ok := item[17].(string)
-			if !ok {
-				continue
-			}
-			tagIDs := []int{}
-			if tagsStr != "" {
-				parts := strings.Split(tagsStr, ",")
-				for _, p := range parts {
-					if id, err := strconv.Atoi(strings.TrimSpace(p)); err == nil {
-						tagIDs = append(tagIDs, id)
-					}
-				}
-			}
-			data[i] = SoftwareEntry{
-				Reference: ref,
-				TagIDs:    tagIDs,
-			}
-		}
-	}
-
-	softwareData = data
-	softwareCacheTime = time.Now()
-	log.Printf("Successfully cached %d software entries.", len(softwareData))
-	return softwareData, nil
-}
-
-// getTagDefinitions fetches the tag definitions from the selfhst CDN and caches it.
-func getTagDefinitions() ([]TagDefinition, error) {
-	tagDefinitionsCacheMux.RLock()
-	if time.Since(tagDefinitionsCacheTime) < tagDefinitionsCacheTTL && len(tagDefinitions) > 0 {
-		tagDefinitionsCacheMux.RUnlock()
-		return tagDefinitions, nil
-	}
-	tagDefinitionsCacheMux.RUnlock()
-
-	tagDefinitionsCacheMux.Lock()
-	defer tagDefinitionsCacheMux.Unlock()
-	// Double-check after acquiring the lock
-	if time.Since(tagDefinitionsCacheTime) < tagDefinitionsCacheTTL && len(tagDefinitions) > 0 {
-		return tagDefinitions, nil
-	}
-
-	log.Println("Refreshing tag definitions cache...")
-	req, _ := http.NewRequestWithContext(context.Background(), "GET", tagDefinitionsURL, nil)
-	req.Header.Set("User-Agent", "TraLa-Dashboard-App")
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var data []TagDefinition
+	var data []SelfHstApp
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
 		return nil, err
 	}
 
-	tagDefinitions = data
-	tagDefinitionsCacheTime = time.Now()
-	log.Printf("Successfully cached %d tag definitions.", len(tagDefinitions))
-	return tagDefinitions, nil
+	// Sort the apps using a multi-level approach for the best fuzzy search results.
+	// 1. Primary sort: by length (shortest first). This prioritizes base names over variants
+	//    (e.g., "proxmox" over "proxmox-helper-scripts").
+	// 2. Secondary sort: alphabetically. This provides a stable order for names of the same length.
+	sort.Slice(data, func(i, j int) bool {
+		lenI := len(data[i].Reference)
+		lenJ := len(data[j].Reference)
+		if lenI != lenJ {
+			return lenI < lenJ
+		}
+		return data[i].Reference < data[j].Reference
+	})
+
+	selfhstApps = data
+	selfhstAppsCacheTime = time.Now()
+	log.Printf("Successfully cached %d apps and tags", len(selfhstApps))
+	return selfhstApps, nil
 }
 
 // determineProtocol determines the correct protocol (http/https) for a service
@@ -1858,6 +1778,7 @@ func main() {
 
 	// Pre-warm the caches in the background
 	go getSelfHstIconNames() // Pre-warm the selfh.st icon cache
+	go getSelfHstAppTags()   // Pre-warm the integration data cache
 	go func() {
 		if err := scanUserIcons(); err != nil {
 			log.Printf("Warning: Could not scan user icons directory: %v", err)
