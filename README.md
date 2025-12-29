@@ -99,6 +99,7 @@ environment:
     enabled: true
     columns: 3  # Number of columns in grouped view (1-6), default: 3
     tag_frequency_threshold: 0.9  # Threshold for excluding tags present in more than 90% of services
+    min_services_per_group: 2  # Minimum number of services required for a tag to form a group (default: 2)
   traefik:
     api_host: http://traefik:8080
     enable_basic_auth: true
@@ -186,6 +187,7 @@ Supported environment variables are shown below.
 | `GROUPING_ENABLED`         | Enable or disable the smart grouping feature.                                                            | `true`                                 | No       |
 | `GROUPED_COLUMNS`          | Number of columns in grouped view for xl screen size (1-6).                                              | `3`                                    | No       |
 | `GROUPING_TAG_FREQUENCY_THRESHOLD` | Threshold for excluding tags present in more than this percentage of services (0.0-1.0). | `0.9`                                 | No       |
+| `GROUPING_MIN_SERVICES_PER_GROUP` | Minimum number of services required for a tag to form a group (must be >= 1).              | `2`                                    | No       |
 | `TRAEFIK_BASIC_AUTH_USERNAME`      | Sets the username for the Traefik basic auth scheme if enabled.                                                                                   | `(none)`                                     | No       |
 | `TRAEFIK_BASIC_AUTH_PASSWORD`      | Sets the password for the Traefik basic auth scheme if enabled.                                                                                   | `(none)`                                     | No       |
 | `TRAEFIK_BASIC_AUTH_PASSWORD_FILE` | Sets the file path from where to load the password for the Traefik basic auth scheme if enabled. Takes precedence over setting password directly. | `(none)`                                     | No       |
@@ -255,9 +257,11 @@ Smart Grouping allows you to organize services into collapsible groups for bette
 
 - `grouping.tag_frequency_threshold`: Control which tags are used for automatic grouping by setting a threshold (0.0-1.0, default: 0.9). Tags present in more than this percentage of services are excluded to avoid overly broad groups. For example, a threshold of 0.9 excludes tags found in more than 90% of services, preventing common tags from creating unhelpful groupings.
 
+- `grouping.min_services_per_group`: Set the minimum number of services required for a tag to form a group (must be >= 1, default: 2). Tags with fewer services than this threshold are excluded from automatic grouping. This helps ensure that groups contain a meaningful number of services.
+
 - `group`: In service overrides, use the `group` field to manually assign services to specific groups, overriding automatic tag-based grouping.
 
-These settings can be configured via the YAML configuration file or environment variables (`GROUPING_ENABLED`, `GROUPED_COLUMNS`, `GROUPING_TAG_FREQUENCY_THRESHOLD`).
+These settings can be configured via the YAML configuration file or environment variables (`GROUPING_ENABLED`, `GROUPED_COLUMNS`, `GROUPING_TAG_FREQUENCY_THRESHOLD`, `GROUPING_MIN_SERVICES_PER_GROUP`).
 
 ### Custom Icon Directory
 

@@ -138,6 +138,7 @@ type EnvironmentConfiguration struct {
 		Enabled               bool    `yaml:"enabled"`
 		Columns               int     `yaml:"columns"`
 		TagFrequencyThreshold float64 `yaml:"tag_frequency_threshold"`
+		MinServicesPerGroup   int     `yaml:"min_services_per_group"`
 	} `yaml:"grouping"`
 }
 
@@ -1421,28 +1422,41 @@ func calculateTagFrequencies(remaining []Service) (map[string]int, map[string]in
 	return tagCount, serviceTagCount
 }
 
-// filterValidTags filters tags based on frequency thresholds and ensures single-tag services are included.
-// Tags present in more than the configured threshold of services are excluded to avoid overly broad groups.
-// For tags with count == 1, only include if there's a service with exactly that single tag.
+// filterValidTags filters tags based on frequency thresholds and ensures meaningful grouping.
+// Tags that are too common (above frequency threshold) are excluded unless they meet minimum services per group.
+// Single-occurrence tags are only included if there's a service with exactly that one tag.
 func filterValidTags(remaining []Service, tagCount map[string]int) []string {
 	validTags := make([]string, 0)
 	total := len(remaining)
 	threshold := int(configuration.Environment.Grouping.TagFrequencyThreshold * float64(total))
+	minServicesPerGroup := configuration.Environment.Grouping.MinServicesPerGroup
+
 	for tag, count := range tagCount {
-		if count > threshold && count != 1 {
+		// Case 1: Skip tags that are too common (above frequency threshold) and don't meet minimum services
+		if count > threshold && count < minServicesPerGroup {
 			continue
 		}
+
+		// Case 2: Handle single-occurrence tags
 		if count == 1 {
-			for _, s := range remaining {
-				if len(s.Tags) == 1 && s.Tags[0] == tag {
-					validTags = append(validTags, tag)
-					break
+			if minServicesPerGroup > 1 {
+				// Only include single tags if there's a service with exactly that one tag
+				for _, s := range remaining {
+					if len(s.Tags) == 1 && s.Tags[0] == tag {
+						validTags = append(validTags, tag)
+						break
+					}
 				}
 			}
+			// If minServicesPerGroup == 1, single tags are included by default
 		} else {
-			validTags = append(validTags, tag)
+			// Case 3: Include tags with count >= minServicesPerGroup
+			if count >= minServicesPerGroup {
+				validTags = append(validTags, tag)
+			}
 		}
 	}
+
 	sort.Strings(validTags)
 	return validTags
 }
@@ -1684,10 +1698,12 @@ func loadConfiguration() {
 				Enabled               bool    `yaml:"enabled"`
 				Columns               int     `yaml:"columns"`
 				TagFrequencyThreshold float64 `yaml:"tag_frequency_threshold"`
+				MinServicesPerGroup   int     `yaml:"min_services_per_group"`
 			}{
 				Enabled:               true,
 				Columns:               3,
 				TagFrequencyThreshold: 0.9,
+				MinServicesPerGroup:   2,
 			},
 		},
 		Services: ServiceConfiguration{
@@ -1766,6 +1782,13 @@ func loadConfiguration() {
 			config.Environment.Grouping.TagFrequencyThreshold = num
 		} else {
 			log.Printf("Warning: Invalid GROUPING_TAG_FREQUENCY_THRESHOLD '%s', using %f", v, config.Environment.Grouping.TagFrequencyThreshold)
+		}
+	}
+	if v := os.Getenv("GROUPING_MIN_SERVICES_PER_GROUP"); v != "" {
+		if num, err := strconv.Atoi(v); err == nil && num >= 1 {
+			config.Environment.Grouping.MinServicesPerGroup = num
+		} else {
+			log.Printf("Warning: Invalid GROUPING_MIN_SERVICES_PER_GROUP '%s', must be >= 1, using %d", v, config.Environment.Grouping.MinServicesPerGroup)
 		}
 	}
 	if v := os.Getenv("GROUPED_COLUMNS"); v != "" {
