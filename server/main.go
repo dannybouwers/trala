@@ -1438,22 +1438,18 @@ func filterValidTags(remaining []Service, tagCount map[string]int) []string {
 		}
 
 		// Case 2: Handle single-occurrence tags
-		if count == 1 {
-			if minServicesPerGroup > 1 {
-				// Only include single tags if there's a service with exactly that one tag
-				for _, s := range remaining {
-					if len(s.Tags) == 1 && s.Tags[0] == tag {
-						validTags = append(validTags, tag)
-						break
-					}
+		if count == 1 && minServicesPerGroup > 1 {
+			// Only include single tags if there's a service with exactly that one tag
+			// If minServicesPerGroup == 1, single tags are included by default
+			for _, s := range remaining {
+				if len(s.Tags) == 1 && s.Tags[0] == tag {
+					validTags = append(validTags, tag)
+					break
 				}
 			}
-			// If minServicesPerGroup == 1, single tags are included by default
-		} else {
-			// Case 3: Include tags with count >= minServicesPerGroup
-			if count >= minServicesPerGroup {
-				validTags = append(validTags, tag)
-			}
+		} else if count >= minServicesPerGroup {
+			// Case 3: Include tags that meet the minimum services requirement
+			validTags = append(validTags, tag)
 		}
 	}
 
@@ -1469,11 +1465,9 @@ func selectBestTag(validTags []string, tagCount map[string]int, targetSize float
 	for _, tag := range validTags {
 		groupSize := tagCount[tag]
 		var score float64
-		if float64(groupSize) <= targetSize {
-			score = targetSize - float64(groupSize)
-		} else {
-			score = -float64(groupSize)
-		}
+		// Score based on how CLOSE the group size is to target (smaller distance = better)
+		// Use negative distance so higher score = better match
+		score = -math.Abs(float64(groupSize) - targetSize)
 		if score > bestScore {
 			bestScore = score
 			bestTag = tag
