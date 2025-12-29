@@ -84,9 +84,9 @@ A sample configuration file is shown below:
 
 ```yaml
 # TraLa Configuration File
-# Version 3.1
+# Version 3.2
 
-version: 3.1
+version: 3.2
 
 # Environment settings (optional, environment variables take precedence)
 environment:
