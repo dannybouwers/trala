@@ -22,7 +22,7 @@ A simple, modern, and dynamic dashboard for your Traefik services. This applicat
 
 ## 🚀 Getting Started
 
-The easiest way to get started is by using the pre-built Docker image from the GitHub Container Registry.
+The easiest way to get started is by using the pre-built Docker image from the GitHub Container Registry (primary) or Docker Hub (secondary).
 
 ### `docker-compose.yml` (Recommended)
 
@@ -40,7 +40,9 @@ services:
       - traefik-net # A shared network
 
   trala:
-    image: ghcr.io/dannybouwers/trala:latest
+    # Use either GitHub Container Registry (primary) or Docker Hub (secondary)
+    image: ghcr.io/dannybouwers/trala:latest  # Primary source
+    # image: dannybouwers/trala:latest       # Secondary source (Docker Hub)
     container_name: trala
     restart: unless-stopped
     networks:
