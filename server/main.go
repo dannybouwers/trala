@@ -270,7 +270,7 @@ func initializeHTTPClients() {
 	}
 
 	// Create external HTTP client (always has SSL verification enabled)
-	// Using the original simple pattern for external calls
+	// Using the default transport pattern for external calls
 	externalHTTPClient = &http.Client{Timeout: 5 * time.Second}
 }
 
