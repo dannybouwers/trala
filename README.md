@@ -84,9 +84,9 @@ A sample configuration file is shown below:
 
 ```yaml
 # TraLa Configuration File
-# Version 3.2
+# Version 3.3
 
-version: 3.2
+version: 3.3
 
 # Environment settings (optional, environment variables take precedence)
 environment:
@@ -103,6 +103,7 @@ environment:
   traefik:
     api_host: http://traefik:8080
     enable_basic_auth: true
+    insecure_skip_verify: false # Skip SSL certificate verification for Traefik API (default: false)
     basic_auth:
       username: username
       password: password # mutually exclusive with password_file
@@ -191,6 +192,7 @@ Supported environment variables are shown below.
 | `TRAEFIK_BASIC_AUTH_USERNAME`      | Sets the username for the Traefik basic auth scheme if enabled.                                                                                   | `(none)`                                     | No       |
 | `TRAEFIK_BASIC_AUTH_PASSWORD`      | Sets the password for the Traefik basic auth scheme if enabled.                                                                                   | `(none)`                                     | No       |
 | `TRAEFIK_BASIC_AUTH_PASSWORD_FILE` | Sets the file path from where to load the password for the Traefik basic auth scheme if enabled. Takes precedence over setting password directly. | `(none)`                                     | No       |
+| `TRAEFIK_INSECURE_SKIP_VERIFY` | Skip SSL certificate verification for Traefik API connections (similar to `providers.http.tls.insecureSkipVerify` in Traefik). | `false`                                     | No       |
 | `LANGUAGE`                 | The language of the application.                 | `en`                                   | No       |
 
 ### Switching Languages

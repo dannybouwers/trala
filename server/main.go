@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -96,9 +98,10 @@ type TraefikBasicAuth struct {
 }
 
 type TraefikConfig struct {
-	APIHost         string           `yaml:"api_host"`
-	EnableBasicAuth bool             `yaml:"enable_basic_auth"`
-	BasicAuth       TraefikBasicAuth `yaml:"basic_auth"`
+	APIHost            string           `yaml:"api_host"`
+	EnableBasicAuth    bool             `yaml:"enable_basic_auth"`
+	BasicAuth          TraefikBasicAuth `yaml:"basic_auth"`
+	InsecureSkipVerify bool             `yaml:"insecure_skip_verify"`
 }
 
 type ServiceOverride struct {
@@ -198,7 +201,8 @@ var (
 	// Map used to quickly map a router name to a given service override
 	serviceOverrideMap map[string]ServiceOverride
 	configurationMux   sync.RWMutex
-	httpClient         = &http.Client{Timeout: 5 * time.Second}
+	traefikHTTPClient  *http.Client // HTTP client for Traefik API calls (may have SSL verification disabled)
+	externalHTTPClient *http.Client // HTTP client for external calls (always has SSL verification enabled)
 	// Regex to reliably find Host and PathPrefix.
 	hostRegex = regexp.MustCompile(`Host\(\s*` + "`" + `([^` + "`" + `]+)` + "`" + `\s*\)`)
 	pathRegex = regexp.MustCompile(`PathPrefix\(\s*` + "`" + `([^` + "`" + `]+)` + "`" + `\s*\)`)
@@ -235,6 +239,40 @@ func debugf(format string, v ...interface{}) {
 }
 
 // --- Config & Template Loading ---
+
+// initializeHTTPClients initializes separate HTTP clients for Traefik API and external calls
+func initializeHTTPClients() {
+	// Create Traefik HTTP client (may have SSL verification disabled)
+	traefikTransport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
+	// Configure TLS for Traefik client based on configuration
+	if configuration.Environment.Traefik.InsecureSkipVerify {
+		traefikTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		log.Printf("WARNING: SSL certificate verification is disabled for Traefik API connections")
+	} else {
+		traefikTransport.TLSClientConfig = &tls.Config{}
+	}
+
+	traefikHTTPClient = &http.Client{
+		Timeout:   5 * time.Second,
+		Transport: traefikTransport,
+	}
+
+	// Create external HTTP client (always has SSL verification enabled)
+	// Using the default transport pattern for external calls
+	externalHTTPClient = &http.Client{Timeout: 5 * time.Second}
+}
 
 // loadHTMLTemplate reads the index.html file into memory once.
 func loadHTMLTemplate(templatePath string) {
@@ -301,7 +339,7 @@ func createAndExecuteHTTPRequest(w http.ResponseWriter, method, url string) (*ht
 		return nil, err
 	}
 
-	resp, err := httpClient.Do(req)
+	resp, err := traefikHTTPClient.Do(req)
 	if err != nil {
 		log.Printf("ERROR: Could not fetch from %s: %v", url, err)
 		http.Error(w, "Could not connect to API", http.StatusBadGateway)
@@ -328,7 +366,7 @@ func createAndExecuteHTTPRequestWithContext(w http.ResponseWriter, ctx context.C
 		return nil, err
 	}
 
-	resp, err := httpClient.Do(req)
+	resp, err := traefikHTTPClient.Do(req)
 	if err != nil {
 		log.Printf("ERROR: Could not fetch from %s: %v", url, err)
 		http.Error(w, "Could not connect to API", http.StatusBadGateway)
@@ -917,7 +955,7 @@ func findFavicon(serviceURL string) string {
 
 // findHTMLIcon fetches and parses the service's HTML.
 func findHTMLIcon(serviceURL string) string {
-	resp, err := httpClient.Get(serviceURL)
+	resp, err := externalHTTPClient.Get(serviceURL)
 	if err != nil {
 		return ""
 	}
@@ -943,7 +981,7 @@ func findHTMLIcon(serviceURL string) string {
 
 // isValidImageURL performs a HEAD request to check if a URL points to a valid image.
 func isValidImageURL(url string) bool {
-	resp, err := httpClient.Head(url)
+	resp, err := externalHTTPClient.Head(url)
 	if err != nil {
 		return false
 	}
@@ -1074,7 +1112,7 @@ func getSelfHstIconNames() ([]SelfHstIcon, error) {
 	req, _ := http.NewRequestWithContext(context.Background(), "GET", selfhstAPIURL, nil)
 	req.Header.Set("User-Agent", "TraLa-Dashboard-App")
 
-	resp, err := httpClient.Do(req)
+	resp, err := externalHTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -1124,7 +1162,7 @@ func getSelfHstAppTags() ([]SelfHstApp, error) {
 	req, _ := http.NewRequestWithContext(context.Background(), "GET", selfhstAppsURL, nil)
 	req.Header.Set("User-Agent", "TraLa-Dashboard-App")
 
-	resp, err := httpClient.Do(req)
+	resp, err := externalHTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -1600,8 +1638,9 @@ func loadConfiguration() {
 			RefreshIntervalSeconds: 30,
 			LogLevel:               "info",
 			Traefik: TraefikConfig{
-				APIHost:         "",
-				EnableBasicAuth: false,
+				APIHost:            "",
+				EnableBasicAuth:    false,
+				InsecureSkipVerify: false,
 				BasicAuth: TraefikBasicAuth{
 					Username:     "",
 					Password:     "",
@@ -1677,6 +1716,13 @@ func loadConfiguration() {
 	}
 	if v := os.Getenv("TRAEFIK_BASIC_AUTH_PASSWORD_FILE"); v != "" {
 		config.Environment.Traefik.BasicAuth.PasswordFile = v
+	}
+	if v := os.Getenv("TRAEFIK_INSECURE_SKIP_VERIFY"); v != "" {
+		if skipVerify, err := strconv.ParseBool(v); err == nil {
+			config.Environment.Traefik.InsecureSkipVerify = skipVerify
+		} else {
+			log.Printf("Warning: Invalid TRAEFIK_INSECURE_SKIP_VERIFY '%s', using %t", v, config.Environment.Traefik.InsecureSkipVerify)
+		}
 	}
 	if v := os.Getenv("LOG_LEVEL"); v != "" {
 		config.Environment.LogLevel = v
@@ -1787,6 +1833,7 @@ func loadConfiguration() {
 // --- Main Application Setup ---
 func main() {
 	loadConfiguration()
+	initializeHTTPClients()
 	initI18n()
 	const templatePath = "template"
 	loadHTMLTemplate(templatePath)
