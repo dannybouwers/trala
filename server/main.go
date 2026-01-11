@@ -476,43 +476,45 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 	// Fetch entrypoints from the Traefik API.
 	entryPointsURL := fmt.Sprintf("%s/api/entrypoints", configuration.Environment.Traefik.APIHost)
 	debugf("Fetching entrypoints from Traefik API: %s", entryPointsURL)
+	var entryPointsMap map[string]TraefikEntryPoint
 	resp, err := createAndExecuteHTTPRequest(w, "GET", entryPointsURL)
 	if err != nil {
-		return // Error already handled by createAndExecuteHTTPRequest
-	}
-	defer resp.Body.Close()
-
-	var entryPoints []TraefikEntryPoint
-	if err := json.NewDecoder(resp.Body).Decode(&entryPoints); err != nil {
-		log.Printf("ERROR: Could not decode Traefik Entrypoints API response: %v", err)
-		http.Error(w, "Invalid JSON from Traefik Entrypoints API", http.StatusInternalServerError)
-		return
-	}
-	debugf("Successfully fetched %d entrypoints from Traefik.", len(entryPoints))
-
-	// Create a map for faster lookups.
-	entryPointsMap := make(map[string]TraefikEntryPoint, len(entryPoints))
-	for _, ep := range entryPoints {
-		entryPointsMap[ep.Name] = ep
+		log.Printf("WARNING: Could not fetch entrypoints from Traefik API: %v. Continuing with empty entrypoints.", err)
+		entryPointsMap = make(map[string]TraefikEntryPoint)
+	} else {
+		defer resp.Body.Close()
+		var entryPoints []TraefikEntryPoint
+		if err := json.NewDecoder(resp.Body).Decode(&entryPoints); err != nil {
+			log.Printf("ERROR: Could not decode Traefik Entrypoints API response: %v", err)
+			http.Error(w, "Invalid JSON from Traefik Entrypoints API", http.StatusInternalServerError)
+			return
+		}
+		debugf("Successfully fetched %d entrypoints from Traefik.", len(entryPoints))
+		// Create a map for faster lookups.
+		entryPointsMap = make(map[string]TraefikEntryPoint, len(entryPoints))
+		for _, ep := range entryPoints {
+			entryPointsMap[ep.Name] = ep
+		}
 	}
 
 	// 3. Fetch routers from the Traefik API.
 	routersURL := fmt.Sprintf("%s/api/http/routers", configuration.Environment.Traefik.APIHost)
 	debugf("Fetching routers from Traefik API: %s", routersURL)
 
+	var routers []TraefikRouter
 	resp, err = createAndExecuteHTTPRequest(w, "GET", routersURL)
 	if err != nil {
-		return // Error already handled by createAndExecuteHTTPRequest
+		log.Printf("WARNING: Could not fetch routers from Traefik API: %v. Continuing with manual services only.", err)
+		// Continue with empty routers
+	} else {
+		defer resp.Body.Close()
+		if err := json.NewDecoder(resp.Body).Decode(&routers); err != nil {
+			log.Printf("ERROR: Could not decode Traefik Routers API response: %v", err)
+			http.Error(w, "Invalid JSON from Traefik Routers API", http.StatusInternalServerError)
+			return
+		}
+		debugf("Successfully fetched %d routers from Traefik.", len(routers))
 	}
-	defer resp.Body.Close()
-
-	var routers []TraefikRouter
-	if err := json.NewDecoder(resp.Body).Decode(&routers); err != nil {
-		log.Printf("ERROR: Could not decode Traefik Routers API response: %v", err)
-		http.Error(w, "Invalid JSON from Traefik Routers API", http.StatusInternalServerError)
-		return
-	}
-	debugf("Successfully fetched %d routers from Traefik.", len(routers))
 
 	// 4. Process all routers concurrently to find their icons.
 	var wg sync.WaitGroup
@@ -970,7 +972,9 @@ func findHTMLIcon(serviceURL string) string {
 	selectors := []string{"link[rel='apple-touch-icon']", "link[rel='icon']"}
 	for _, selector := range selectors {
 		if iconPath, exists := doc.Find(selector).Attr("href"); exists {
-			absoluteIconURL, err := resolveURL(serviceURL, iconPath)
+			// Use the final URL after redirects as the base for resolving relative URLs
+			finalURL := resp.Request.URL.String()
+			absoluteIconURL, err := resolveURL(finalURL, iconPath)
 			if err == nil && isValidImageURL(absoluteIconURL) {
 				return absoluteIconURL
 			}
