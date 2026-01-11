@@ -533,9 +533,11 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 
 ## 🙏 Acknowledgements
 
-This project was initially developed in close collaboration with Google's Gemini. I provided the architectural direction, feature requirements, and debugging, while Gemini handled the bulk of the code generation. This transparent, AI-assisted approach allowed for rapid development and iteration.
+This project was started to experience AI-assisted coding. It was initially developed in close collaboration with Google's Gemini. I provided the architectural direction, feature requirements, and debugging, while Gemini handled the bulk of the code generation. I've shared my experience in [this GitHub discussion](https://github.com/dannybouwers/trala/discussions/3).
+
+I continued coding using [Kilo Code](https://kilo.ai), supported by mainly Qwen3, GLM, Grok Code and Mistral Devstral.
 
 Special thanks to:
 
 - **[Maria Letta](https://github.com/MariaLetta/free-gophers-pack)** for the wonderful Gopher logo used in the application.
-- **[selfh.st/icons](https://selfh.st/icons/)** for providing the extensive, high-quality icon database that powers the service icon discovery.
+- **[Ethan Sholly](https://github.com/shollyethan)** for providing the extensive, high-quality icon and apps database at [selfh.st](https://selfh.st) that powers the service icon discovery.
