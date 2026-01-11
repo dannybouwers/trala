@@ -85,7 +85,7 @@ networks:
 
 ## 🔧 Configuration
 
-The application can be configured with a configuration file and with environment variables. Environment overwrite settings from the configuration file. To view the effective configuration after startup, enable debug logging.
+The application can be configured with a configuration file and with environment variables. Environment variables override settings from the configuration file. To view the effective configuration after startup, enable debug logging.
 
 A sample configuration file is shown below:
 
@@ -101,7 +101,7 @@ environment:
   search_engine_url: https://duckduckgo.com/?q=
   refresh_interval_seconds: 30
   log_level: info
-  language: de  # change Language (Default "en").
+  language: de  # Change language (default: en).
   grouping:
     enabled: true
     columns: 3  # Number of columns in grouped view (1-6), default: 3
@@ -142,7 +142,7 @@ services:
       display_name: "Home Assistant"
       icon: "home-assistant.svg"
     - service: "nextcloud"
-      display_name: "NextCloud"
+      display_name: "Nextcloud"
       icon: "nextcloud.svg"
     - service: "portainer"
       display_name: "Portainer"
@@ -329,7 +329,6 @@ If TraLa is deployed in the same Docker network as Traefik, the router should al
 #### Example Configuration
 
 ```yaml
-version: '3.8'
 services:
   traefik:
     image: "traefik:v3.0"
