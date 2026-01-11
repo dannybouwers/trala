@@ -6,17 +6,22 @@ A simple, modern, and dynamic dashboard for your Traefik services. This applicat
 
 ## ✨ Features
 
+### Automation first
 - **Auto-Discovery:** Automatically fetches and displays all HTTP routers from your Traefik instance.
-- **Manual Services:** Add custom services to your dashboard that aren't managed by Traefik (e.g., Reddit, GitHub, external websites).
-- **Advanced Icon Fetching:** Intelligently finds the best icon for each service using a robust, prioritized strategy from selfh.st/icons.
-- **Icon Overrides:** Manually map router names to specific icons for perfect results every time.
-- **Custom Icon Directory:** Mount your own icon directory at `/icons` for ultimate customization with fuzzy matching.
-- **Modern UI:** Clean, responsive interface with automatic Light/Dark mode based on your OS settings.
+- **Icon Auto-Detection:** Intelligently finds the best icon for each service using selfh.st/icons as the main source.
+- **Smart Grouping:** Automatically group services based on tags from selfh.st/apps.
+- **Light/Dark Mode:** Automatic Light/Dark mode based on your OS settings.
+
+### Configuration Overrides
+Everything automatic can be overwritten with a single YAML configuration file, providing ultimate customization control.
+
+### Additional Features
+- **Manual Services:** Add custom services to your dashboard that aren't managed by Traefik.
+- **Service Exclusion:** Hide specific services from the dashboard using router and entry point name exclusions.
 - **Live Search & Sort:** Instantly filter and sort your services by name, URL, or priority.
 - **External Search:** Use the search bar to quickly search the web with your configured search engine.
 - **Lightweight & Multi-Arch:** Built with Go and a minimal Alpine base, the Docker image is small and compatible with `amd64` and `arm64` architectures.
-- **Service Exclusion:** Hide specific services from the dashboard using router name exclusions.
-- **Smart Grouping:** Automatically group services based on tags from selfh.st/apps, with manual overrides and frontend toggle for collapse/expand.
+- **Multi-Language Support:** Available in English, German, and Dutch.
 
 ---
 
