@@ -43,7 +43,7 @@ jobs:
         with:
           images: |
             ghcr.io/${{ github.repository }}
-            dannybouwers/trala
+            ${{ github.repository }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -72,3 +72,10 @@ jobs:
             COMMIT=${{ env.COMMIT }}
             BUILD_TIME=${{ env.BUILD_TIME }}
 
+      - name: Update Docker Hub description
+        uses: peter-evans/dockerhub-description@v5
+        with:
+          username: ${{ env.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+          short-description: ${{ github.event.repository.description }}
+          enable-url-completion: true
