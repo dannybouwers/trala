@@ -970,7 +970,9 @@ func findHTMLIcon(serviceURL string) string {
 	selectors := []string{"link[rel='apple-touch-icon']", "link[rel='icon']"}
 	for _, selector := range selectors {
 		if iconPath, exists := doc.Find(selector).Attr("href"); exists {
-			absoluteIconURL, err := resolveURL(serviceURL, iconPath)
+			// Use the final URL after redirects as the base for resolving relative URLs
+			finalURL := resp.Request.URL.String()
+			absoluteIconURL, err := resolveURL(finalURL, iconPath)
 			if err == nil && isValidImageURL(absoluteIconURL) {
 				return absoluteIconURL
 			}
