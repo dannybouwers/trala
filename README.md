@@ -6,17 +6,22 @@ A simple, modern, and dynamic dashboard for your Traefik services. This applicat
 
 ## ✨ Features
 
+### Automation first
 - **Auto-Discovery:** Automatically fetches and displays all HTTP routers from your Traefik instance.
-- **Manual Services:** Add custom services to your dashboard that aren't managed by Traefik (e.g., Reddit, GitHub, external websites).
-- **Advanced Icon Fetching:** Intelligently finds the best icon for each service using a robust, prioritized strategy from selfh.st/icons.
-- **Icon Overrides:** Manually map router names to specific icons for perfect results every time.
-- **Custom Icon Directory:** Mount your own icon directory at `/icons` for ultimate customization with fuzzy matching.
-- **Modern UI:** Clean, responsive interface with automatic Light/Dark mode based on your OS settings.
+- **Icon Auto-Detection:** Intelligently finds the best icon for each service using selfh.st/icons as the main source.
+- **Smart Grouping:** Automatically group services based on tags from selfh.st/apps.
+- **Light/Dark Mode:** Automatic Light/Dark mode based on your OS settings.
+
+### Configuration Overrides
+Everything automatic can be overwritten with a single YAML configuration file, providing ultimate customization control.
+
+### Additional Features
+- **Manual Services:** Add custom services to your dashboard that aren't managed by Traefik.
+- **Service Exclusion:** Hide specific services from the dashboard using router and entry point name exclusions.
 - **Live Search & Sort:** Instantly filter and sort your services by name, URL, or priority.
 - **External Search:** Use the search bar to quickly search the web with your configured search engine.
 - **Lightweight & Multi-Arch:** Built with Go and a minimal Alpine base, the Docker image is small and compatible with `amd64` and `arm64` architectures.
-- **Service Exclusion:** Hide specific services from the dashboard using router name exclusions.
-- **Smart Grouping:** Automatically group services based on tags from selfh.st/apps, with manual overrides and frontend toggle for collapse/expand.
+- **Multi-Language Support:** Available in English, German, and Dutch.
 
 ---
 
@@ -80,7 +85,7 @@ networks:
 
 ## 🔧 Configuration
 
-The application can be configured with a configuration file and with environment variables. Environment overwrite settings from the configuration file. To view the effective configuration after startup, enable debug logging.
+The application can be configured with a configuration file and with environment variables. Environment variables override settings from the configuration file. To view the effective configuration after startup, enable debug logging.
 
 A sample configuration file is shown below:
 
@@ -92,24 +97,24 @@ version: 3.3
 
 # Environment settings (optional, environment variables take precedence)
 environment:
-  selfhst_icon_url: https://cdn.jsdelivr.net/gh/selfhst/icons/
-  search_engine_url: https://duckduckgo.com/?q=
-  refresh_interval_seconds: 30
-  log_level: info
-  language: de  # change Language (Default "en").
+  selfhst_icon_url: https://cdn.jsdelivr.net/gh/selfhst/icons/  # Base URL of the Selfhst icon endpoint (default: https://cdn.jsdelivr.net/gh/selfhst/icons/)
+  search_engine_url: https://duckduckgo.com/?q=  # The URL for the external search engine (default: https://www.google.com/search?q=)
+  refresh_interval_seconds: 30  # The interval in seconds at which the service list automatically refreshes (default: 30)
+  log_level: info  # Set to `debug` for verbose logging (default: info)
+  language: nl  # The language of the application (default: en)
   grouping:
-    enabled: true
-    columns: 3  # Number of columns in grouped view (1-6), default: 3
-    tag_frequency_threshold: 0.9  # Threshold for excluding tags present in more than 90% of services
+    enabled: true  # Enable or disable the smart grouping feature (default: true)
+    columns: 3  # Number of columns in grouped view for xl (1280px) screen size (1-6) (default: 3)
+    tag_frequency_threshold: 0.9  # Threshold for excluding tags present in more than this percentage of services (0.0-1.0) (default: 0.9)
     min_services_per_group: 2  # Minimum number of services required for a tag to form a group (default: 2)
   traefik:
-    api_host: http://traefik:8080
-    enable_basic_auth: true
-    insecure_skip_verify: false # Skip SSL certificate verification for Traefik API (default: false)
+    api_host: http://traefik:8080  # The full base URL of your Traefik API (default: (none), required)
+    enable_basic_auth: true  # Enable basic auth for Traefik API (default: false)
+    insecure_skip_verify: false  # Skip SSL certificate verification for Traefik API (default: false)
     basic_auth:
-      username: username
-      password: password # mutually exclusive with password_file
-      password_file: /run/secrets/basic_auth_password # mutually exclusive with password
+      username: username  # Username for Traefik basic auth (default: (none))
+      password: password  # Password for Traefik basic auth (default: (none))
+      password_file: /run/secrets/basic_auth_password  # File path for Traefik basic auth password (default: (none))
 
 # Service configuration
 services:
@@ -137,7 +142,7 @@ services:
       display_name: "Home Assistant"
       icon: "home-assistant.svg"
     - service: "nextcloud"
-      display_name: "NextCloud"
+      display_name: "Nextcloud"
       icon: "nextcloud.svg"
     - service: "portainer"
       display_name: "Portainer"
@@ -178,24 +183,13 @@ services:
       priority: 90
 ```
 
-Supported environment variables are shown below.
+Configuration values can be overridden using environment variables. Environment variables **take precedence** over the configuration file. The environment variable names are derived by converting the YAML key path to uppercase and replacing dots with underscores (`_`). E.g. for keys under 'environment.traefik', the variable name is prefixed with 'TRAEFIK_'. Here are some examples:
 
-| Variable                   | Description                                                                                             | Default                                | Required |
-| -------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------- | -------- |
-| `TRAEFIK_API_HOST`         | The full base URL of your Traefik API. From within Docker, this is typically `http://traefik:8080`.        | `(none)`                               | **Yes** |
-| `SELFHST_ICON_URL`         | Base URL of the Selfhst icon endpoint. Customize if you are hosting your own local instance. | `https://cdn.jsdelivr.net/gh/selfhst/icons/`                               | No |
-| `REFRESH_INTERVAL_SECONDS` | The interval in seconds at which the service list automatically refreshes.                                | `30`                                   | No       |
-| `SEARCH_ENGINE_URL`        | The URL for the external search engine. The search query will be appended to this URL.                    | `https://www.google.com/search?q=`     | No       |
-| `LOG_LEVEL`                | Set to `debug` for verbose logging of the icon-finding process. Any other value is silent.              | `info`                                 | No       |
-| `GROUPING_ENABLED`         | Enable or disable the smart grouping feature.                                                            | `true`                                 | No       |
-| `GROUPED_COLUMNS`          | Number of columns in grouped view for xl screen size (1-6).                                              | `3`                                    | No       |
-| `GROUPING_TAG_FREQUENCY_THRESHOLD` | Threshold for excluding tags present in more than this percentage of services (0.0-1.0). | `0.9`                                 | No       |
-| `GROUPING_MIN_SERVICES_PER_GROUP` | Minimum number of services required for a tag to form a group (must be >= 1).              | `2`                                    | No       |
-| `TRAEFIK_BASIC_AUTH_USERNAME`      | Sets the username for the Traefik basic auth scheme if enabled.                                                                                   | `(none)`                                     | No       |
-| `TRAEFIK_BASIC_AUTH_PASSWORD`      | Sets the password for the Traefik basic auth scheme if enabled.                                                                                   | `(none)`                                     | No       |
-| `TRAEFIK_BASIC_AUTH_PASSWORD_FILE` | Sets the file path from where to load the password for the Traefik basic auth scheme if enabled. Takes precedence over setting password directly. | `(none)`                                     | No       |
-| `TRAEFIK_INSECURE_SKIP_VERIFY` | Skip SSL certificate verification for Traefik API connections (similar to `providers.http.tls.insecureSkipVerify` in Traefik). | `false`                                     | No       |
-| `LANGUAGE`                 | The language of the application.                 | `en`                                   | No       |
+- `environment.selfhst_icon_url` → `SELFHST_ICON_URL`
+- `environment.language` → `LANGUAGE`
+- `environment.grouping.enabled` → `GROUPING_ENABLED`
+- `environment.traefik.api_host` → `TRAEFIK_API_HOST`
+- `environment.traefik.basic_auth.username` → `TRAEFIK_BASIC_AUTH_USERNAME`
 
 ### Switching Languages
 
@@ -324,7 +318,6 @@ If TraLa is deployed in the same Docker network as Traefik, the router should al
 #### Example Configuration
 
 ```yaml
-version: '3.8'
 services:
   traefik:
     image: "traefik:v3.0"
@@ -528,9 +521,11 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 
 ## 🙏 Acknowledgements
 
-This project was initially developed in close collaboration with Google's Gemini. I provided the architectural direction, feature requirements, and debugging, while Gemini handled the bulk of the code generation. This transparent, AI-assisted approach allowed for rapid development and iteration.
+This project was started to experience AI-assisted coding. It was initially developed in close collaboration with Google's Gemini. I provided the architectural direction, feature requirements, and debugging, while Gemini handled the bulk of the code generation. I've shared my experience in [this GitHub discussion](https://github.com/dannybouwers/trala/discussions/3).
+
+I continued coding using [Kilo Code](https://kilo.ai), supported by mainly Qwen3, GLM, Grok Code and Mistral Devstral.
 
 Special thanks to:
 
 - **[Maria Letta](https://github.com/MariaLetta/free-gophers-pack)** for the wonderful Gopher logo used in the application.
-- **[selfh.st/icons](https://selfh.st/icons/)** for providing the extensive, high-quality icon database that powers the service icon discovery.
+- **[Ethan Sholly](https://github.com/shollyethan)** for providing the extensive, high-quality icon and apps database at [selfh.st](https://selfh.st) that powers the service icon discovery.
