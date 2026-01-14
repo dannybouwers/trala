@@ -1,5 +1,5 @@
 ### STAGE 1: Build Tailwind CSS ###
-FROM node:25.2.1-alpine AS tailwind-builder
+FROM node:25.3.0-alpine AS tailwind-builder
 
 WORKDIR /app
 
