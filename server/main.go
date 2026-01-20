@@ -473,20 +473,11 @@ func T(id string) string {
 
 // servicesHandler is the main API endpoint. It fetches, processes, and returns all service data.
 func servicesHandler(w http.ResponseWriter, r *http.Request) {
-	// Fetch entrypoints from the Traefik API.
+	// Fetch entrypoints from the Traefik API with pagination support.
 	entryPointsURL := fmt.Sprintf("%s/api/entrypoints", configuration.Environment.Traefik.APIHost)
-	debugf("Fetching entrypoints from Traefik API: %s", entryPointsURL)
-	resp, err := createAndExecuteHTTPRequest(w, "GET", entryPointsURL)
+	entryPoints, err := fetchAllPages[TraefikEntryPoint](w, entryPointsURL)
 	if err != nil {
-		return // Error already handled by createAndExecuteHTTPRequest
-	}
-	defer resp.Body.Close()
-
-	var entryPoints []TraefikEntryPoint
-	if err := json.NewDecoder(resp.Body).Decode(&entryPoints); err != nil {
-		log.Printf("ERROR: Could not decode Traefik Entrypoints API response: %v", err)
-		http.Error(w, "Invalid JSON from Traefik Entrypoints API", http.StatusInternalServerError)
-		return
+		return // Error already handled by fetchAllPages
 	}
 	debugf("Successfully fetched %d entrypoints from Traefik.", len(entryPoints))
 
@@ -496,21 +487,11 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 		entryPointsMap[ep.Name] = ep
 	}
 
-	// 3. Fetch routers from the Traefik API.
+	// Fetch routers from the Traefik API with pagination support.
 	routersURL := fmt.Sprintf("%s/api/http/routers", configuration.Environment.Traefik.APIHost)
-	debugf("Fetching routers from Traefik API: %s", routersURL)
-
-	resp, err = createAndExecuteHTTPRequest(w, "GET", routersURL)
+	routers, err := fetchAllPages[TraefikRouter](w, routersURL)
 	if err != nil {
-		return // Error already handled by createAndExecuteHTTPRequest
-	}
-	defer resp.Body.Close()
-
-	var routers []TraefikRouter
-	if err := json.NewDecoder(resp.Body).Decode(&routers); err != nil {
-		log.Printf("ERROR: Could not decode Traefik Routers API response: %v", err)
-		http.Error(w, "Invalid JSON from Traefik Routers API", http.StatusInternalServerError)
-		return
+		return // Error already handled by fetchAllPages
 	}
 	debugf("Successfully fetched %d routers from Traefik.", len(routers))
 
@@ -553,6 +534,73 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(finalServices)
+}
+
+// fetchAllPages fetches all pages of data from a paginated Traefik API endpoint
+func fetchAllPages[T any](w http.ResponseWriter, baseURL string) ([]T, error) {
+	var allItems []T
+	currentURL := baseURL
+
+	for {
+		// Create request with context
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		req, err := createHTTPRequestWithAuthAndContext(ctx, "GET", currentURL)
+		if err != nil {
+			log.Printf("ERROR: Could not create request for %s: %v", currentURL, err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return nil, err
+		}
+
+		resp, err := traefikHTTPClient.Do(req)
+		if err != nil {
+			log.Printf("ERROR: Could not fetch from %s: %v", currentURL, err)
+			http.Error(w, "Could not connect to API", http.StatusBadGateway)
+			return nil, err
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			log.Printf("ERROR: API returned non-200 status: %s", resp.Status)
+			http.Error(w, "Received non-200 status from API", http.StatusBadGateway)
+			resp.Body.Close()
+			return nil, fmt.Errorf("non-200 status: %s", resp.Status)
+		}
+
+		// Decode the current page
+		var items []T
+		if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
+			log.Printf("ERROR: Could not decode API response from %s: %v", currentURL, err)
+			http.Error(w, "Invalid JSON from API", http.StatusInternalServerError)
+			resp.Body.Close()
+			return nil, err
+		}
+		resp.Body.Close()
+
+		allItems = append(allItems, items...)
+
+		// Check for next page
+		nextPage := resp.Header.Get("X-Next-Page")
+		if nextPage == "" || nextPage == "1" {
+			// No more pages
+			break
+		}
+
+		// Construct URL for next page
+		parsedURL, err := url.Parse(currentURL)
+		if err != nil {
+			log.Printf("ERROR: Could not parse URL %s: %v", currentURL, err)
+			break
+		}
+
+		// Add or update the page query parameter
+		query := parsedURL.Query()
+		query.Set("page", nextPage)
+		parsedURL.RawQuery = query.Encode()
+		currentURL = parsedURL.String()
+	}
+
+	return allItems, nil
 }
 
 func IsValidUrl(str string) bool {
