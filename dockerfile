@@ -24,15 +24,16 @@ ARG BUILD_TIME=unknown
 
 WORKDIR /app
 
-# Copy Go module files and download dependencies
-COPY server/go.mod server/go.sum ./
+# Copy Go project
+COPY cmd cmd/
+COPY src src/
+COPY go.mod go.sum ./
+
+# Download project dependencies
 RUN go mod download
 
-# Copy the source code
-COPY server/main.go .
-
 # Build the application as a statically linked binary with version info
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildTime=${BUILD_TIME}" -o /server .
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildTime=${BUILD_TIME}" -o /server ./cmd/server/
 
 
 ### STAGE 3: Production ###
