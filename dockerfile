@@ -4,8 +4,7 @@ FROM node:25.6.0-alpine AS tailwind-builder
 WORKDIR /app
 
 # Copy Tailwind configuration and source files
-COPY src/input.css /app/src/
-COPY index.html /app/src/
+COPY frontend/input.css frontend/index.html /app/src/
 
 # Install Tailwind CSS and build it
 RUN npm install tailwindcss @tailwindcss/cli
@@ -56,7 +55,7 @@ COPY translations/* /app/translations/
 COPY --from=tailwind-builder /app/src/output.css /app/static/output.css
 
 # Copy the html template into a 'template' directory
-COPY index.html /app/template/index.html
+COPY frontend/index.html /app/template/index.html
 
 # Expose the port the Go server is listening on
 EXPOSE 8080
