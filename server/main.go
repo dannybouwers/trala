@@ -23,8 +23,8 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/lithammer/fuzzysearch/fuzzy"
 	"github.com/nicksnyder/go-i18n/v2/i18n"
+	"go.yaml.in/yaml/v4"
 	"golang.org/x/text/language"
-	"gopkg.in/yaml.v3"
 )
 
 // Version information set at build time
