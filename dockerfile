@@ -13,7 +13,7 @@ RUN npm install tailwindcss @tailwindcss/cli
 RUN npx @tailwindcss/cli -i /app/src/input.css -o /app/src/output.css
 
 ### STAGE 2: Build Go Application ###
-FROM golang:1.25.6-alpine AS builder
+FROM golang:1.26.0-alpine AS builder
 
 # Install build essentials for static compilation
 RUN apk add --no-cache build-base
