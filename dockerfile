@@ -4,12 +4,13 @@ FROM node:25.6.1-alpine AS tailwind-builder
 WORKDIR /app
 
 # Copy Tailwind configuration and source files
-COPY web/html/index.html web/css/input.css /app/src/
+COPY web/html/* web/css/* web/js/* /app/src/
 
 # Install Tailwind CSS and build it
 RUN npm install tailwindcss @tailwindcss/cli
-# Create a minimal tailwind.config.js file
-RUN npx @tailwindcss/cli -i /app/src/input.css -o /app/src/output.css
+
+# Create a minimal tailwind.css file
+RUN npx @tailwindcss/cli -i /app/src/tailwind.src.css -o /app/src/tailwind.css
 
 ### STAGE 2: Build Go Application ###
 FROM golang:1.26.0-alpine AS builder
@@ -42,14 +43,14 @@ WORKDIR /app
 # Copy the compiled Go binary from the builder stage
 COPY --from=builder /server /app/server
 
-# Copy the static frontend files into a 'static' directory
-COPY static/* /app/static/
+# Copy the frontend files into a 'static' directory
+COPY --exclude=*.src.css --exclude=html/index.html web /app/static/
 
 # Copy the translations code
 COPY translations/* /app/translations/
 
 # Copy the compiled Tailwind CSS from the tailwind-builder stage
-COPY --from=tailwind-builder /app/src/output.css /app/static/output.css
+COPY --from=tailwind-builder /app/src/tailwind.css /app/static/css/tailwind.css
 
 # Copy the html template into a 'template' directory
 COPY web/html/index.html /app/template/index.html
