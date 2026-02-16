@@ -1,0 +1,72 @@
+/* TraLa Application Styles */
+
+body {
+    font-family: 'Roboto', sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.logo-font {
+    font-family: 'Roboto Slab', serif;
+}
+
+#api-loading-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background-color: #f59e0b;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+    z-index: 9999;
+    opacity: 0;
+}
+
+#api-loading-bar.loading {
+    transform: scaleX(1);
+    opacity: 1;
+}
+
+#refresh-progress-bar-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background-color: rgba(107, 114, 128, 0.2);
+    z-index: 9998;
+}
+
+#refresh-progress-bar {
+    width: 0%;
+    height: 100%;
+    background-color: #3b82f6;
+    transition: width linear;
+}
+
+.fallback-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 1.5rem;
+    color: white;
+}
+
+#service-grid > a {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.sort-btn {
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.sort-btn.active {
+    background-color: #3b82f6;
+    color: white;
+}
+
+.search-icon-greyscale {
+    filter: grayscale(100%);
+}
