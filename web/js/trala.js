@@ -14,6 +14,19 @@ const getTranslation = (key) => document.body.dataset[key] || '';
 // Constants for hardcoded strings and CSS classes
 const GRID_CLASSES_UNGROUPED = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6';
 
+// HTML escaping function to prevent XSS attacks
+const escapeHtml = (unsafe) => {
+    if (unsafe === null || unsafe === undefined) {
+        return '';
+    }
+    return String(unsafe)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+};
+
 const serviceGrid = document.getElementById('service-grid');
 const searchInput = document.getElementById('search-input');
 const clearButton = document.getElementById('clear-button');
@@ -119,7 +132,7 @@ const createServiceCard = (service) => {
     const firstLetter = service.Name.charAt(0).toUpperCase();
     const bgColor = getColorFromString(service.Name);
 
-    card.innerHTML = `<div class="flex flex-col items-center text-center"><div class="w-16 h-16 mb-4 flex items-center justify-center rounded-lg overflow-hidden"><img class="w-full h-full object-contain icon-img" src="${service.icon}" alt="Icon for ${service.Name}" style="display: block;" /><div class="fallback-icon w-full h-full ${bgColor}" style="display: none;">${firstLetter}</div></div><p class="font-semibold truncate w-full" title="${service.Name}">${service.Name}</p><p class="text-xs text-gray-500 dark:text-gray-400 truncate w-full" title="${service.url}">${service.url.replace('https://', '')}</p></div>`;
+    card.innerHTML = `<div class="flex flex-col items-center text-center"><div class="w-16 h-16 mb-4 flex items-center justify-center rounded-lg overflow-hidden"><img class="w-full h-full object-contain icon-img" src="${escapeHtml(service.icon)}" alt="Icon for ${escapeHtml(service.Name)}" style="display: block;" /><div class="fallback-icon w-full h-full ${bgColor}" style="display: none;">${escapeHtml(firstLetter)}</div></div><p class="font-semibold truncate w-full" title="${escapeHtml(service.Name)}">${escapeHtml(service.Name)}</p><p class="text-xs text-gray-500 dark:text-gray-400 truncate w-full" title="${escapeHtml(service.url)}">${escapeHtml(service.url.replace('https://', ''))}</p></div>`;
 
     const img = card.querySelector('.icon-img');
     const fallback = card.querySelector('.fallback-icon');
@@ -141,7 +154,7 @@ const createServiceCard = (service) => {
 const renderUngroupedView = (servicesToRender) => {
     serviceGrid.className = GRID_CLASSES_UNGROUPED;
     serviceGrid.innerHTML = '';
-    if (servicesToRender.length === 0 && searchInput.value) { serviceGrid.innerHTML = `<p class="col-span-full text-center text-gray-500 dark:text-gray-400">No services found for "${searchInput.value}".</p>`; return; }
+    if (servicesToRender.length === 0 && searchInput.value) { serviceGrid.innerHTML = `<p class="col-span-full text-center text-gray-500 dark:text-gray-400">No services found for "${escapeHtml(searchInput.value)}".</p>`; return; }
 
     for (const service of servicesToRender) {
         const card = createServiceCard(service);
@@ -153,7 +166,7 @@ const renderUngroupedView = (servicesToRender) => {
 const renderGroupedView = (servicesToRender) => {
     serviceGrid.className = getGroupedGridClasses(GROUPING_COLUMNS);
     if (servicesToRender.length === 0) {
-        serviceGrid.innerHTML = searchInput.value ? `<p class="text-center text-gray-500 dark:text-gray-400">No services found for "${searchInput.value}".</p>` : '';
+        serviceGrid.innerHTML = searchInput.value ? `<p class="text-center text-gray-500 dark:text-gray-400">No services found for "${escapeHtml(searchInput.value)}".</p>` : '';
         return;
     }
     serviceGrid.innerHTML = '';
