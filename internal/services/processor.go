@@ -26,7 +26,7 @@ func ProcessRouter(router models.TraefikRouter, entryPoints map[string]models.Tr
 		// Create the pattern to match: entrypoint name followed by a dash
 		prefix := entryPointName + "-"
 		// Check if router name starts with the entrypoint name (case-insensitive)
-		if strings.HasPrefix(strings.ToLower(routerName), strings.ToLower(prefix)) {
+		if len(routerName) > len(prefix) && strings.HasPrefix(strings.ToLower(routerName), strings.ToLower(prefix)) {
 			// Remove the entrypoint prefix
 			routerName = routerName[len(prefix):]
 			debugf("Removed entrypoint prefix '%s' from router name, new name: '%s'", prefix, routerName)

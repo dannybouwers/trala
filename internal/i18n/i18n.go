@@ -68,10 +68,10 @@ func Init() {
 	// Load the translation file into the bundle
 	if _, err := bundle.LoadMessageFile(translationFile); err != nil {
 		log.Fatalf("Failed to load translation file '%s': %v", translationFile, err)
-
-		// Create a localizer for the current language
-		localizer = i18n.NewLocalizer(bundle, lang)
 	}
+
+	// Create a localizer for the current language
+	localizer = i18n.NewLocalizer(bundle, lang)
 }
 
 // T is a helper function for localization. It takes a message ID and returns the localized string.
