@@ -45,7 +45,7 @@ func FindIcon(routerName, serviceURL string, displayNameReplaced string, referen
 		}
 
 		// Fallback to default behavior if extension is not valid
-		iconURL := config.GetSelfhstIconURL() + "png/" + iconValue
+	iconURL := config.GetSelfhstIconURL() + "png/" + strings.ToLower(iconValue) + ".png"
 		debugf("[%s] Found icon via override (fallback): %s", routerName, iconURL)
 		return iconURL
 	}
