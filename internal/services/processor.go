@@ -120,7 +120,7 @@ func GetManualServices() []models.Service {
 				iconURL = config.GetSelfhstIconURL() + strings.TrimPrefix(ext, ".") + "/" + strings.ToLower(iconURL)
 			} else {
 				// Fallback to default behavior if extension is not valid
-				iconURL = config.GetSelfhstIconURL() + "png/" + iconURL
+			iconURL = config.GetSelfhstIconURL() + "png/" + strings.ToLower(iconURL) + ".png"
 			}
 		}
 
