@@ -27,6 +27,7 @@ WORKDIR /app
 
 # Copy Go project
 COPY cmd cmd/
+COPY internal internal/
 COPY go.mod go.sum ./
 
 # Build the application as a statically linked binary with version info
