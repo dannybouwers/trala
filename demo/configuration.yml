@@ -1,0 +1,97 @@
+# TraLa Configuration File
+# Version 3.3
+
+version: 3.3
+
+# Environment settings (optional, environment variables take precedence)
+environment:
+  selfhst_icon_url: https://cdn.jsdelivr.net/gh/selfhst/icons/
+  search_engine_url: https://duckduckgo.com/?q=
+  refresh_interval_seconds: 30
+  log_level: info
+  language: en  # change Language (Default "en").
+  grouping:
+    enabled: true
+    columns: 3  # Number of columns in grouped view (1-6), default: 3
+    tag_frequency_threshold: 0.9  # Threshold for excluding tags present in more than 90% of services
+    min_services_per_group: 2  # Minimum number of services required for a tag to form a group (default: 2)
+  traefik:
+    api_host: http://traefik:8080
+    enable_basic_auth: false
+    insecure_skip_verify: false # Skip SSL certificate verification for Traefik API (default: false)
+    # basic_auth:
+    #   username: username
+    #   password: password # mutually exclusive with password_file
+    #   password_file: /run/secrets/basic_auth_password # mutually exclusive with password
+
+# Service configuration
+services:
+  # Services to exclude from the dashboard
+  exclude:
+    routers:
+      - "traefik-api"  # Hide the Traefik API itself
+      - "admin-panel"  # Hide internal admin interface
+      - "api*" # Hide all routers starting with "api"
+    entrypoints:
+      - "*lan*"        # Hide services using entrypoints containing "lan"
+      - "internal"     # Hide services using the "internal" entrypoint
+
+  # Service overrides for display names and icons
+  overrides:
+    # Override both display name and icon
+    - service: "firefly-core"
+      display_name: "Firefly III"
+      icon: "https://cdn.jsdelivr.net/gh/selfhst/icons/svg/firefly-iii.svg"
+    - service: "unifi-controller"
+      display_name: "UniFi Network"
+      icon: "ubiquiti-unifi.svg"
+      group: "Network"
+    - service: "home-assistant"
+      display_name: "Home Assistant"
+      icon: "home-assistant.svg"
+    - service: "nextcloud"
+      display_name: "NextCloud"
+      icon: "nextcloud.svg"
+    - service: "portainer"
+      display_name: "Portainer"
+      icon: "portainer.svg"
+      group: "Network"
+    - service: "proxmox"
+      group: "Network"
+    
+    # Override only icon
+    - service: "plex"
+      icon: "plex.webp"
+    - service: "unknown-service"
+      icon: "https://selfh.st/content/images/2023/09/favicon-1.png"
+    
+    # Override for search engine icon
+    - service: "searxng-domain"
+      icon: "searxng.svg"
+    - service: "duckduckgo"
+      icon: "https://cdn.jsdelivr.net/gh/MariaLetta/free-gophers-pack/characters/svg/49.svg"
+  
+  # Manually added services (not from Traefik)
+  manual:
+    # Basic manual service with just name and URL
+    - name: "Reddit"
+      url: "https://www.reddit.com"
+      group: "News & Social"
+    
+    # Manual service with custom icon
+    - name: "GitHub"
+      url: "https://github.com"
+      icon: "github.svg"
+    
+    # Manual service with icon and priority
+    - name: "The Verge"
+      url: "https://www.theverge.com"
+      icon: "https://www.theverge.com/favicon.ico"
+      priority: 100
+      group: "News & Social"
+    
+    # Manual service with just name, URL, and priority (icon will be auto-detected)
+    - name: "Hacker News"
+      url: "https://news.ycombinator.com"
+      priority: 90
+      group: "News & Social"

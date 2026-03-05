@@ -2,5 +2,5 @@
 .vscode
 .kilocode
 .env
-demo
-plans
+/local
+/plans
