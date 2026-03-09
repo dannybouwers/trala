@@ -1,0 +1,36 @@
+---
+interface Props {
+  currentPath: string;
+}
+
+const { currentPath } = Astro.props;
+
+const docs = [
+  { path: '/docs/README', title: 'Quick Start' },
+  { path: '/docs/configuration', title: 'Configuration' },
+  { path: '/docs/services', title: 'Services' },
+  { path: '/docs/grouping', title: 'Grouping' },
+  { path: '/docs/icons', title: 'Icons' },
+  { path: '/docs/search', title: 'Search' },
+  { path: '/docs/security', title: 'Security' },
+  { path: '/docs/development', title: 'Development' },
+];
+---
+
+<aside class="hidden lg:block w-64 flex-shrink-0 py-8 pr-8">
+  <nav class="space-y-1">
+    {docs.map((doc) => (
+      <a
+        href={doc.path}
+        class:list={[
+          'block px-3 py-2 rounded-md text-sm font-medium transition-colors',
+          currentPath === doc.path
+            ? 'bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-800'
+        ]}
+      >
+        {doc.title}
+      </a>
+    ))}
+  </nav>
+</aside>

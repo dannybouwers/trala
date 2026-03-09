@@ -1,0 +1,109 @@
+---
+---
+
+<div class="hero-screenshot-container relative w-full max-w-4xl mx-auto overflow-hidden rounded-xl shadow-2xl">
+  <!-- Background that matches theme -->
+  <div 
+    class="absolute inset-0 theme-bg"
+    id="hero-theme-bg"
+  ></div>
+  
+  <!-- Images - shown based on theme -->
+  <img 
+    src="/_media/trala-light.png" 
+    alt="TraLa Dashboard - Light Theme"
+    class="absolute inset-0 w-full h-full screenshot-img"
+    id="hero-screenshot-light"
+  />
+  <img 
+    src="/_media/trala-dark.png" 
+    alt="TraLa Dashboard - Dark Theme"
+    class="absolute inset-0 w-full h-full screenshot-img"
+    id="hero-screenshot-dark"
+  />
+</div>
+
+<style>
+  .hero-screenshot-container {
+    /* Responsive height using viewport units - scales with screen */
+    height: 40vh;
+    min-height: 300px;
+    max-height: 500px;
+  }
+  
+  .theme-bg {
+    z-index: 0;
+  }
+  
+  .screenshot-img {
+    z-index: 1;
+    object-fit: contain;
+    object-position: center;
+  }
+  
+  /* Hide dark image by default, show based on theme */
+  #hero-screenshot-dark {
+    display: none;
+  }
+  
+  :global(.dark) #hero-screenshot-dark {
+    display: block;
+  }
+  
+  :global(.dark) #hero-screenshot-light {
+    display: none;
+  }
+  
+  .theme-bg {
+    background-color: #f9fafb;
+  }
+  
+  :global(.dark) .theme-bg {
+    background-color: #111827;
+  }
+</style>
+
+<script>
+  function initHeroScreenshot() {
+    const lightScreenshot = document.getElementById('hero-screenshot-light');
+    const darkScreenshot = document.getElementById('hero-screenshot-dark');
+    const themeBg = document.getElementById('hero-theme-bg');
+    
+    if (!lightScreenshot || !darkScreenshot || !themeBg) {
+      console.log('HeroScreenshot: Missing elements');
+      return;
+    }
+    
+    function updateTheme() {
+      const isDark = document.documentElement.classList.contains('dark');
+      
+      if (isDark) {
+        darkScreenshot.style.display = 'block';
+        lightScreenshot.style.display = 'none';
+        themeBg.style.backgroundColor = '#111827';
+      } else {
+        lightScreenshot.style.display = 'block';
+        darkScreenshot.style.display = 'none';
+        themeBg.style.backgroundColor = '#f9fafb';
+      }
+    }
+    
+    // Initial update
+    updateTheme();
+    
+    // Watch for theme changes
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'class') {
+          updateTheme();
+        }
+      });
+    });
+    
+    observer.observe(document.documentElement, { attributes: true });
+  }
+  
+  // Initialize on page load
+  initHeroScreenshot();
+  document.addEventListener('astro:page-load', initHeroScreenshot);
+</script>
