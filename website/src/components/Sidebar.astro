@@ -9,6 +9,60 @@ interface Props {
 const { currentPath } = Astro.props;
 ---
 
+<!-- Hamburger Menu Button (visible on screens < 1024px) -->
+<button
+  id="hamburger-button"
+  type="button"
+  class="lg:hidden fixed top-16 left-4 z-50 p-2 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+  aria-label="Toggle navigation menu"
+  aria-expanded="false"
+  aria-controls="mobile-menu"
+  style="min-width: 44px; min-height: 44px;"
+>
+  <svg id="hamburger-icon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+  </svg>
+  <svg id="close-icon" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+  </svg>
+</button>
+
+<!-- Mobile Menu Overlay -->
+<div
+  id="mobile-menu-overlay"
+  class="lg:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity duration-300 opacity-0 pointer-events-none"
+  aria-hidden="true"
+></div>
+
+<!-- Mobile Sidebar (slide-out menu) -->
+<aside
+  id="mobile-menu"
+  class="lg:hidden fixed top-0 left-0 z-40 w-64 h-full bg-white dark:bg-gray-900 shadow-xl transform -translate-x-full transition-transform duration-300 ease-in-out"
+  role="dialog"
+  aria-modal="true"
+  aria-label="Navigation menu"
+  aria-hidden="true"
+>
+  <div class="py-8 pr-8 pl-4 pt-32">
+    <nav class="space-y-1">
+      {docs.map((doc) => (
+        <a
+          href={doc.path}
+          class:list={[
+            'block px-3 py-3 rounded-md text-base font-medium transition-colors',
+            isCurrentPage(currentPath, doc.path)
+              ? 'bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-800'
+          ]}
+        >
+          {doc.title}
+        </a>
+      ))}
+    </nav>
+  </div>
+</aside>
+
+<!-- Desktop Sidebar (visible on screens >= 1024px) -->
 <aside class="hidden lg:block w-64 flex-shrink-0 py-8 pr-8">
   <nav class="space-y-1">
     {docs.map((doc) => (
@@ -26,3 +80,80 @@ const { currentPath } = Astro.props;
     ))}
   </nav>
 </aside>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const hamburgerButton = document.getElementById('hamburger-button');
+    const mobileMenu = document.getElementById('mobile-menu');
+    const mobileMenuOverlay = document.getElementById('mobile-menu-overlay');
+    const hamburgerIcon = document.getElementById('hamburger-icon');
+    const closeIcon = document.getElementById('close-icon');
+    
+    let isMenuOpen = false;
+
+    function openMenu() {
+      isMenuOpen = true;
+      mobileMenu?.classList.remove('-translate-x-full');
+      mobileMenu?.classList.add('translate-x-0');
+      mobileMenu?.setAttribute('aria-hidden', 'false');
+      
+      mobileMenuOverlay?.classList.remove('opacity-0', 'pointer-events-none');
+      mobileMenuOverlay?.classList.add('opacity-100', 'pointer-events-auto');
+      
+      hamburgerIcon?.classList.add('hidden');
+      closeIcon?.classList.remove('hidden');
+      
+      hamburgerButton?.setAttribute('aria-expanded', 'true');
+      
+      // Lock body scroll
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeMenu() {
+      isMenuOpen = false;
+      mobileMenu?.classList.remove('translate-x-0');
+      mobileMenu?.classList.add('-translate-x-full');
+      mobileMenu?.setAttribute('aria-hidden', 'true');
+      
+      mobileMenuOverlay?.classList.remove('opacity-100', 'pointer-events-auto');
+      mobileMenuOverlay?.classList.add('opacity-0', 'pointer-events-none');
+      
+      hamburgerIcon?.classList.remove('hidden');
+      closeIcon?.classList.add('hidden');
+      
+      hamburgerButton?.setAttribute('aria-expanded', 'false');
+      
+      // Unlock body scroll
+      document.body.style.overflow = '';
+    }
+
+    function toggleMenu() {
+      if (isMenuOpen) {
+        closeMenu();
+      } else {
+        openMenu();
+      }
+    }
+
+    // Toggle menu on hamburger button click
+    hamburgerButton?.addEventListener('click', toggleMenu);
+
+    // Close menu on overlay click
+    mobileMenuOverlay?.addEventListener('click', closeMenu);
+
+    // Close menu on Escape key press
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && isMenuOpen) {
+        closeMenu();
+        // Return focus to hamburger button for accessibility
+        hamburgerButton?.focus();
+      }
+    });
+
+    // Close menu when clicking a navigation link (mobile)
+    const mobileMenuLinks = mobileMenu?.querySelectorAll('a');
+    mobileMenuLinks?.forEach((link) => {
+      link.addEventListener('click', closeMenu);
+    });
+  });
+</script>

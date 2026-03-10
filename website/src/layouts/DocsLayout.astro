@@ -18,7 +18,7 @@ const { title, currentPath } = Astro.props;
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex min-h-[calc(100vh-4rem)]">
       <Sidebar currentPath={currentPath} />
-      <main class="flex-1 py-8">
+      <main class="flex-1 py-8 pl-4 lg:pl-0">
         <article class="prose dark:prose-invert max-w-none">
           <slot />
         </article>
