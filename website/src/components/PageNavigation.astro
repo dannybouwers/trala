@@ -1,5 +1,5 @@
 ---
-import { docs } from '../data/docs';
+import { getPageNavigation } from '../utils/navigation';
 
 interface Props {
   currentPath: string;
@@ -7,12 +7,8 @@ interface Props {
 
 const { currentPath } = Astro.props;
 
-// Find current page index
-const currentIndex = docs.findIndex((doc) => doc.path === currentPath);
-
-// Determine previous and next pages
-const previousPage = currentIndex > 0 ? docs[currentIndex - 1] : null;
-const nextPage = currentIndex < docs.length - 1 ? docs[currentIndex + 1] : null;
+// Get navigation data
+const { previous: previousPage, next: nextPage } = getPageNavigation(currentPath);
 ---
 
 <nav class="flex items-center justify-between mt-12 pt-8 border-t border-gray-200 dark:border-gray-700">

@@ -1,5 +1,6 @@
 ---
 import { docs } from '../data/docs';
+import { isCurrentPage } from '../utils/navigation';
 
 interface Props {
   currentPath: string;
@@ -15,7 +16,7 @@ const { currentPath } = Astro.props;
         href={doc.path}
         class:list={[
           'block px-3 py-2 rounded-md text-sm font-medium transition-colors',
-          currentPath === doc.path
+          isCurrentPage(currentPath, doc.path)
             ? 'bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
             : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-800'
         ]}

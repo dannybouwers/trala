@@ -1,6 +1,3 @@
----
----
-
 <div class="hero-screenshot-container relative w-full max-w-4xl mx-auto">
   <!-- Images - shown based on theme -->
   <img 
@@ -18,17 +15,18 @@
 </div>
 
 <script>
+  import { isDarkMode } from '../utils/theme';
+
   function initHeroScreenshot() {
     const lightScreenshot = document.getElementById('hero-screenshot-light');
     const darkScreenshot = document.getElementById('hero-screenshot-dark');
     
     if (!lightScreenshot || !darkScreenshot) {
-      console.log('HeroScreenshot: Missing elements');
       return;
     }
     
     function updateTheme() {
-      const isDark = document.documentElement.classList.contains('dark');
+      const isDark = isDarkMode();
       
       if (isDark) {
         darkScreenshot.style.display = 'block';

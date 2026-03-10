@@ -12,12 +12,14 @@
   </svg>
 </button>
 
-<script is:inline>
+<script>
+  import { toggleTheme, isDarkMode } from '../utils/theme';
+
   const darkIcon = document.getElementById('theme-toggle-dark-icon');
   const lightIcon = document.getElementById('theme-toggle-light-icon');
   
   function updateIcons() {
-    const isDark = document.documentElement.classList.contains('dark');
+    const isDark = isDarkMode();
     darkIcon?.classList.toggle('hidden', !isDark);
     lightIcon?.classList.toggle('hidden', isDark);
   }
@@ -25,9 +27,7 @@
   updateIcons();
   
   document.getElementById('theme-toggle')?.addEventListener('click', function() {
-    const isDark = document.documentElement.classList.contains('dark');
-    document.documentElement.classList.toggle('dark', !isDark);
-    localStorage.setItem('color-theme', !isDark ? 'dark' : 'light');
+    toggleTheme();
     updateIcons();
   });
 </script>

@@ -23,17 +23,9 @@ const { title, description = 'Trala - Traefik Landing Page' } = Astro.props;
   </head>
   <body class="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors">
     <slot />
-    <script is:inline>
-      // Check for saved theme preference in localStorage first
-      const savedTheme = localStorage.getItem('color-theme');
-      
-      // If no saved preference, fall back to system preference
-      if (savedTheme) {
-        document.documentElement.classList.toggle('dark', savedTheme === 'dark');
-      } else {
-        const theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        document.documentElement.classList.toggle('dark', theme === 'dark');
-      }
+    <script>
+      import { initTheme } from '../utils/theme';
+      initTheme();
     </script>
   </body>
 </html>

@@ -17,6 +17,6 @@ const { Content } = await render(doc);
 const currentPath = `/docs/${doc.id.replace('.md', '')}`;
 ---
 
-<DocsLayout title={doc.body?.slice(0, 50) || 'Documentation'} currentPath={currentPath}>
+<DocsLayout title={doc.data.title || doc.id.replace('.md', '')} currentPath={currentPath}>
   <Content />
 </DocsLayout>
