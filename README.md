@@ -12,6 +12,12 @@ A modern, dynamic dashboard for Traefik services.
 - **Multi-Language** — Available in English, German, and Dutch
 - **Multi-Arch** — Built for amd64 and arm64 architectures
 
+## Screenshots
+
+![TraLa Dashboard in Light Mode](docs/_media/trala-light.png "TraLa dashboard showing Traefik services in light mode with a clean grid layout")
+
+![TraLa Dashboard in Dark Mode](docs/_media/trala-dark.png "TraLa dashboard showing Traefik services in dark mode with a responsive grid")
+
 ## 🚀 Quick Start
 
 ```yaml
@@ -27,6 +33,7 @@ For the full documentation, visit **[trala.fyi](https://trala.fyi)**.
 ## 📖 Documentation
 
 - [Quick Start](docs/README.md)
+- [Setup](docs/setup.md)
 - [Configuration](docs/configuration.md)
 - [Services](docs/services.md)
 - [Grouping](docs/grouping.md)
