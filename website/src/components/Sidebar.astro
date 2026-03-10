@@ -1,20 +1,11 @@
 ---
+import { docs } from '../data/docs';
+
 interface Props {
   currentPath: string;
 }
 
 const { currentPath } = Astro.props;
-
-const docs = [
-  { path: '/docs/README', title: 'Quick Start' },
-  { path: '/docs/configuration', title: 'Configuration' },
-  { path: '/docs/services', title: 'Services' },
-  { path: '/docs/grouping', title: 'Grouping' },
-  { path: '/docs/icons', title: 'Icons' },
-  { path: '/docs/search', title: 'Search' },
-  { path: '/docs/security', title: 'Security' },
-  { path: '/docs/development', title: 'Development' },
-];
 ---
 
 <aside class="hidden lg:block w-64 flex-shrink-0 py-8 pr-8">

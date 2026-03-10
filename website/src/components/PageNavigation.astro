@@ -1,0 +1,74 @@
+---
+import { docs } from '../data/docs';
+
+interface Props {
+  currentPath: string;
+}
+
+const { currentPath } = Astro.props;
+
+// Find current page index
+const currentIndex = docs.findIndex((doc) => doc.path === currentPath);
+
+// Determine previous and next pages
+const previousPage = currentIndex > 0 ? docs[currentIndex - 1] : null;
+const nextPage = currentIndex < docs.length - 1 ? docs[currentIndex + 1] : null;
+---
+
+<nav class="flex items-center justify-between mt-12 pt-8 border-t border-gray-200 dark:border-gray-700">
+  {/* Previous button */}
+  {previousPage ? (
+    <a
+      href={previousPage.path}
+      class="group flex items-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+    >
+      <svg
+        class="w-4 h-4 mr-2 transition-transform group-hover:-translate-x-1"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M15 19l-7-7 7-7"
+        />
+      </svg>
+      <span class="flex flex-col">
+        <span class="text-xs text-gray-500 dark:text-gray-400">Previous</span>
+        <span>{previousPage.title}</span>
+      </span>
+    </a>
+  ) : (
+    <div />
+  )}
+
+  {/* Next button */}
+  {nextPage ? (
+    <a
+      href={nextPage.path}
+      class="group flex items-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-right"
+    >
+      <span class="flex flex-col">
+        <span class="text-xs text-gray-500 dark:text-gray-400">Next</span>
+        <span>{nextPage.title}</span>
+      </span>
+      <svg
+        class="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M9 5l7 7-7 7"
+        />
+      </svg>
+    </a>
+  ) : (
+    <div />
+  )}
+</nav>

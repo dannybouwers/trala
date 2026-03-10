@@ -3,6 +3,7 @@ import Layout from './Layout.astro';
 import Header from '../components/Header.astro';
 import Sidebar from '../components/Sidebar.astro';
 import Footer from '../components/Footer.astro';
+import PageNavigation from '../components/PageNavigation.astro';
 
 interface Props {
   title: string;
@@ -21,6 +22,7 @@ const { title, currentPath } = Astro.props;
         <article class="prose dark:prose-invert max-w-none">
           <slot />
         </article>
+        <PageNavigation currentPath={currentPath} />
       </main>
     </div>
   </div>

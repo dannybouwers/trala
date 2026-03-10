@@ -45,12 +45,3 @@ services:
       - "traefik.http.services.trala.loadbalancer.server.port=8080"
       - "traefik.http.services.trala.loadbalancer.server.scheme=http"
 ```
-
-## Next Steps
-
-- **[Configuration](configuration.md)** — Learn how to customize TraLa with configuration files and environment variables
-- **[Services](services.md)** — Exclude services, add overrides, or add manual services
-- **[Grouping](grouping.md)** — Enable smart grouping to organize your services
-- **[Icons](icons.md)** — Configure icon detection and custom icons
-- **[Search](search.md)** — Set up external search engine
-- **[Security](security.md)** — Secure Traefik API access with authentication
