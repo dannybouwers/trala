@@ -4,5 +4,4 @@
 .env
 /local
 /plans
-/docs/dist
 /website/src/content/docs

@@ -6,7 +6,7 @@ import remarkGithubAlerts from 'remark-github-alerts';
 export default defineConfig({
   site: 'https://trala.fyi',
   srcDir: './src',
-  outDir: '../docs/dist',
+  outDir: './dist',
   publicDir: './public',
   integrations: [
     tailwind(),
