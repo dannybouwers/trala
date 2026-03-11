@@ -1,0 +1,219 @@
+networks:
+  traefik-net:
+    driver: bridge
+
+services:
+  traefik:
+    image: "traefik:latest"
+    container_name: traefik
+    restart: unless-stopped
+    command:
+      - "--api.insecure=true" # Required for the dashboard to access the API
+      - "--api.dashboard=true" # Enable the Traefik dashboard
+      - "--providers.docker=true" # Enable Docker provider
+      - "--providers.docker.exposedbydefault=false" # Don't expose containers by default
+      - "--entrypoints.web.address=:80" # HTTP entrypoint
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure" # Redirect HTTP to HTTPS
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https" # Redirect scheme to HTTPS
+      - "--entrypoints.websecure.address=:443" # HTTPS entrypoint
+      - "--entrypoints.websecure.http.tls=true" # Enable TLS for websecure
+    ports:
+      - "80:80" # HTTP
+      - "443:443" # HTTPS
+      - "8080:8080" # Traefik dashboard
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro" # Docker socket for provider
+    networks:
+      - traefik-net # A shared network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.localhost`)"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.services.traefik.loadbalancer.server.port=8080"
+
+  trala:
+    # Use either GitHub Container Registry (primary) or Docker Hub (secondary)
+    # image: ghcr.io/dannybouwers/trala:latest  # Primary source
+    # image: dannybouwers/trala:latest       # Secondary source (Docker Hub)
+    build: ../.
+    container_name: trala
+    restart: unless-stopped
+    networks:
+      - traefik-net # Must be on the same network as Traefik
+    volumes:
+      # Optional: Mount a configuration file. See "Configuration" section below.
+      - ./configuration.yml:/config/configuration.yml:ro
+      # Optional: Mount a directory with custom icons. See "Configuration" section below.
+      # - ./icons:/icons:ro
+    environment:
+      # Required: The internal Docker network address for the Traefik API
+      - TRAEFIK_API_HOST=http://traefik:8080
+      # Optional: Change refresh interval
+      - REFRESH_INTERVAL_SECONDS=30
+      # Optional: Change the search engine
+      - SEARCH_ENGINE_URL=https://duckduckgo.com/?q=
+      # Optional: Set to "debug" for verbose icon-finding logs
+      - LOG_LEVEL=info
+    labels:
+      # --- Traefik Labels to expose TraLa itself ---
+      - "traefik.enable=true"
+      - "traefik.http.routers.trala.rule=Host(`trala.localhost`)"
+      - "traefik.http.routers.trala.entrypoints=websecure"
+      - "traefik.http.routers.trala.tls=true"
+      - "traefik.http.services.trala.loadbalancer.server.port=8080"
+      - "traefik.http.services.trala.loadbalancer.server.scheme=http"
+
+  # Mock services using traefik/whoami
+  subscription-manager:
+    image: "traefik/whoami"
+    container_name: subscription-manager
+    networks:
+      - traefik-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.subscription-manager.rule=Host(`subscription-manager.localhost`)"
+      - "traefik.http.routers.subscription-manager.entrypoints=websecure"
+      - "traefik.http.services.subscription-manager.loadbalancer.server.port=80"
+
+  firefly-iii:
+    image: "traefik/whoami"
+    container_name: firefly-iii
+    networks:
+      - traefik-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.firefly-iii.rule=Host(`firefly-iii.localhost`)"
+      - "traefik.http.routers.firefly-iii.entrypoints=websecure"
+      - "traefik.http.services.firefly-iii.loadbalancer.server.port=80"
+
+  spliit:
+    image: "traefik/whoami"
+    container_name: spliit
+    networks:
+      - traefik-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.spliit.rule=Host(`spliit.localhost`)"
+      - "traefik.http.routers.spliit.entrypoints=websecure"
+      - "traefik.http.services.spliit.loadbalancer.server.port=80"
+
+  watchstate:
+    image: "traefik/whoami"
+    container_name: watchstate
+    networks:
+      - traefik-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.watchstate.rule=Host(`watchstate.localhost`)"
+      - "traefik.http.routers.watchstate.entrypoints=websecure"
+      - "traefik.http.services.watchstate.loadbalancer.server.port=80"
+
+  jellyfin:
+    image: "traefik/whoami"
+    container_name: jellyfin
+    networks:
+      - traefik-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jellyfin.rule=Host(`jellyfin.localhost`)"
+      - "traefik.http.routers.jellyfin.entrypoints=websecure"
+      - "traefik.http.services.jellyfin.loadbalancer.server.port=80"
+
+  plex:
+    image: "traefik/whoami"
+    container_name: plex
+    networks:
+      - traefik-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.plex.rule=Host(`plex.localhost`)"
+      - "traefik.http.routers.plex.entrypoints=websecure"
+      - "traefik.http.services.plex.loadbalancer.server.port=80"
+
+  portainer:
+    image: "traefik/whoami"
+    container_name: portainer
+    networks:
+      - traefik-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.portainer.rule=Host(`portainer.localhost`)"
+      - "traefik.http.routers.portainer.entrypoints=websecure"
+      - "traefik.http.services.portainer.loadbalancer.server.port=80"
+
+  unifi-controller:
+    image: "traefik/whoami"
+    container_name: unifi-controller
+    networks:
+      - traefik-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.unifi-controller.rule=Host(`unifi.localhost`)"
+      - "traefik.http.routers.unifi-controller.entrypoints=websecure"
+      - "traefik.http.services.unifi-controller.loadbalancer.server.port=80"
+
+  unknown-service:
+    image: "traefik/whoami"
+    container_name: unknown-service
+    networks:
+      - traefik-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.unknown-service.rule=Host(`unknown.localhost`)"
+      - "traefik.http.routers.unknown-service.entrypoints=websecure"
+      - "traefik.http.services.unknown-service.loadbalancer.server.port=80"
+
+  vaultwarden:
+    image: "traefik/whoami"
+    container_name: vaultwarden
+    networks:
+      - traefik-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vaultwarden.rule=Host(`vaultwarden.localhost`)"
+      - "traefik.http.routers.vaultwarden.entrypoints=websecure"
+      - "traefik.http.services.vaultwarden.loadbalancer.server.port=80"
+
+  home-assistant:
+    image: "traefik/whoami"
+    container_name: home-assistant
+    networks:
+      - traefik-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.home-assistant.rule=Host(`home-assistant.localhost`)"
+      - "traefik.http.routers.home-assistant.entrypoints=websecure"
+      - "traefik.http.services.home-assistant.loadbalancer.server.port=80"
+
+  nextcloud:
+    image: "traefik/whoami"
+    container_name: nextcloud
+    networks:
+      - traefik-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nextcloud.rule=Host(`nextcloud.localhost`)"
+      - "traefik.http.routers.nextcloud.entrypoints=websecure"
+      - "traefik.http.services.nextcloud.loadbalancer.server.port=80"
+
+  adguard:
+    image: "traefik/whoami"
+    container_name: adguard
+    networks:
+      - traefik-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.adguard.rule=Host(`adguard.localhost`)"
+      - "traefik.http.routers.adguard.entrypoints=websecure"
+      - "traefik.http.services.adguard.loadbalancer.server.port=80"
+
+  proxmox:
+    image: "traefik/whoami"
+    container_name: proxmox
+    networks:
+      - traefik-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.proxmox.rule=Host(`proxmox.localhost`)"
+      - "traefik.http.routers.proxmox.entrypoints=websecure"
+      - "traefik.http.services.proxmox.loadbalancer.server.port=80"

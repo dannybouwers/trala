@@ -1,0 +1,58 @@
+<div class="hero-screenshot-container relative w-full max-w-4xl mx-auto">
+  <!-- Images - shown based on theme -->
+  <img 
+    src="/_media/trala-light.png" 
+    alt="TraLa Dashboard - Light Theme"
+    class="w-full h-full screenshot-img rounded-xl shadow-2xl"
+    id="hero-screenshot-light"
+  />
+  <img 
+    src="/_media/trala-dark.png" 
+    alt="TraLa Dashboard - Dark Theme"
+    class="w-full h-full screenshot-img rounded-xl shadow-2xl"
+    id="hero-screenshot-dark"
+  />
+</div>
+
+<script>
+  import { isDarkMode } from '../utils/theme';
+
+  function initHeroScreenshot() {
+    const lightScreenshot = document.getElementById('hero-screenshot-light');
+    const darkScreenshot = document.getElementById('hero-screenshot-dark');
+    
+    if (!lightScreenshot || !darkScreenshot) {
+      return;
+    }
+    
+    function updateTheme() {
+      const isDark = isDarkMode();
+      
+      if (isDark) {
+        darkScreenshot.style.display = 'block';
+        lightScreenshot.style.display = 'none';
+      } else {
+        lightScreenshot.style.display = 'block';
+        darkScreenshot.style.display = 'none';
+      }
+    }
+    
+    // Initial update
+    updateTheme();
+    
+    // Watch for theme changes
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'class') {
+          updateTheme();
+        }
+      });
+    });
+    
+    observer.observe(document.documentElement, { attributes: true });
+  }
+  
+  // Initialize on page load
+  initHeroScreenshot();
+  document.addEventListener('astro:page-load', initHeroScreenshot);
+</script>

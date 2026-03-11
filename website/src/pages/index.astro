@@ -1,0 +1,131 @@
+---
+import LandingLayout from '../layouts/LandingLayout.astro';
+import HeroScreenshot from '../components/HeroScreenshot.astro';
+
+const features = [
+  {
+    title: 'Auto-Discovery',
+    description: 'Automatically fetches and displays all HTTP routers from Traefik',
+    icon: '🔍'
+  },
+  {
+    title: 'Smart Grouping',
+    description: 'Auto-groups services based on tags from selfh.st/apps',
+    icon: '📁'
+  },
+  {
+    title: 'Live Search',
+    description: 'Filter services by name, URL, or priority',
+    icon: '⚡'
+  },
+  {
+    title: 'Icon Auto-Detection',
+    description: 'Intelligent service icons from selfh.st/icons',
+    icon: '🏷️'
+  },
+  {
+    title: 'Dark Mode',
+    description: 'Automatic theme based on your OS settings',
+    icon: '🌙'
+  },
+  {
+    title: 'Multi-Language',
+    description: 'Support for English, German, and Dutch',
+    icon: '🌍'
+  }
+];
+---
+
+<LandingLayout title="TraLa - Modern Traefik Dashboard">
+  <!-- Hero Section -->
+  <section class="relative overflow-hidden bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800 py-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-12">
+        <div class="flex items-center justify-center mb-6">
+          <img src="/_media/gopher.svg" alt="TraLa" class="h-16 w-16" />
+        </div>
+        <h1 class="text-4xl md:text-5xl lg:text-6xl font-bold text-blue-500 mb-4 font-display">
+          TraLa
+        </h1>
+        <p class="text-xl md:text-2xl text-gray-600 dark:text-gray-300 mb-8">
+          Modern Traefik Dashboard
+        </p>
+        <p class="text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto mb-8">
+          A beautiful, modern dashboard for managing your Traefik services. 
+          Discover, group, and monitor your services with ease.
+        </p>
+        <div class="flex flex-col sm:flex-row gap-4 justify-center">
+          <a href="/docs/README" class="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors">
+            Get Started
+          </a>
+          <a href="https://github.com" class="inline-flex items-center justify-center px-6 py-3 border border-gray-300 dark:border-gray-600 text-base font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+            View on GitHub
+          </a>
+        </div>
+      </div>
+      
+      <!-- Hero Screenshot -->
+      <div class="mt-12">
+        <HeroScreenshot />
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section class="py-20 bg-white dark:bg-gray-900">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-16">
+        <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+          Features
+        </h2>
+        <p class="text-lg text-gray-500 dark:text-gray-400">
+          One overview of your Self-hosted services
+        </p>
+      </div>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {features.map((feature) => (
+          <div class="p-6 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 transition-colors">
+            <div class="text-4xl mb-4">{feature.icon}</div>
+            <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+              {feature.title}
+            </h3>
+            <p class="text-gray-600 dark:text-gray-400">
+              {feature.description}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Quick Start Section -->
+  <section class="py-20 bg-gray-50 dark:bg-gray-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-16">
+        <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+          Quick Start
+        </h2>
+        <p class="text-lg text-gray-500 dark:text-gray-400">
+          Get up and running in minutes
+        </p>
+      </div>
+      
+      <div class="max-w-3xl mx-auto">
+        <div class="bg-gray-900 dark:bg-gray-950 rounded-xl p-6 overflow-x-auto">
+          <pre class="text-sm text-gray-100"><code>services:
+  trala:
+    image: ghcr.io/dannybouwers/trala:latest
+    environment:
+      - TRAEFIK_API_HOST=http://traefik:8080
+    ports:
+      - "8080:8080"</code></pre>
+        </div>
+        
+        <p class="mt-6 text-center text-gray-600 dark:text-gray-400">
+          Check the <a href="/docs/configuration" class="text-blue-600 dark:text-blue-400 hover:underline">Configuration</a> page for more options.
+        </p>
+      </div>
+    </div>
+  </section>
+</LandingLayout>

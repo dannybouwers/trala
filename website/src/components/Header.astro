@@ -1,0 +1,20 @@
+---
+import ThemeToggle from './ThemeToggle.astro';
+---
+
+<header class="sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex justify-between items-center h-16">
+      <div class="flex items-center">
+        <a href="/" class="flex items-center space-x-2">
+          <img src="/_media/gopher.svg" alt="TraLa" class="h-8 w-8" />
+          <span class="text-xl font-bold text-blue-500 font-display">TraLa</span>
+        </a>
+      </div>
+      <nav class="hidden md:flex items-center space-x-8">
+        <a href="/docs/README" class="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors">Docs</a>
+        <ThemeToggle />
+      </nav>
+    </div>
+  </div>
+</header>
