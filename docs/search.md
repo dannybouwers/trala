@@ -14,14 +14,15 @@ environment:
 
 Set via environment variable: `SEARCH_ENGINE_URL=https://duckduckgo.com/?q=`
 
-### Available Search Engines
+### Example Search Engines
 
 | Search Engine | URL |
 |---------------|-----|
 | DuckDuckGo | `https://duckduckgo.com/?q=` |
 | Google | `https://www.google.com/search?q=` |
 | Bing | `https://www.bing.com/search?q=` |
-| Startpage | `https://www.startpage.com/do/search?q=` |
+| Qwant | `https://www.qwant.com/?q=` |
+| Ecosia | `https://www.ecosia.org/search?q=` |
 
 ## Search Engine Icon
 
