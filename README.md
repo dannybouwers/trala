@@ -28,7 +28,7 @@ services:
       - TRAEFIK_API_HOST=http://traefik:8080
 ```
 
-For the full documentation, visit **[trala.fyi](https://trala.fyi)**.
+For the full documentation, visit **[trala.fyi](https://www.trala.fyi)**.
 
 ## 📖 Documentation
 
