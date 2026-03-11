@@ -21,12 +21,6 @@ Everything automatic can be overwritten with a single YAML configuration file, p
 - **Lightweight & Multi-Arch:** Built with Go and a minimal Alpine base, the Docker image is small and compatible with `amd64` and `arm64` architectures.
 - **Multi-Language Support:** Available in English, German, and Dutch.
 
-## Screenshots
-
-![TraLa Dashboard in Light Mode](_media/trala-light.png "TraLa dashboard showing Traefik services in light mode with a clean grid layout")
-
-![TraLa Dashboard in Dark Mode](_media/trala-dark.png "TraLa dashboard showing Traefik services in dark mode with a responsive grid")
-
 ## Quick start
 
 Get TraLa up and running in minutes. Add TraLa to your existing `docker-compose.yml`:
