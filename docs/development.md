@@ -72,7 +72,7 @@ TraLa includes a demo stack for testing. The demo uses Docker Compose and includ
    docker compose down
    ```
 
-> [!NOTE]
+> [!IMPORTANT]
 > The demo uses HTTPS with self-signed certificates. You may need to accept the security warning in your browser or add the certificate to your trust store.
 
 ### Demo Services

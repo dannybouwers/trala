@@ -160,6 +160,8 @@ environment:
       password: <PASSWORD>
 ```
 
-?> While Traefik uses password hashes, TraLa requires the plain password.
+> [!WARNING]
+> While Traefik uses password hashes, TraLa requires the plain password.
 
-!> The Traefik API will be reachable on all routes using `api@internal`. Ensure authentication is enabled on all routers that expose the dashboard!
+> [!IMPORTANT]
+> The Traefik API will be reachable on all routes using `api@internal`. Ensure authentication is enabled on all routers that expose the dashboard!
