@@ -24,10 +24,7 @@ func CalculateGroups(services []models.Service) []models.Service {
 	remainingIndices := make([]int, 0, len(services))
 	for i, s := range services {
 		// Check if the service already has a group set (from override)
-		if s.Group != "" {
-			// Service already has a group assigned, keep it
-			services[i].Group = s.Group
-		} else {
+		if s.Group == "" {
 			remainingIndices = append(remainingIndices, i)
 		}
 	}

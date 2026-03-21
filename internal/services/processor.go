@@ -10,6 +10,7 @@ import (
 
 	"server/internal/config"
 	"server/internal/icons"
+	"server/internal/logging"
 	"server/internal/models"
 	"server/internal/traefik"
 )
@@ -210,16 +211,8 @@ func ExtractServiceNameFromURL(searchURL string) string {
 	}
 
 	// Use the second-level domain (e.g., "example" from "www.example.com")
-	if len(parts) >= 2 {
-		return parts[len(parts)-2]
-	}
-
-	return hostname
+	return parts[len(parts)-2]
 }
 
-// debugf logs a message only if LOG_LEVEL is set to "debug".
-func debugf(format string, v ...interface{}) {
-	if config.GetLogLevel() == "debug" {
-		log.Printf("DEBUG: "+format, v...)
-	}
-}
+// debugf is a convenience alias for logging.Debugf.
+var debugf = logging.Debugf
