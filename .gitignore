@@ -5,3 +5,6 @@
 /local
 /plans
 /website/src/content/docs
+node_modules/
+/server
+*.exe
