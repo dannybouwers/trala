@@ -48,9 +48,11 @@ const expandCollapseAll = document.getElementById('expand-collapse-all');
 
 let allServices = [];
 let allExpanded = true;
+let hasLoadedOnce = false; // Track if initial load succeeded
 let refreshIntervalId = null;
 let currentSort = 'name';
 let groupingEnabled = false; // Will be set after fetching server config
+const collapsedGroups = new Set(); // Preserve collapse state across re-renders
 const colors = ['bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-yellow-500', 'bg-lime-500', 'bg-green-500', 'bg-emerald-500', 'bg-teal-500', 'bg-cyan-500', 'bg-sky-500', 'bg-blue-500', 'bg-indigo-500', 'bg-violet-500', 'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500', 'bg-rose-500'];
 
 const getColorFromString = (str) => { let hash = 0; for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); } return colors[Math.abs(hash % colors.length)]; };
@@ -59,21 +61,21 @@ const getColorFromString = (str) => { let hash = 0; for (let i = 0; i < str.leng
 const getGroupedGridClasses = (columns) => {
     // Clamp the value between 1 and 6
     columns = Math.max(1, Math.min(6, columns));
-    
+
     // Generate responsive grid classes
     let gridClasses = 'grid gap-4';
-    
+
     // Always 1 column on mobile
     gridClasses += ' grid-cols-1';
-    
+
     // Add medium screen size only if columns > 1, never more than xl columns
     if (columns > 1) {
         gridClasses += ' md:grid-cols-2';
     }
-    
+
     // Add xl screen size with the configured number of columns
     gridClasses += ` xl:grid-cols-${columns}`;
-    
+
     return gridClasses;
 };
 
@@ -84,7 +86,7 @@ const getCardGridClasses = (groupColumns) => {
 
     // Calculate card columns: total cards should be 6 on xl, so cardColumns = 6 / groupColumns
     const cardColumns = Math.floor(6 / groupColumns);
-    
+
     // Always 2 columns on mobile and medium screens
     return `group-content grid grid-cols-2 xl:grid-cols-${cardColumns} gap-4`;
 };
@@ -132,7 +134,7 @@ const createServiceCard = (service) => {
     const firstLetter = service.Name.charAt(0).toUpperCase();
     const bgColor = getColorFromString(service.Name);
 
-    card.innerHTML = `<div class="flex flex-col items-center text-center"><div class="w-16 h-16 mb-4 flex items-center justify-center rounded-lg overflow-hidden"><img class="w-full h-full object-contain icon-img" src="${escapeHtml(service.icon)}" alt="Icon for ${escapeHtml(service.Name)}" style="display: block;" /><div class="fallback-icon w-full h-full ${bgColor}" style="display: none;">${escapeHtml(firstLetter)}</div></div><p class="font-semibold truncate w-full" title="${escapeHtml(service.Name)}">${escapeHtml(service.Name)}</p><p class="text-xs text-gray-500 dark:text-gray-400 truncate w-full" title="${escapeHtml(service.url)}">${escapeHtml(service.url.replace('https://', ''))}</p></div>`;
+    card.innerHTML = `<div class="flex flex-col items-center text-center"><div class="w-16 h-16 mb-4 flex items-center justify-center rounded-lg overflow-hidden"><img class="w-full h-full object-contain icon-img" src="${escapeHtml(service.icon)}" alt="Icon for ${escapeHtml(service.Name)}" loading="lazy" style="display: block;" /><div class="fallback-icon w-full h-full ${bgColor}" style="display: none;">${escapeHtml(firstLetter)}</div></div><p class="font-semibold truncate w-full" title="${escapeHtml(service.Name)}">${escapeHtml(service.Name)}</p><p class="text-xs text-gray-500 dark:text-gray-400 truncate w-full" title="${escapeHtml(service.url)}">${escapeHtml(service.url.replace('https://', ''))}</p></div>`;
 
     const img = card.querySelector('.icon-img');
     const fallback = card.querySelector('.fallback-icon');
@@ -184,15 +186,34 @@ const renderGroupedView = (servicesToRender) => {
         const header = document.createElement('h2');
         header.className = 'text-xl font-bold mb-4 cursor-pointer border-b border-gray-300 dark:border-gray-700 pb-2';
         header.textContent = group;
-        let isExpanded = true;
-        header.addEventListener('click', () => {
+        header.setAttribute('role', 'button');
+        header.setAttribute('tabindex', '0');
+
+        // Determine initial state from persisted collapse state
+        let isExpanded = !collapsedGroups.has(group);
+        header.setAttribute('aria-expanded', String(isExpanded));
+
+        const toggleGroup = () => {
             isExpanded = !isExpanded;
             content.style.display = isExpanded ? 'grid' : 'none';
+            header.setAttribute('aria-expanded', String(isExpanded));
+            if (isExpanded) {
+                collapsedGroups.delete(group);
+            } else {
+                collapsedGroups.add(group);
+            }
+        };
+        header.addEventListener('click', toggleGroup);
+        header.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleGroup();
+            }
         });
         groupDiv.appendChild(header);
         const content = document.createElement('div');
         content.className = getCardGridClasses(GROUPING_COLUMNS);
-        content.style.display = allExpanded ? 'grid' : 'none';
+        content.style.display = isExpanded ? 'grid' : 'none';
         grouped[group].sort((a, b) => b.priority - a.priority).forEach(service => {
             const card = createServiceCard(service);
             content.appendChild(card);
@@ -213,17 +234,17 @@ const renderServices = (servicesToRender) => {
 const applyFiltersAndSort = () => {
     const searchTerm = searchInput.value.toLowerCase();
     let filteredServices = allServices.filter(service => service.Name.toLowerCase().includes(searchTerm) || service.url.toLowerCase().includes(searchTerm));
-    
+
     let sortedServices = [...filteredServices];
     switch (currentSort) {
-        case 'name': 
-            sortedServices.sort((a, b) => a.Name.localeCompare(b.Name)); 
+        case 'name':
+            sortedServices.sort((a, b) => a.Name.localeCompare(b.Name));
             break;
-        case 'url': 
-            sortedServices.sort((a, b) => a.url.localeCompare(b.url)); 
+        case 'url':
+            sortedServices.sort((a, b) => a.url.localeCompare(b.url));
             break;
-        case 'priority': 
-            sortedServices.sort((a, b) => b.priority - a.priority); 
+        case 'priority':
+            sortedServices.sort((a, b) => b.priority - a.priority);
             break;
     }
     renderServices(sortedServices);
@@ -234,26 +255,33 @@ const fetchAndProcessServices = async () => {
     hideErrorPage();
     try {
         const response = await fetch(API_URL);
-        if (!response.ok) { 
+        if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`API request failed: ${response.status} - ${errorText}`); 
+            throw new Error(`API request failed: ${response.status} - ${errorText}`);
         }
         let data = await response.json();
-        if (!Array.isArray(data)) { 
-            showErrorPage("Invalid data from API."); 
-            allServices = []; 
-        } else { 
-            const currentHref = window.location.href.replace(/\/$/, ""); 
+        if (!Array.isArray(data)) {
+            if (!hasLoadedOnce) {
+                showErrorPage("Invalid data from API.");
+            }
+            allServices = [];
+        } else {
+            const currentHref = window.location.href.replace(/\/$/, "");
             allServices = data.filter(service => {
                 const serviceHref = service.url.replace(/\/$/, "");
                 return serviceHref !== currentHref;
             });
+            hasLoadedOnce = true;
         }
         applyFiltersAndSort();
     } catch (error) {
         console.error("Error fetching services:", error);
-        showErrorPage(error.message);
-        allServices = [];
+        // On refresh failure after initial success, keep showing stale data
+        if (hasLoadedOnce) {
+            console.warn("Refresh failed, keeping existing data visible.");
+        } else {
+            showErrorPage(error.message);
+        }
     } finally {
         setApiLoading(false);
     }
@@ -264,13 +292,13 @@ const initialize = () => {
     const applyTheme = (isDark) => { document.documentElement.classList.toggle('dark', isDark); };
     applyTheme(prefersDark.matches);
     prefersDark.addEventListener('change', (e) => applyTheme(e.matches));
-    
+
     searchInput.addEventListener('input', () => {
         // Show/hide clear button based on input content
         clearButton.style.display = searchInput.value ? 'block' : 'none';
         applyFiltersAndSort();
     });
-    
+
     // Clear search when clear button is clicked
     clearButton.addEventListener('click', () => {
         searchInput.value = '';
@@ -278,7 +306,7 @@ const initialize = () => {
         applyFiltersAndSort();
         searchInput.focus();
     });
-    
+
     sortControls.addEventListener('click', (e) => {
         if (e.target.tagName === 'BUTTON') {
             currentSort = e.target.dataset.sort;
@@ -290,7 +318,7 @@ const initialize = () => {
 
     groupToggle.addEventListener('click', () => {
         groupingEnabled = !groupingEnabled;
-        localStorage.setItem('groupingEnabled', groupingEnabled);
+        try { localStorage.setItem('groupingEnabled', groupingEnabled); } catch (e) { /* Safari private browsing */ }
         groupToggle.classList.toggle('active');
         if (groupingEnabled) allExpanded = true;
         applyFiltersAndSort();
@@ -298,14 +326,28 @@ const initialize = () => {
 
     expandCollapseAll.addEventListener('click', () => {
         allExpanded = !allExpanded;
+        expandCollapseAll.setAttribute('aria-expanded', String(allExpanded));
+        if (allExpanded) {
+            collapsedGroups.clear();
+        }
         const groupContents = document.querySelectorAll('.group-content');
         groupContents.forEach(content => {
             content.style.display = allExpanded ? 'grid' : 'none';
         });
+        // Update all group header aria-expanded
+        document.querySelectorAll('.group-section h2[role="button"]').forEach(header => {
+            header.setAttribute('aria-expanded', String(allExpanded));
+        });
+        if (!allExpanded) {
+            // Mark all groups as collapsed
+            document.querySelectorAll('.group-section h2[role="button"]').forEach(header => {
+                collapsedGroups.add(header.textContent);
+            });
+        }
     });
 
     searchForm.addEventListener('submit', (e) => { e.preventDefault(); if (searchInput.value) { window.open(`${SEARCH_ENGINE_URL}${encodeURIComponent(searchInput.value)}`, '_blank'); } });
-    
+
 
     // Fetch all application status information in a single call
     const fetchApplicationStatus = async () => {
@@ -314,9 +356,9 @@ const initialize = () => {
             if (!response.ok) {
                 throw new Error(`Status request failed: ${response.status}`);
             }
-            
+
             const status = await response.json();
-            
+
             // Update version information
             const versionElement = document.getElementById('version-number');
             const versionLink = document.getElementById('version-link');
@@ -325,7 +367,7 @@ const initialize = () => {
                 versionElement.textContent = version;
                 versionLink.href = `https://github.com/dannybouwers/trala/releases/tag/${version}`;
             }
-            
+
             // Update configuration status warning
             if (status.config && configWarning) {
                 // Show warning if config is incompatible OR if there's a warning message
@@ -334,7 +376,7 @@ const initialize = () => {
                     configWarning.title = status.config.warningMessage || 'Configuration issue detected';
                 }
             }
-            
+
             // Update frontend configuration
             if (status.frontend) {
                 SEARCH_ENGINE_URL = status.frontend.searchEngineURL || SEARCH_ENGINE_URL;
@@ -360,23 +402,25 @@ const initialize = () => {
                     groupingEnabled = status.frontend.groupingEnabled;
                     groupControls.style.display = status.frontend.groupingEnabled ? 'flex' : 'none';
                     // Load persisted toggle state if available
-                    const storedGrouping = localStorage.getItem('groupingEnabled');
-                    if (storedGrouping !== null) {
-                        groupingEnabled = storedGrouping === 'true';
-                    }
+                    try {
+                        const storedGrouping = localStorage.getItem('groupingEnabled');
+                        if (storedGrouping !== null) {
+                            groupingEnabled = storedGrouping === 'true';
+                        }
+                    } catch (e) { /* Safari private browsing */ }
                     groupToggle.classList.toggle('active', groupingEnabled);
                 }
-                
+
                 // Update grouped columns configuration
                 if (status.frontend.groupingColumns !== undefined) {
                     GROUPING_COLUMNS = status.frontend.groupingColumns;
                 }
             }
-            
+
             return status;
         } catch (error) {
             console.error('Error fetching application status:', error);
-            
+
             // Set fallback values
             const versionElement = document.getElementById('version-number');
             const versionLink = document.getElementById('version-link');
@@ -384,7 +428,7 @@ const initialize = () => {
                 versionElement.textContent = 'dev';
                 versionLink.href = 'https://github.com/dannybouwers/trala/releases';
             }
-            
+
             return null;
         }
     };
@@ -392,13 +436,13 @@ const initialize = () => {
     const startApp = async () => {
         // Fetch all application status information in a single call
         await fetchApplicationStatus();
-        
+
         updateGreeting();
         updateClock();
         setInterval(() => {
             updateClock();
             updateGreeting();
-        }, 6000);
+        }, 60000);
 
         await fetchAndProcessServices();
         if (refreshIntervalId) clearInterval(refreshIntervalId);
@@ -410,7 +454,7 @@ const initialize = () => {
             }, REFRESH_INTERVAL_SECONDS * 1000);
         }
     };
-    
+
     startApp();
 };
 
