@@ -220,7 +220,14 @@ func Load() {
 
 	if config.Environment.LogLevel == "debug" {
 		log.Printf("Using effective configuration:")
-		out, err := yaml.Marshal(config)
+		configCopy := config
+		if configCopy.Environment.Traefik.BasicAuth.Password != "" {
+			configCopy.Environment.Traefik.BasicAuth.Password = "***REDACTED***"
+		}
+		if configCopy.Environment.Traefik.BasicAuth.PasswordFile != "" {
+			configCopy.Environment.Traefik.BasicAuth.PasswordFile = "***REDACTED***"
+		}
+		out, err := yaml.Marshal(configCopy)
 		if err != nil {
 			fmt.Printf("Failed to marshal configuration: %v\n", err)
 			return

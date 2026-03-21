@@ -5,6 +5,7 @@ package icons
 import (
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -162,9 +163,58 @@ func GetServiceTags(reference string) []string {
 	return []string{}
 }
 
+// isPrivateIP checks if an IP address is in a private, loopback, or link-local range.
+func isPrivateIP(ip net.IP) bool {
+	privateRanges := []struct {
+		network string
+	}{
+		{"10.0.0.0/8"},
+		{"172.16.0.0/12"},
+		{"192.168.0.0/16"},
+		{"127.0.0.0/8"},
+		{"169.254.0.0/16"},
+		{"::1/128"},
+		{"fc00::/7"},
+		{"fe80::/10"},
+	}
+	for _, r := range privateRanges {
+		_, cidr, _ := net.ParseCIDR(r.network)
+		if cidr.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// isAllowedURL checks if a URL resolves to a non-private IP address.
+// Returns false for URLs that resolve to private/loopback/link-local addresses (SSRF protection).
+func isAllowedURL(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	hostname := u.Hostname()
+	if hostname == "" {
+		return false
+	}
+	ips, err := net.LookupIP(hostname)
+	if err != nil {
+		return false
+	}
+	for _, ip := range ips {
+		if isPrivateIP(ip) {
+			return false
+		}
+	}
+	return true
+}
+
 // FindFavicon checks for the existence of /favicon.ico at the service URL.
 // Returns the favicon URL if it exists and is a valid image, otherwise empty string.
 func FindFavicon(serviceURL string) string {
+	if !isAllowedURL(serviceURL) {
+		return ""
+	}
 	u, err := url.Parse(serviceURL)
 	if err != nil {
 		return ""
@@ -180,6 +230,9 @@ func FindFavicon(serviceURL string) string {
 // It looks for apple-touch-icon and icon link rels in order.
 func FindHTMLIcon(serviceURL string) string {
 	if externalHTTPClient == nil {
+		return ""
+	}
+	if !isAllowedURL(serviceURL) {
 		return ""
 	}
 
