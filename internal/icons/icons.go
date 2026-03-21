@@ -3,6 +3,7 @@
 package icons
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -10,6 +11,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"server/internal/config"
 
@@ -186,35 +188,42 @@ func isPrivateIP(ip net.IP) bool {
 	return false
 }
 
-// isAllowedURL checks if a URL resolves to a non-private IP address.
-// Returns false for URLs that resolve to private/loopback/link-local addresses (SSRF protection).
-func isAllowedURL(rawURL string) bool {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return false
+// NewSSRFSafeClient creates an http.Client with a custom Transport that blocks
+// connections to private/loopback/link-local IP addresses at dial time,
+// preventing SSRF via DNS rebinding.
+func NewSSRFSafeClient(timeout time.Duration) *http.Client {
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(addr)
+			if err != nil {
+				return nil, fmt.Errorf("failed to split host/port: %w", err)
+			}
+			ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+			if err != nil {
+				return nil, fmt.Errorf("DNS lookup failed: %w", err)
+			}
+			if len(ips) == 0 {
+				return nil, fmt.Errorf("no IP addresses found for host: %s", host)
+			}
+			for _, ip := range ips {
+				if isPrivateIP(ip.IP) {
+					return nil, fmt.Errorf("blocked connection to private/reserved IP %s for host %s", ip.IP, host)
+				}
+			}
+			// Connect directly to the first resolved IP to prevent re-resolution
+			dialer := &net.Dialer{}
+			return dialer.DialContext(ctx, network, net.JoinHostPort(ips[0].IP.String(), port))
+		},
 	}
-	hostname := u.Hostname()
-	if hostname == "" {
-		return false
+	return &http.Client{
+		Timeout:   timeout,
+		Transport: transport,
 	}
-	ips, err := net.LookupIP(hostname)
-	if err != nil {
-		return false
-	}
-	for _, ip := range ips {
-		if isPrivateIP(ip) {
-			return false
-		}
-	}
-	return true
 }
 
 // FindFavicon checks for the existence of /favicon.ico at the service URL.
 // Returns the favicon URL if it exists and is a valid image, otherwise empty string.
 func FindFavicon(serviceURL string) string {
-	if !isAllowedURL(serviceURL) {
-		return ""
-	}
 	u, err := url.Parse(serviceURL)
 	if err != nil {
 		return ""
@@ -230,9 +239,6 @@ func FindFavicon(serviceURL string) string {
 // It looks for apple-touch-icon and icon link rels in order.
 func FindHTMLIcon(serviceURL string) string {
 	if externalHTTPClient == nil {
-		return ""
-	}
-	if !isAllowedURL(serviceURL) {
 		return ""
 	}
 

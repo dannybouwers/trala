@@ -24,7 +24,7 @@ var (
 func noDirListingFileServer(dir string) http.Handler {
 	fs := http.FileServer(http.Dir(dir))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/") {
+		if r.URL.Path == "" || strings.HasSuffix(r.URL.Path, "/") {
 			http.NotFound(w, r)
 			return
 		}
@@ -39,8 +39,8 @@ func main() {
 	// Initialize HTTP clients
 	traefik.InitializeHTTPClient()
 
-	// Create external HTTP client for icon discovery (always has SSL verification enabled)
-	externalHTTPClient := &http.Client{Timeout: 5 * time.Second}
+	// Create SSRF-safe HTTP client for icon discovery (blocks private/loopback IPs at dial time)
+	externalHTTPClient := icons.NewSSRFSafeClient(5 * time.Second)
 	icons.InitHTTPClient(externalHTTPClient)
 
 	// Set debug mode for icons package based on log level
