@@ -158,6 +158,13 @@ func Load() {
 		}
 	}
 
+	// Validate LOG_LEVEL
+	validLogLevels := map[string]bool{"info": true, "debug": true, "warn": true, "error": true}
+	if config.Environment.LogLevel != "" && !validLogLevels[config.Environment.LogLevel] {
+		log.Printf("Warning: Unknown LOG_LEVEL '%s', defaulting to 'info'", config.Environment.LogLevel)
+		config.Environment.LogLevel = "info"
+	}
+
 	// Step 5: post-processing / validation
 	if config.Environment.Traefik.APIHost == "" {
 		log.Printf("ERROR: Traefik API host is not set. Provide via env var or config file.")
@@ -192,14 +199,8 @@ func Load() {
 				os.Exit(1)
 			}
 		} else {
-			config.Environment.Traefik.BasicAuth.Password = string(data)
+			config.Environment.Traefik.BasicAuth.Password = strings.TrimSpace(string(data))
 		}
-	}
-
-	// Build map that maps a router name to a ServiceOverride for fast lookups
-	serviceOverrideMap = make(map[string]models.ServiceOverride, len(config.Services.Overrides))
-	for _, o := range config.Services.Overrides {
-		serviceOverrideMap[o.Service] = o
 	}
 
 	log.Printf("Loaded %d router excludes from %s", len(config.Services.Exclude.Routers), ConfigurationFilePath)
@@ -207,9 +208,9 @@ func Load() {
 	log.Printf("Loaded %d service overrides from %s", len(config.Services.Overrides), ConfigurationFilePath)
 
 	// Validate configuration version (without basic auth validation since we already did it above)
-	configCompatibilityStatus = ValidateConfigVersion(config.Version, basicAuthWarning)
-	if !configCompatibilityStatus.IsCompatible {
-		log.Printf("WARNING: %s", configCompatibilityStatus.WarningMessage)
+	status := ValidateConfigVersion(config.Version, basicAuthWarning)
+	if !status.IsCompatible {
+		log.Printf("WARNING: %s", status.WarningMessage)
 	}
 
 	// Now that all validation is complete, lock the mutex and update the global configuration
@@ -217,6 +218,13 @@ func Load() {
 	defer configurationMux.Unlock()
 
 	configuration = config
+	configCompatibilityStatus = status
+
+	// Build map that maps a router name to a ServiceOverride for fast lookups (inside lock)
+	serviceOverrideMap = make(map[string]models.ServiceOverride, len(config.Services.Overrides))
+	for _, o := range config.Services.Overrides {
+		serviceOverrideMap[o.Service] = o
+	}
 
 	if config.Environment.LogLevel == "debug" {
 		log.Printf("Using effective configuration:")
@@ -454,32 +462,42 @@ func GetInsecureSkipVerify() bool {
 	return configuration.Environment.Traefik.InsecureSkipVerify
 }
 
-// GetServiceOverrideMap returns the map of service overrides by router name.
+// GetServiceOverrideMap returns a copy of the map of service overrides by router name.
 func GetServiceOverrideMap() map[string]models.ServiceOverride {
 	configurationMux.RLock()
 	defer configurationMux.RUnlock()
-	return serviceOverrideMap
+	result := make(map[string]models.ServiceOverride, len(serviceOverrideMap))
+	for k, v := range serviceOverrideMap {
+		result[k] = v
+	}
+	return result
 }
 
-// GetExcludeRouters returns the list of router exclusion patterns.
+// GetExcludeRouters returns a copy of the list of router exclusion patterns.
 func GetExcludeRouters() []string {
 	configurationMux.RLock()
 	defer configurationMux.RUnlock()
-	return configuration.Services.Exclude.Routers
+	result := make([]string, len(configuration.Services.Exclude.Routers))
+	copy(result, configuration.Services.Exclude.Routers)
+	return result
 }
 
-// GetExcludeEntrypoints returns the list of entrypoint exclusion patterns.
+// GetExcludeEntrypoints returns a copy of the list of entrypoint exclusion patterns.
 func GetExcludeEntrypoints() []string {
 	configurationMux.RLock()
 	defer configurationMux.RUnlock()
-	return configuration.Services.Exclude.Entrypoints
+	result := make([]string, len(configuration.Services.Exclude.Entrypoints))
+	copy(result, configuration.Services.Exclude.Entrypoints)
+	return result
 }
 
-// GetManualServices returns the list of manually configured services.
+// GetManualServices returns a copy of the list of manually configured services.
 func GetManualServices() []models.ManualService {
 	configurationMux.RLock()
 	defer configurationMux.RUnlock()
-	return configuration.Services.Manual
+	result := make([]models.ManualService, len(configuration.Services.Manual))
+	copy(result, configuration.Services.Manual)
+	return result
 }
 
 // GetConfigCompatibilityStatus returns the configuration compatibility status.

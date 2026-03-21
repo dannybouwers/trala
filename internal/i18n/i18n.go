@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/nicksnyder/go-i18n/v2/i18n"
 	"go.yaml.in/yaml/v4"
@@ -34,6 +35,12 @@ func Init() {
 	lang := config.GetLanguage()
 	if lang == "" {
 		log.Printf("Language not set - using fallback language: %s", fallbackLang)
+		lang = fallbackLang
+	}
+
+	// Validate language code to prevent path traversal
+	if strings.ContainsAny(lang, "/\\.") || len(lang) > 10 {
+		log.Printf("Warning: Invalid language code '%s', falling back to '%s'", lang, fallbackLang)
 		lang = fallbackLang
 	}
 
