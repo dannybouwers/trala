@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"server/internal/debug"
 	"server/internal/models"
 
 	"github.com/lithammer/fuzzysearch/fuzzy"
@@ -264,26 +265,14 @@ func FindUserIcon(routerName string) string {
 	return ""
 }
 
-// debugf logs a message only if LOG_LEVEL is set to "debug".
-func debugf(format string, v ...interface{}) {
-	// Import config to check log level
-	if isDebugLogLevel() {
-		log.Printf("DEBUG: "+format, v...)
-	}
-}
+// debugf is a wrapper for the shared debug utility
+var debugf = debug.Debugf
 
-// isDebugLogLevel checks if the log level is set to debug
-func isDebugLogLevel() bool {
-	// This will be implemented by checking the config package
-	// We avoid importing config directly to prevent circular dependencies
-	// The log level check is done via a callback set during initialization
-	return debugLogEnabled
-}
-
-// debugLogEnabled is set by SetDebugMode
-var debugLogEnabled = false
-
-// SetDebugMode enables or disables debug logging for the icons package.
+// SetDebugMode is deprecated and has no effect.
+// Debug logging is now controlled by the debug package via config.GetLogLevel().
+// This function is kept for backward compatibility with any external callers.
 func SetDebugMode(enabled bool) {
-	debugLogEnabled = enabled
+	// No-op: debug level is now determined by the debug package
+	// This function is kept for backward compatibility with any external callers
+	_ = enabled // Suppress unused parameter warning
 }

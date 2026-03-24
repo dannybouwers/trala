@@ -19,6 +19,7 @@ import (
 	"github.com/nicksnyder/go-i18n/v2/i18n"
 
 	"server/internal/config"
+	"server/internal/debug"
 	appi18n "server/internal/i18n"
 	"server/internal/icons"
 	"server/internal/models"
@@ -270,9 +271,5 @@ func StatusHandler(w http.ResponseWriter, r *http.Request) {
 
 // --- Helper Functions ---
 
-// debugf logs a message only if LOG_LEVEL is set to "debug".
-func debugf(format string, v ...interface{}) {
-	if config.GetLogLevel() == "debug" {
-		log.Printf("DEBUG: "+format, v...)
-	}
-}
+// debugf is a wrapper for the shared debug utility
+var debugf = debug.Debugf
