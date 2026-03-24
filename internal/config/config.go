@@ -79,8 +79,29 @@ func Load() {
 		}
 	} else {
 		if err := yaml.Unmarshal(data, &config); err != nil {
-			log.Printf("Warning: Could not parse configuration file %s: %v", ConfigurationFilePath, err)
+			log.Printf("ERROR: Failed to parse configuration file: %v", err)
+			log.Printf("FATAL: The configuration file contains invalid YAML. Please check the syntax.")
+			log.Printf("HINT: Common issues include:")
+			log.Printf("  - Incorrect indentation (use spaces, not tabs)")
+			log.Printf("  - Missing colons after field names")
+			log.Printf("  - Unquoted strings with special characters")
+			os.Exit(1)
 		}
+
+		// After successful YAML unmarshal, add debug logging
+		// Use the log level that was potentially set in config file (if any)
+		debugLog := func(format string, v ...interface{}) {
+			// We can't use config.Environment.LogLevel yet, so check env var
+			if os.Getenv("LOG_LEVEL") == "debug" {
+				log.Printf("DEBUG: "+format, v...)
+			}
+		}
+
+		debugLog("Successfully parsed configuration file:")
+		debugLog("  - Version: %s", config.Version)
+		debugLog("  - Exclude routers: %v", config.Services.Exclude.Routers)
+		debugLog("  - Exclude entrypoints: %v", config.Services.Exclude.Entrypoints)
+		debugLog("  - Service overrides: %d items", len(config.Services.Overrides))
 	}
 
 	// Step 3: validate basic auth password configuration before environment overrides
