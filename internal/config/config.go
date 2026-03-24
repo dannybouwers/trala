@@ -179,6 +179,37 @@ func Load() {
 		}
 	}
 
+	// After environment overrides, log effective configuration
+	debugLogEffectiveConfig := func(format string, v ...interface{}) {
+		if os.Getenv("LOG_LEVEL") == "debug" {
+			log.Printf("DEBUG: "+format, v...)
+		}
+	}
+
+	debugLogEffectiveConfig("=== Effective Configuration ===")
+	debugLogEffectiveConfig("Traefik API: %s", config.Environment.Traefik.APIHost)
+	debugLogEffectiveConfig("Log Level: %s", config.Environment.LogLevel)
+	debugLogEffectiveConfig("Language: %s", config.Environment.Language)
+	debugLogEffectiveConfig("Refresh Interval: %d seconds", config.Environment.RefreshIntervalSeconds)
+	debugLogEffectiveConfig("Grouping Enabled: %t", config.Environment.Grouping.Enabled)
+	debugLogEffectiveConfig("Grouping Columns: %d", config.Environment.Grouping.Columns)
+	debugLogEffectiveConfig("Excluded routers: %v", config.Services.Exclude.Routers)
+	debugLogEffectiveConfig("Excluded entrypoints: %v", config.Services.Exclude.Entrypoints)
+	debugLogEffectiveConfig("Service overrides: %d", len(config.Services.Overrides))
+
+	// Log each service override individually
+	for _, o := range config.Services.Overrides {
+		debugLogEffectiveConfig("Override: %s -> name=%s, icon=%s, group=%s",
+			o.Service, o.DisplayName, o.Icon, o.Group)
+	}
+
+	// Log manual services
+	debugLogEffectiveConfig("Manual services: %d", len(config.Services.Manual))
+	for _, m := range config.Services.Manual {
+		debugLogEffectiveConfig("Manual: %s -> name=%s, url=%s, icon=%s, group=%s",
+			m.Name, m.Name, m.URL, m.Icon, m.Group)
+	}
+
 	// Step 5: post-processing / validation
 	if config.Environment.Traefik.APIHost == "" {
 		log.Printf("ERROR: Traefik API host is not set. Provide via env var or config file.")

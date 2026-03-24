@@ -53,7 +53,7 @@ services:
       # Optional: Change the search engine
       - SEARCH_ENGINE_URL=https://duckduckgo.com/?q=
       # Optional: Set to "debug" for verbose icon-finding logs
-      - LOG_LEVEL=info
+      - LOG_LEVEL=debug
     labels:
       # --- Traefik Labels to expose TraLa itself ---
       - "traefik.enable=true"
