@@ -5,10 +5,13 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
 export async function getStaticPaths() {
   const docs = await getCollection('docs');
   
-  return docs.map((doc) => ({
-    params: { slug: doc.id.replace('.md', '') },
-    props: { doc },
-  }));
+  // Filter out README.md - it's handled by the index.astro page
+  return docs
+    .filter(doc => doc.id !== 'README.md')
+    .map((doc) => ({
+      params: { slug: doc.id.replace('.md', '') },
+      props: { doc },
+    }));
 }
 
 const { doc } = Astro.props;

@@ -74,6 +74,8 @@ services:
       group: "Network"
 ```
 
+This assigns the service to the "Network" group regardless of automatic tag-based grouping.
+
 ### Icon File Extensions
 
 When using filenames from the selfh.st icon repository, specify the extension:
@@ -86,45 +88,4 @@ The application automatically constructs the appropriate URL based on the file e
 
 ## Manual Services
 
-Add custom services that aren't managed by Traefik.
-
-### Basic Manual Service
-
-```yaml
-services:
-  manual:
-    - name: "Reddit"
-      url: "https://www.reddit.com"
-```
-
-### Manual Service with Custom Icon
-
-```yaml
-services:
-  manual:
-    - name: "GitHub"
-      url: "https://github.com"
-      icon: "github.svg"
-```
-
-### Manual Service with Priority
-
-```yaml
-services:
-  manual:
-    - name: "The Verge"
-      url: "https://www.theverge.com"
-      icon: "https://www.theverge.com/favicon.ico"
-      priority: 100
-```
-
-### Configuration Options
-
-| Option | Required | Description |
-|--------|----------|-------------|
-| `name` | Yes | Display name |
-| `url` | Yes | Service URL |
-| `icon` | No | Custom icon (URL or filename) |
-| `priority` | No | Sort priority (higher = first, default: 50) |
-
-Manual services are merged with Traefik-discovered services and use the same icon detection logic.
+Add custom services that aren't managed by Traefik. For complete documentation, see [Manual Services](/docs/manual_services).
