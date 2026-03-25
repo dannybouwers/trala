@@ -1,0 +1,19 @@
+---
+import { getCollection, render } from 'astro:content';
+import DocsLayout from '../../layouts/DocsLayout.astro';
+
+// Get the README document specifically
+const docs = await getCollection('docs');
+const readmeDoc = docs.find(doc => doc.id === 'README.md');
+
+if (!readmeDoc) {
+  throw new Error('README.md not found in docs collection');
+}
+
+const { Content } = await render(readmeDoc);
+const currentPath = '/docs';
+---
+
+<DocsLayout title={readmeDoc.data.title || 'Quick Start'} currentPath={currentPath}>
+  <Content />
+</DocsLayout>
