@@ -179,7 +179,7 @@ Now that you have TraLa running, explore these features to customize your dashbo
 | **Smart Grouping** | Auto-group services by tags | [Grouping](/docs/grouping) |
 | **Custom Icons** | Use selfh.st icons or your own | [Icons](/docs/icons) |
 | **External Search** | Configure search engine | [Search](/docs/search) |
-| **Security** | Secure Traefik API access | [Security](/docs/security) |
+| **Security** | Secure Traefik API access | [Secure Traefik](/docs/secure_traefik) |
 
 ---
 
