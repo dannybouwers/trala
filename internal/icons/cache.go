@@ -91,6 +91,10 @@ func GetSelfHstIconNames() ([]models.SelfHstIcon, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("selfh.st icons API returned status %d", resp.StatusCode)
+	}
+
 	var icons []models.SelfHstIcon
 	if err := json.NewDecoder(resp.Body).Decode(&icons); err != nil {
 		return nil, err
@@ -144,6 +148,10 @@ func GetSelfHstAppTags() ([]models.SelfHstApp, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("selfh.st apps API returned status %d", resp.StatusCode)
+	}
 
 	var data []models.SelfHstApp
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {

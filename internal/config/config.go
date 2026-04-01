@@ -225,7 +225,14 @@ func Load() {
 			fmt.Printf("Failed to marshal configuration: %v\n", err)
 			return
 		}
-		fmt.Println(string(out))
+		output := string(out)
+		if config.Environment.Traefik.BasicAuth.Password != "" {
+			output = strings.ReplaceAll(output, config.Environment.Traefik.BasicAuth.Password, "***REDACTED***")
+		}
+		if config.Environment.Traefik.BasicAuth.PasswordFile != "" {
+			output = strings.ReplaceAll(output, config.Environment.Traefik.BasicAuth.PasswordFile, "***REDACTED***")
+		}
+		fmt.Println(output)
 	}
 }
 
