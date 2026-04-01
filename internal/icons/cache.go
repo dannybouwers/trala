@@ -5,6 +5,7 @@ package icons
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -78,7 +79,10 @@ func GetSelfHstIconNames() ([]models.SelfHstIcon, error) {
 	}
 
 	log.Println("Refreshing selfh.st icon cache from index.json...")
-	req, _ := http.NewRequestWithContext(context.Background(), "GET", selfhstAPIURL, nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", selfhstAPIURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
 	req.Header.Set("User-Agent", "TraLa-Dashboard-App")
 
 	resp, err := externalHTTPClient.Do(req)
@@ -129,7 +133,10 @@ func GetSelfHstAppTags() ([]models.SelfHstApp, error) {
 	}
 
 	log.Println("Refreshing Selfh.st apps cache from trala.json...")
-	req, _ := http.NewRequestWithContext(context.Background(), "GET", selfhstAppsURL, nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", selfhstAppsURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
 	req.Header.Set("User-Agent", "TraLa-Dashboard-App")
 
 	resp, err := externalHTTPClient.Do(req)
