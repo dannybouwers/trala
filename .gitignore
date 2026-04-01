@@ -1,6 +1,7 @@
 .DS_Store
 .vscode
 .kilocode
+.kilo
 .env
 /local
 /plans
