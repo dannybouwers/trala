@@ -13,7 +13,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"text/template"
+	"html/template"
 	"time"
 
 	"github.com/nicksnyder/go-i18n/v2/i18n"
