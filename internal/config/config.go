@@ -220,19 +220,19 @@ func Load() {
 
 	if config.Environment.LogLevel == "debug" {
 		log.Printf("Using effective configuration:")
-		configCopy := config
-		if configCopy.Environment.Traefik.BasicAuth.Password != "" {
-			configCopy.Environment.Traefik.BasicAuth.Password = "***REDACTED***"
-		}
-		if configCopy.Environment.Traefik.BasicAuth.PasswordFile != "" {
-			configCopy.Environment.Traefik.BasicAuth.PasswordFile = "***REDACTED***"
-		}
-		out, err := yaml.Marshal(configCopy)
+		out, err := yaml.Marshal(config)
 		if err != nil {
 			fmt.Printf("Failed to marshal configuration: %v\n", err)
 			return
 		}
-		fmt.Println(string(out))
+		output := string(out)
+		if config.Environment.Traefik.BasicAuth.Password != "" {
+			output = strings.ReplaceAll(output, config.Environment.Traefik.BasicAuth.Password, "***REDACTED***")
+		}
+		if config.Environment.Traefik.BasicAuth.PasswordFile != "" {
+			output = strings.ReplaceAll(output, config.Environment.Traefik.BasicAuth.PasswordFile, "***REDACTED***")
+		}
+		fmt.Println(output)
 	}
 }
 
