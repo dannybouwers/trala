@@ -1,0 +1,16 @@
+.git
+.github
+.gitignore
+.vscode
+.kilo
+.kilocode
+.env
+.DS_Store
+demo
+website
+plans
+local
+node_modules
+README.md
+LICENSE
+CONTRIBUTING.md
