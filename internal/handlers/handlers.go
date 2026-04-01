@@ -93,6 +93,20 @@ func LoadHTMLTemplate(templatePath string) {
 	})
 }
 
+// --- Security Middleware ---
+
+// SecurityHeaders wraps an http.Handler to add security headers to all responses.
+func SecurityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; img-src 'self' https: data:; connect-src 'self'")
+		next.ServeHTTP(w, r)
+	})
+}
+
 // --- HTTP Handlers ---
 
 // ServeHTMLTemplate renders the HTML template with i18n support using go-i18n.
