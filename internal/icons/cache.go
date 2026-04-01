@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync/atomic"
 	"os"
 	"path/filepath"
 	"sort"
@@ -289,16 +290,13 @@ func debugf(format string, v ...interface{}) {
 
 // isDebugLogLevel checks if the log level is set to debug
 func isDebugLogLevel() bool {
-	// This will be implemented by checking the config package
-	// We avoid importing config directly to prevent circular dependencies
-	// The log level check is done via a callback set during initialization
-	return debugLogEnabled
+	return debugLogEnabled.Load()
 }
 
-// debugLogEnabled is set by SetDebugMode
-var debugLogEnabled = false
+// debugLogEnabled is set by SetDebugMode (atomic for concurrency safety)
+var debugLogEnabled atomic.Bool
 
 // SetDebugMode enables or disables debug logging for the icons package.
 func SetDebugMode(enabled bool) {
-	debugLogEnabled = enabled
+	debugLogEnabled.Store(enabled)
 }
