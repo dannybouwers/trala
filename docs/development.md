@@ -2,53 +2,27 @@
 
 This guide covers how to develop and contribute to TraLa.
 
-## Building from Source
+## Testing and Development Options
 
-### Prerequisites
+Choose one of the following approaches to develop and test TraLa.
 
-- Go 1.21+
-- Node.js 25+ (for Tailwind CSS)
+---
+
+### Option 1: Docker Compose with Demo Stack
+
+The demo stack provides a complete testing environment with mock services routed by Traefik.
+
+#### Prerequisites
+
 - Docker
 - Docker Compose
 
-### Build Steps
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/dannybouwers/trala.git
-   cd trala
-   ```
-
-2. Build the Docker image (this also builds Tailwind CSS):
-   ```bash
-   docker build -t trala .
-   ```
-
-3. Run the locally built image:
-   ```bash
-   docker run -d -p 8080:8080 -e TRAEFIK_API_HOST="http://<your-traefik-ip>:8080" trala
-   ```
-
-### Building Tailwind CSS Manually
-
-If you need to rebuild Tailwind CSS separately:
-
-```bash
-cd web/html
-npm install tailwindcss @tailwindcss/cli
-npx @tailwindcss/cli -i tailwind.src.css -o ../css/tailwind.css
-```
-
-## Local Development with Demo Stack
-
-TraLa includes a demo stack for testing. The demo uses Docker Compose and includes mock services routed by Traefik.
-
-### Demo Files
+#### Demo Files
 
 - `demo/docker-compose.yml` — Stack definition
 - `demo/configuration.yml` — Test configuration
 
-### Running the Demo
+#### Running the Demo
 
 1. Navigate to the demo directory:
    ```bash
@@ -75,12 +49,123 @@ TraLa includes a demo stack for testing. The demo uses Docker Compose and includ
 > [!IMPORTANT]
 > The demo uses HTTPS with self-signed certificates. You may need to accept the security warning in your browser or add the certificate to your trust store.
 
-### Demo Services
+#### Demo Services
 
 The demo stack includes:
 - Traefik with the whoami service
 - TraLa dashboard accessible at `https://trala.localhost`
 - Various test routers (subscription-manager, firefly-iii, jellyfin, plex, portainer, etc.)
+
+---
+
+### Option 2: Build and Run with Dockerfile
+
+Build the Docker image yourself and run it locally.
+
+#### Prerequisites
+
+- Docker
+
+#### Build the Image
+
+```bash
+docker build -t trala .
+```
+
+This builds Tailwind CSS and compiles the Go application in a multi-stage build.
+
+#### Run the Container
+
+```bash
+docker run -d -p 8080:8080 -e TRAEFIK_API_HOST="http://<your-traefik-ip>:8080" trala
+```
+
+Replace `<your-traefik-ip>` with your Traefik API host IP address.
+
+#### Mount Custom Configuration (Optional)
+
+To use a custom configuration file:
+
+```bash
+docker run -d -p 8080:8080 -v /path/to/your/configuration.yml:/config/configuration.yml trala
+```
+
+---
+
+### Option 3: Manual Build (No Docker)
+
+Build and run TraLa directly on your local machine without Docker. This requires Go and Node.js.
+
+#### Prerequisites
+
+- Go 1.21+
+- Node.js 25+
+
+#### Step 1: Clone the Repository
+
+```bash
+git clone https://github.com/dannybouwers/trala.git
+cd trala
+```
+
+#### Step 2: Install Node.js Dependencies and Build Tailwind CSS
+
+1. Navigate to the web directory:
+   ```bash
+   cd web/html
+   ```
+
+2. Install Tailwind CSS:
+   ```bash
+   npm install tailwindcss @tailwindcss/cli
+   ```
+
+3. Build the Tailwind CSS file:
+   ```bash
+   npx @tailwindcss/cli -i tailwind.src.css -o ../css/tailwind.css
+   ```
+
+The compiled Tailwind CSS will be output to `web/css/tailwind.css`.
+
+#### Step 3: Build the Go Application
+
+1. Return to the project root:
+   ```bash
+   cd ../..
+   ```
+
+2. Build the Go server:
+   ```bash
+   go build -o trala ./cmd/server/
+   ```
+
+#### Step 4: Run the Application
+
+Create the required directory structure and run:
+
+```bash
+mkdir -p static template translations
+
+# Copy frontend files to the correct locations
+cp web/css/tailwind.css static/css/
+cp web/css/trala.css static/css/
+cp -r web/js/* static/js/
+cp -r web/img/* static/img/
+cp web/html/index.html template/index.html
+cp translations/* translations/
+```
+
+Run the server:
+
+```bash
+TRAEFIK_API_HOST="http://<your-traefik-ip>:8080" ./trala
+```
+
+Replace `<your-traefik-ip>` with your Traefik API host IP address.
+
+The application will start on `http://localhost:8080`.
+
+---
 
 ## Project Structure
 

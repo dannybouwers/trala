@@ -177,9 +177,10 @@ Now that you have TraLa running, explore these features to customize your dashbo
 | **Configuration** | Full configuration options with YAML and environment variables | [Configuration](/docs/configuration) |
 | **Service Management** | Exclude, override, or manually add services | [Services](/docs/services) |
 | **Smart Grouping** | Auto-group services by tags | [Grouping](/docs/grouping) |
+| **Manual Services** | Add custom services and assign groups | [Manual Services](/docs/manual_services) |
 | **Custom Icons** | Use selfh.st icons or your own | [Icons](/docs/icons) |
 | **External Search** | Configure search engine | [Search](/docs/search) |
-| **Security** | Secure Traefik API access | [Security](/docs/security) |
+| **Security** | Secure Traefik API access | [Secure Traefik](/docs/secure_traefik) |
 
 ---
 

@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"server/internal/config"
@@ -18,6 +19,18 @@ var (
 	commit    string
 	buildTime string
 )
+
+// noDirListingFileServer wraps http.FileServer to disable directory listing.
+func noDirListingFileServer(dir string) http.Handler {
+	fs := http.FileServer(http.Dir(dir))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/") {
+			http.NotFound(w, r)
+			return
+		}
+		fs.ServeHTTP(w, r)
+	})
+}
 
 func main() {
 	// Load configuration
@@ -49,13 +62,22 @@ func main() {
 	mux.HandleFunc("/api/services", handlers.ServicesHandler)
 	mux.HandleFunc("/api/status", handlers.StatusHandler)
 	mux.HandleFunc("/api/health", handlers.HealthHandler)
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("/app/static"))))
-	mux.Handle("/icons/", http.StripPrefix("/icons/", http.FileServer(http.Dir("/icons"))))
+	mux.Handle("/static/", http.StripPrefix("/static/", noDirListingFileServer("/app/static")))
+	mux.Handle("/icons/", http.StripPrefix("/icons/", noDirListingFileServer("/icons")))
 	mux.HandleFunc("/", handlers.ServeHTMLTemplate)
 
 	// Start server
+	log.Println("WARNING: TraLa does not provide authentication. Ensure it is placed behind an authenticating reverse proxy.")
 	log.Println("Starting server on :8080...")
-	if err := http.ListenAndServe(":8080", mux); err != nil {
+	server := &http.Server{
+		Addr:              ":8080",
+		Handler:           handlers.SecurityHeaders(mux),
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second,
+		MaxHeaderBytes:    1 << 20, // 1MB
+	}
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }

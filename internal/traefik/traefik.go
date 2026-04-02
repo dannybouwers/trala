@@ -152,10 +152,10 @@ func FetchAllPages[T any](w http.ResponseWriter, baseURL string) ([]T, error) {
 	for {
 		// Create request with context
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
 
 		req, err := CreateHTTPRequestWithAuthAndContext(ctx, "GET", currentURL)
 		if err != nil {
+			cancel()
 			log.Printf("ERROR: Could not create request for %s: %v", currentURL, err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return nil, err
@@ -163,6 +163,7 @@ func FetchAllPages[T any](w http.ResponseWriter, baseURL string) ([]T, error) {
 
 		resp, err := HTTPClient.Do(req)
 		if err != nil {
+			cancel()
 			log.Printf("ERROR: Could not fetch from %s: %v", currentURL, err)
 			http.Error(w, "Could not connect to API", http.StatusBadGateway)
 			return nil, err
@@ -172,6 +173,7 @@ func FetchAllPages[T any](w http.ResponseWriter, baseURL string) ([]T, error) {
 			log.Printf("ERROR: API returned non-200 status: %s", resp.Status)
 			http.Error(w, "Received non-200 status from API", http.StatusBadGateway)
 			resp.Body.Close()
+			cancel()
 			return nil, fmt.Errorf("non-200 status: %s", resp.Status)
 		}
 
@@ -181,9 +183,11 @@ func FetchAllPages[T any](w http.ResponseWriter, baseURL string) ([]T, error) {
 			log.Printf("ERROR: Could not decode API response from %s: %v", currentURL, err)
 			http.Error(w, "Invalid JSON from API", http.StatusInternalServerError)
 			resp.Body.Close()
+			cancel()
 			return nil, err
 		}
 		resp.Body.Close()
+		cancel()
 
 		allItems = append(allItems, items...)
 
@@ -286,7 +290,7 @@ func ReconstructURL(router models.TraefikRouter, entryPoints map[string]models.T
 		return fmt.Sprintf("%s://%s%s", protocol, hostname, path)
 	}
 
-	return fmt.Sprintf("%s://%s%s:%s", protocol, hostname, path, port)
+	return fmt.Sprintf("%s://%s:%s%s", protocol, hostname, port, path)
 }
 
 // --- Helper Functions ---

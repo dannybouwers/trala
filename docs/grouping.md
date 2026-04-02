@@ -67,19 +67,7 @@ Set via environment variable: `GROUPING_MIN_SERVICES_PER_GROUP=2`
 
 ## Manual Group Assignment
 
-Override automatic grouping by manually assigning services to groups:
-
-```yaml
-# configuration.yml
-services:
-  overrides:
-    - service: "unifi-controller"
-      display_name: "UniFi Network"
-      icon: "ubiquiti-unifi.svg"
-      group: "Network"
-```
-
-This assigns the service to the "Network" group regardless of automatic tag-based grouping.
+Override automatic grouping by manually assigning services to groups. See [Services](/docs/services) for details.
 
 ## Environment Variables Summary
 
