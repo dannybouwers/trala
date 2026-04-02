@@ -91,8 +91,8 @@ func Load() {
 		// After successful YAML unmarshal, add debug logging
 		// Use the log level that was potentially set in config file (if any)
 		debugLog := func(format string, v ...interface{}) {
-			// We can't use config.Environment.LogLevel yet, so check env var
-			if os.Getenv("LOG_LEVEL") == "debug" {
+			// Use the log level set in the config file (defaults to "info" if not set)
+			if config.Environment.LogLevel == "debug" {
 				log.Printf("DEBUG: "+format, v...)
 			}
 		}
@@ -188,7 +188,7 @@ func Load() {
 
 	// After environment overrides, log effective configuration
 	debugLogEffectiveConfig := func(format string, v ...interface{}) {
-		if os.Getenv("LOG_LEVEL") == "debug" {
+		if config.Environment.LogLevel == "debug" {
 			log.Printf("DEBUG: "+format, v...)
 		}
 	}
