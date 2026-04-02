@@ -43,11 +43,6 @@ func main() {
 	externalHTTPClient := &http.Client{Timeout: 5 * time.Second}
 	icons.InitHTTPClient(externalHTTPClient)
 
-	// Set debug mode for icons package based on log level
-	if config.GetLogLevel() == "debug" {
-		icons.SetDebugMode(true)
-	}
-
 	// Initialize i18n
 	i18n.Init()
 

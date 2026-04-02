@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"server/internal/config"
+	"server/internal/debug"
 	"server/internal/models"
 )
 
@@ -294,9 +295,5 @@ func ReconstructURL(router models.TraefikRouter, entryPoints map[string]models.T
 
 // --- Helper Functions ---
 
-// debugf logs a message only if LOG_LEVEL is set to "debug".
-func debugf(format string, v ...interface{}) {
-	if config.GetLogLevel() == "debug" {
-		log.Printf("DEBUG: "+format, v...)
-	}
-}
+// debugf is a wrapper for the shared debug utility
+var debugf = debug.Debugf

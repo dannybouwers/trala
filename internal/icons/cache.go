@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"sync/atomic"
 	"os"
 	"path/filepath"
 	"sort"
@@ -16,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"server/internal/debug"
 	"server/internal/models"
 
 	"github.com/lithammer/fuzzysearch/fuzzy"
@@ -280,23 +280,14 @@ func FindUserIcon(routerName string) string {
 	return ""
 }
 
-// debugf logs a message only if LOG_LEVEL is set to "debug".
-func debugf(format string, v ...interface{}) {
-	// Import config to check log level
-	if isDebugLogLevel() {
-		log.Printf("DEBUG: "+format, v...)
-	}
-}
+// debugf is a wrapper for the shared debug utility
+var debugf = debug.Debugf
 
-// isDebugLogLevel checks if the log level is set to debug
-func isDebugLogLevel() bool {
-	return debugLogEnabled.Load()
-}
-
-// debugLogEnabled is set by SetDebugMode (atomic for concurrency safety)
-var debugLogEnabled atomic.Bool
-
-// SetDebugMode enables or disables debug logging for the icons package.
+// SetDebugMode is deprecated and has no effect.
+// Debug logging is now controlled by the debug package via config.GetLogLevel().
+// This function is kept for backward compatibility with any external callers.
 func SetDebugMode(enabled bool) {
-	debugLogEnabled.Store(enabled)
+	// No-op: debug level is now determined by the debug package
+	// This function is kept for backward compatibility with any external callers
+	_ = enabled // Suppress unused parameter warning
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"server/internal/config"
+	"server/internal/debug"
 	"server/internal/icons"
 	"server/internal/models"
 	"server/internal/traefik"
@@ -120,7 +121,7 @@ func GetManualServices() []models.Service {
 				iconURL = config.GetSelfhstIconURL() + strings.TrimPrefix(ext, ".") + "/" + strings.ToLower(iconURL)
 			} else {
 				// Fallback to default behavior if extension is not valid
-			iconURL = config.GetSelfhstIconURL() + "png/" + strings.ToLower(iconURL) + ".png"
+				iconURL = config.GetSelfhstIconURL() + "png/" + strings.ToLower(iconURL) + ".png"
 			}
 		}
 
@@ -217,9 +218,5 @@ func ExtractServiceNameFromURL(searchURL string) string {
 	return hostname
 }
 
-// debugf logs a message only if LOG_LEVEL is set to "debug".
-func debugf(format string, v ...interface{}) {
-	if config.GetLogLevel() == "debug" {
-		log.Printf("DEBUG: "+format, v...)
-	}
-}
+// debugf is a wrapper for the shared debug utility
+var debugf = debug.Debugf

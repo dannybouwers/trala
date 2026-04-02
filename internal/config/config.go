@@ -79,8 +79,29 @@ func Load() {
 		}
 	} else {
 		if err := yaml.Unmarshal(data, &config); err != nil {
-			log.Printf("Warning: Could not parse configuration file %s: %v", ConfigurationFilePath, err)
+			log.Printf("ERROR: Failed to parse configuration file: %v", err)
+			log.Printf("FATAL: The configuration file contains invalid YAML. Please check the syntax.")
+			log.Printf("HINT: Common issues include:")
+			log.Printf("  - Incorrect indentation (use spaces, not tabs)")
+			log.Printf("  - Missing colons after field names")
+			log.Printf("  - Unquoted strings with special characters")
+			os.Exit(1)
 		}
+
+		// After successful YAML unmarshal, add debug logging
+		// Use the log level that was potentially set in config file (if any)
+		debugLog := func(format string, v ...interface{}) {
+			// Use the log level set in the config file (defaults to "info" if not set)
+			if config.Environment.LogLevel == "debug" {
+				log.Printf("DEBUG: "+format, v...)
+			}
+		}
+
+		debugLog("Successfully parsed configuration file:")
+		debugLog("  - Version: %s", config.Version)
+		debugLog("  - Exclude routers: %v", config.Services.Exclude.Routers)
+		debugLog("  - Exclude entrypoints: %v", config.Services.Exclude.Entrypoints)
+		debugLog("  - Service overrides: %d items", len(config.Services.Overrides))
 	}
 
 	// Step 3: validate basic auth password configuration before environment overrides
@@ -163,6 +184,37 @@ func Load() {
 	if config.Environment.LogLevel != "" && !validLogLevels[config.Environment.LogLevel] {
 		log.Printf("Warning: Unknown LOG_LEVEL '%s', defaulting to 'info'", config.Environment.LogLevel)
 		config.Environment.LogLevel = "info"
+	}
+
+	// After environment overrides, log effective configuration
+	debugLogEffectiveConfig := func(format string, v ...interface{}) {
+		if config.Environment.LogLevel == "debug" {
+			log.Printf("DEBUG: "+format, v...)
+		}
+	}
+
+	debugLogEffectiveConfig("=== Effective Configuration ===")
+	debugLogEffectiveConfig("Traefik API: %s", config.Environment.Traefik.APIHost)
+	debugLogEffectiveConfig("Log Level: %s", config.Environment.LogLevel)
+	debugLogEffectiveConfig("Language: %s", config.Environment.Language)
+	debugLogEffectiveConfig("Refresh Interval: %d seconds", config.Environment.RefreshIntervalSeconds)
+	debugLogEffectiveConfig("Grouping Enabled: %t", config.Environment.Grouping.Enabled)
+	debugLogEffectiveConfig("Grouping Columns: %d", config.Environment.Grouping.Columns)
+	debugLogEffectiveConfig("Excluded routers: %v", config.Services.Exclude.Routers)
+	debugLogEffectiveConfig("Excluded entrypoints: %v", config.Services.Exclude.Entrypoints)
+	debugLogEffectiveConfig("Service overrides: %d", len(config.Services.Overrides))
+
+	// Log each service override individually
+	for _, o := range config.Services.Overrides {
+		debugLogEffectiveConfig("Override: %s -> name=%s, icon=%s, group=%s",
+			o.Service, o.DisplayName, o.Icon, o.Group)
+	}
+
+	// Log manual services
+	debugLogEffectiveConfig("Manual services: %d", len(config.Services.Manual))
+	for _, m := range config.Services.Manual {
+		debugLogEffectiveConfig("Manual: %s -> name=%s, url=%s, icon=%s, group=%s",
+			m.Name, m.Name, m.URL, m.Icon, m.Group)
 	}
 
 	// Step 5: post-processing / validation

@@ -8,7 +8,7 @@ environment:
   selfhst_icon_url: https://cdn.jsdelivr.net/gh/selfhst/icons/
   search_engine_url: https://duckduckgo.com/?q=
   refresh_interval_seconds: 30
-  log_level: info
+  log_level: debug
   language: en  # change Language (Default "en").
   grouping:
     enabled: true
