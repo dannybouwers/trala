@@ -3,7 +3,11 @@
 // types, and internal data structures.
 package models
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"server/internal/config"
+)
 
 // --- Traefik API Types ---
 
@@ -58,14 +62,7 @@ type VersionInfo struct {
 	BuildTime string `json:"buildTime"`
 }
 
-// ConfigStatus represents the configuration compatibility status.
-// It indicates whether the loaded configuration is compatible with the current version.
-type ConfigStatus struct {
-	ConfigVersion          string `json:"configVersion"`
-	MinimumRequiredVersion string `json:"minimumRequiredVersion"`
-	IsCompatible           bool   `json:"isCompatible"`
-	WarningMessage         string `json:"warningMessage,omitempty"`
-}
+
 
 // FrontendConfig represents the configuration data sent to the frontend.
 // It contains settings that the frontend needs for proper operation.
@@ -81,7 +78,7 @@ type FrontendConfig struct {
 // It aggregates version, configuration, and frontend status into a single response.
 type ApplicationStatus struct {
 	Version  VersionInfo    `json:"version"`
-	Config   ConfigStatus   `json:"config"`
+	Config   config.ConfigStatus   `json:"config"`
 	Frontend FrontendConfig `json:"frontend"`
 }
 
@@ -108,86 +105,4 @@ type SelfHstApp struct {
 	Reference string   `json:"reference"`
 	Name      string   `json:"name"`
 	Tags      []string `json:"tags"`
-}
-
-// --- Configuration Types ---
-
-// TraefikBasicAuth contains basic authentication credentials for Traefik API access.
-// Password can be provided directly or via a file path.
-type TraefikBasicAuth struct {
-	Username     string `yaml:"username"`
-	Password     string `yaml:"password"`
-	PasswordFile string `yaml:"password_file"`
-}
-
-// TraefikConfig contains configuration for connecting to the Traefik API.
-// It includes the API host and optional authentication settings.
-type TraefikConfig struct {
-	APIHost            string           `yaml:"api_host"`
-	EnableBasicAuth    bool             `yaml:"enable_basic_auth"`
-	BasicAuth          TraefikBasicAuth `yaml:"basic_auth"`
-	InsecureSkipVerify bool             `yaml:"insecure_skip_verify"`
-}
-
-// ServiceOverride defines overrides for a specific service/router.
-// It allows customizing the display name, icon, and group for a service.
-type ServiceOverride struct {
-	Service     string `yaml:"service"`
-	DisplayName string `yaml:"display_name,omitempty"`
-	Icon        string `yaml:"icon,omitempty"`
-	Group       string `yaml:"group,omitempty"`
-}
-
-// ManualService defines a manually configured service.
-// This is used for services not discovered via Traefik.
-type ManualService struct {
-	Name     string `yaml:"name"`
-	URL      string `yaml:"url"`
-	Icon     string `yaml:"icon,omitempty"`
-	Priority int    `yaml:"priority,omitempty"`
-	Group    string `yaml:"group,omitempty"`
-}
-
-// ExcludeConfig defines patterns for excluding routers and entrypoints.
-// Supports wildcard patterns for flexible matching.
-type ExcludeConfig struct {
-	Routers     []string `yaml:"routers"`
-	Entrypoints []string `yaml:"entrypoints"`
-}
-
-// ServiceConfiguration contains service-related configuration options.
-// It includes exclusions, overrides, and manual service definitions.
-type ServiceConfiguration struct {
-	Exclude   ExcludeConfig     `yaml:"exclude"`
-	Overrides []ServiceOverride `yaml:"overrides"`
-	Manual    []ManualService   `yaml:"manual"`
-}
-
-// GroupingConfig contains settings for automatic service grouping.
-// Grouping organizes services by common tags.
-type GroupingConfig struct {
-	Enabled               bool    `yaml:"enabled"`
-	Columns               int     `yaml:"columns"`
-	TagFrequencyThreshold float64 `yaml:"tag_frequency_threshold"`
-	MinServicesPerGroup   int     `yaml:"min_services_per_group"`
-}
-
-// EnvironmentConfiguration contains environment-level configuration options.
-// These settings control the overall behavior of the application.
-type EnvironmentConfiguration struct {
-	SelfhstIconURL         string         `yaml:"selfhst_icon_url"`
-	SearchEngineURL        string         `yaml:"search_engine_url"`
-	RefreshIntervalSeconds int            `yaml:"refresh_interval_seconds"`
-	LogLevel               string         `yaml:"log_level"`
-	Traefik                TraefikConfig  `yaml:"traefik"`
-	Language               string         `yaml:"language"`
-	Grouping               GroupingConfig `yaml:"grouping"`
-}
-
-// TralaConfiguration is the root configuration structure.
-// It represents the complete configuration file format.
-type TralaConfiguration struct {
-	Version     string                   `yaml:"version"`
-	Environment EnvironmentConfiguration `yaml:"environment"`
-	Services    ServiceConfiguration     `yaml:"services"`
 }

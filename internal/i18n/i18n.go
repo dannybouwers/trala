@@ -29,10 +29,9 @@ var (
 
 // Init initializes the i18n bundle and loads the appropriate translation file.
 // It falls back to English if the desired language file is missing.
-// This must be called after config.Load() has been executed.
-func Init() {
+func Init(c *config.TralaConfiguration) {
 	// Get the language from environment configuration
-	lang := config.GetLanguage()
+	lang := c.GetLanguage()
 	if lang == "" {
 		log.Printf("Language not set - using fallback language: %s", fallbackLang)
 		lang = fallbackLang

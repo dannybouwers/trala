@@ -25,6 +25,13 @@ import (
 // HTTPClient is the HTTP client for Traefik API calls (may have SSL verification disabled)
 var HTTPClient *http.Client
 
+var conf *config.TralaConfiguration
+
+// Init stores the configuration instance for use by traefik functions.
+func Init(c *config.TralaConfiguration) {
+	conf = c
+}
+
 // Regex patterns to reliably find Host and PathPrefix in Traefik rules
 var (
 	hostRegex = regexp.MustCompile(`Host\(\s*` + "`" + `([^` + "`" + `]+)` + "`" + `\s*\)`)
@@ -51,7 +58,7 @@ func InitializeHTTPClient() {
 	}
 
 	// Configure TLS for Traefik client based on configuration
-	if config.GetInsecureSkipVerify() {
+	if conf.GetInsecureSkipVerify() {
 		traefikTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 		log.Printf("WARNING: SSL certificate verification is disabled for Traefik API connections")
 	} else {
@@ -79,9 +86,9 @@ func CreateHTTPRequestWithAuthAndContext(ctx context.Context, method, url string
 	}
 
 	// Set basic auth option if enabled
-	if config.GetEnableBasicAuth() {
+	if conf.GetEnableBasicAuth() {
 		debugf("Setting basic auth")
-		req.SetBasicAuth(config.GetBasicAuthUsername(), config.GetBasicAuthPassword())
+		req.SetBasicAuth(conf.GetBasicAuthUsername(), conf.GetBasicAuthPassword())
 	}
 
 	return req, nil
