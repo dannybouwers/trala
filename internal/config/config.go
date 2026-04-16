@@ -19,9 +19,21 @@ const MinimumConfigVersion = "3.0"
 // Configuration file path
 const ConfigurationFilePath = "/config/configuration.yml"
 
-// Load loads the configuration from file and environment variables.
-// It applies defaults, loads from file, overrides from environment, and validates.
+// NewTralaConfiguration loads configuration from the default path, logging and
+// exiting the process on any fatal error. It is the production entry point used
+// by main.
 func NewTralaConfiguration() *TralaConfiguration {
+	conf, err := LoadConfiguration(ConfigurationFilePath)
+	if err != nil {
+		log.Fatalf("FATAL: %v", err)
+	}
+	return conf
+}
+
+// LoadConfiguration loads, validates, and finalizes configuration from the given
+// file path. Environment variables override file values. Returns a descriptive
+// error instead of exiting, making the function testable.
+func LoadConfiguration(path string) (*TralaConfiguration, error) {
 	// Step 1: defaults
 	config := TralaConfiguration{
 		Version: "",
@@ -58,23 +70,17 @@ func NewTralaConfiguration() *TralaConfiguration {
 	}
 
 	// Step 2: configuration file
-	data, err := os.ReadFile(ConfigurationFilePath)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			log.Printf("Info: No configuration file found at %s. Using defaults + env vars.", ConfigurationFilePath)
+			log.Printf("Info: No configuration file found at %s. Using defaults + env vars.", path)
 			config.Version = MinimumConfigVersion // Set to minimum required if no config file
 		} else {
-			log.Printf("Warning: Could not read configuration file at %s: %v", ConfigurationFilePath, err)
+			log.Printf("Warning: Could not read configuration file at %s: %v", path, err)
 		}
 	} else {
 		if err := yaml.Unmarshal(data, &config); err != nil {
-			log.Printf("ERROR: Failed to parse configuration file: %v", err)
-			log.Printf("FATAL: The configuration file contains invalid YAML. Please check the syntax.")
-			log.Printf("HINT: Common issues include:")
-			log.Printf("  - Incorrect indentation (use spaces, not tabs)")
-			log.Printf("  - Missing colons after field names")
-			log.Printf("  - Unquoted strings with special characters")
-			os.Exit(1)
+			return nil, fmt.Errorf("failed to parse configuration file %s: %w (common issues: incorrect indentation, missing colons, unquoted strings with special characters)", path, err)
 		}
 
 		// After successful YAML unmarshal, add debug logging
@@ -208,8 +214,7 @@ func NewTralaConfiguration() *TralaConfiguration {
 
 	// Step 5: post-processing / validation
 	if config.Environment.Traefik.APIHost == "" {
-		log.Printf("ERROR: Traefik API host is not set. Provide via env var or config file.")
-		os.Exit(1)
+		return nil, fmt.Errorf("traefik API host is not set: provide via env var TRAEFIK_API_HOST or config file")
 	}
 	if !strings.HasPrefix(config.Environment.Traefik.APIHost, "http://") && !strings.HasPrefix(config.Environment.Traefik.APIHost, "https://") {
 		config.Environment.Traefik.APIHost = "http://" + config.Environment.Traefik.APIHost
@@ -220,8 +225,7 @@ func NewTralaConfiguration() *TralaConfiguration {
 
 	if config.Environment.Traefik.EnableBasicAuth {
 		if config.Environment.Traefik.BasicAuth.Username == "" || (config.Environment.Traefik.BasicAuth.Password == "" && config.Environment.Traefik.BasicAuth.PasswordFile == "") {
-			log.Printf("ERROR: Basic auth is enabled, but basic auth username, password or password file is not set!")
-			os.Exit(1)
+			return nil, fmt.Errorf("basic auth is enabled but basic auth username, password or password file is not set")
 		}
 		if config.Environment.Traefik.BasicAuth.Password != "" && config.Environment.Traefik.BasicAuth.PasswordFile != "" {
 			log.Printf("WARNING: Basic auth password and password file is set, content of file will take precedence over password!")
@@ -233,20 +237,16 @@ func NewTralaConfiguration() *TralaConfiguration {
 		data, err := os.ReadFile(passwordFilePath)
 		if err != nil {
 			if os.IsNotExist(err) {
-				log.Printf("ERROR: No password file found at %s for basic auth.", passwordFilePath)
-				os.Exit(1)
-			} else {
-				log.Printf("ERROR: Could not read password file at %s: %v", passwordFilePath, err)
-				os.Exit(1)
+				return nil, fmt.Errorf("no password file found at %s for basic auth", passwordFilePath)
 			}
-		} else {
-			config.Environment.Traefik.BasicAuth.Password = strings.TrimSpace(string(data))
+			return nil, fmt.Errorf("could not read password file at %s: %w", passwordFilePath, err)
 		}
+		config.Environment.Traefik.BasicAuth.Password = strings.TrimSpace(string(data))
 	}
 
-	log.Printf("Loaded %d router excludes from %s", len(config.Services.Exclude.Routers), ConfigurationFilePath)
-	log.Printf("Loaded %d entrypoint excludes from %s", len(config.Services.Exclude.Entrypoints), ConfigurationFilePath)
-	log.Printf("Loaded %d service overrides from %s", len(config.Services.Overrides), ConfigurationFilePath)
+	log.Printf("Loaded %d router excludes from %s", len(config.Services.Exclude.Routers), path)
+	log.Printf("Loaded %d entrypoint excludes from %s", len(config.Services.Exclude.Entrypoints), path)
+	log.Printf("Loaded %d service overrides from %s", len(config.Services.Overrides), path)
 
 	// Validate configuration version (without basic auth validation since we already did it above)
 	status := ValidateConfigVersion(config.Version, basicAuthWarning)
@@ -270,8 +270,7 @@ func NewTralaConfiguration() *TralaConfiguration {
 		log.Printf("Using effective configuration:")
 		out, err := yaml.Marshal(config)
 		if err != nil {
-			fmt.Printf("Failed to marshal configuration: %v\n", err)
-			return nil
+			return nil, fmt.Errorf("failed to marshal effective configuration: %w", err)
 		}
 		output := string(out)
 		if config.Environment.Traefik.BasicAuth.Password != "" {
@@ -283,7 +282,7 @@ func NewTralaConfiguration() *TralaConfiguration {
 		fmt.Println(output)
 	}
 
-	return &config
+	return &config, nil
 }
 
 // ValidateConfigVersion checks if the configuration version is compatible.
@@ -396,4 +395,3 @@ func IsValidUrl(str string) bool {
 	u, err := url.Parse(str)
 	return err == nil && u.Scheme != "" && u.Host != ""
 }
-
