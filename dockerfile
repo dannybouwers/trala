@@ -1,5 +1,5 @@
 ### STAGE 1: Build Tailwind CSS ###
-FROM node:25.8.2-alpine AS tailwind-builder
+FROM node:25.9.0-alpine AS tailwind-builder
 
 WORKDIR /app
 
@@ -13,7 +13,7 @@ RUN npm install tailwindcss @tailwindcss/cli
 RUN npx @tailwindcss/cli -i /app/src/tailwind.src.css -o /app/src/tailwind.css
 
 ### STAGE 2: Build Go Application ###
-FROM golang:1.26.1-alpine AS builder
+FROM golang:1.26.2-alpine AS builder
 
 # Accept version as build argument
 ARG VERSION=dev
