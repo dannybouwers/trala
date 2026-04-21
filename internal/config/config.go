@@ -9,9 +9,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
-
-	"server/internal/models"
 
 	"go.yaml.in/yaml/v4"
 )
@@ -22,70 +19,68 @@ const MinimumConfigVersion = "3.0"
 // Configuration file path
 const ConfigurationFilePath = "/config/configuration.yml"
 
-// Global configuration instance and mutex for thread-safe access
-var (
-	configuration             models.TralaConfiguration
-	configurationMux          sync.RWMutex
-	configCompatibilityStatus models.ConfigStatus
-	serviceOverrideMap        map[string]models.ServiceOverride
-)
+// NewTralaConfiguration loads configuration from the default path, logging and
+// exiting the process on any fatal error. It is the production entry point used
+// by main.
+func NewTralaConfiguration() *TralaConfiguration {
+	conf, err := LoadConfiguration(ConfigurationFilePath)
+	if err != nil {
+		log.Fatalf("FATAL: %v", err)
+	}
+	return conf
+}
 
-// Load loads the configuration from file and environment variables.
-// It applies defaults, loads from file, overrides from environment, and validates.
-func Load() {
+// LoadConfiguration loads, validates, and finalizes configuration from the given
+// file path. Environment variables override file values. Returns a descriptive
+// error instead of exiting, making the function testable.
+func LoadConfiguration(path string) (*TralaConfiguration, error) {
 	// Step 1: defaults
-	config := models.TralaConfiguration{
+	config := TralaConfiguration{
 		Version: "",
-		Environment: models.EnvironmentConfiguration{
+		Environment: EnvironmentConfiguration{
 			SelfhstIconURL:         "https://cdn.jsdelivr.net/gh/selfhst/icons/",
 			SearchEngineURL:        "https://www.google.com/search?q=",
 			RefreshIntervalSeconds: 30,
 			LogLevel:               "info",
-			Traefik: models.TraefikConfig{
+			Traefik: TraefikConfig{
 				APIHost:            "",
 				EnableBasicAuth:    false,
 				InsecureSkipVerify: false,
-				BasicAuth: models.TraefikBasicAuth{
+				BasicAuth: TraefikBasicAuth{
 					Username:     "",
 					Password:     "",
 					PasswordFile: "",
 				},
 			},
-			Grouping: models.GroupingConfig{
+			Grouping: GroupingConfig{
 				Enabled:               true,
 				Columns:               3,
 				TagFrequencyThreshold: 0.9,
 				MinServicesPerGroup:   2,
 			},
 		},
-		Services: models.ServiceConfiguration{
-			Exclude: models.ExcludeConfig{
+		Services: ServiceConfiguration{
+			Exclude: ExcludeConfig{
 				Routers:     []string{},
 				Entrypoints: []string{},
 			},
-			Overrides: make([]models.ServiceOverride, 0),
-			Manual:    make([]models.ManualService, 0),
+			Overrides: make([]ServiceOverride, 0),
+			Manual:    make([]ManualService, 0),
 		},
 	}
 
 	// Step 2: configuration file
-	data, err := os.ReadFile(ConfigurationFilePath)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			log.Printf("Info: No configuration file found at %s. Using defaults + env vars.", ConfigurationFilePath)
+			log.Printf("Info: No configuration file found at %s. Using defaults + env vars.", path)
 			config.Version = MinimumConfigVersion // Set to minimum required if no config file
 		} else {
-			log.Printf("Warning: Could not read configuration file at %s: %v", ConfigurationFilePath, err)
+			log.Printf("Warning: Could not read configuration file at %s: %v", path, err)
 		}
 	} else {
 		if err := yaml.Unmarshal(data, &config); err != nil {
-			log.Printf("ERROR: Failed to parse configuration file: %v", err)
-			log.Printf("FATAL: The configuration file contains invalid YAML. Please check the syntax.")
-			log.Printf("HINT: Common issues include:")
-			log.Printf("  - Incorrect indentation (use spaces, not tabs)")
-			log.Printf("  - Missing colons after field names")
-			log.Printf("  - Unquoted strings with special characters")
-			os.Exit(1)
+			return nil, fmt.Errorf("failed to parse configuration file %s: %w (common issues: incorrect indentation, missing colons, unquoted strings with special characters)", path, err)
 		}
 
 		// After successful YAML unmarshal, add debug logging
@@ -219,8 +214,7 @@ func Load() {
 
 	// Step 5: post-processing / validation
 	if config.Environment.Traefik.APIHost == "" {
-		log.Printf("ERROR: Traefik API host is not set. Provide via env var or config file.")
-		os.Exit(1)
+		return nil, fmt.Errorf("traefik API host is not set: provide via env var TRAEFIK_API_HOST or config file")
 	}
 	if !strings.HasPrefix(config.Environment.Traefik.APIHost, "http://") && !strings.HasPrefix(config.Environment.Traefik.APIHost, "https://") {
 		config.Environment.Traefik.APIHost = "http://" + config.Environment.Traefik.APIHost
@@ -231,8 +225,7 @@ func Load() {
 
 	if config.Environment.Traefik.EnableBasicAuth {
 		if config.Environment.Traefik.BasicAuth.Username == "" || (config.Environment.Traefik.BasicAuth.Password == "" && config.Environment.Traefik.BasicAuth.PasswordFile == "") {
-			log.Printf("ERROR: Basic auth is enabled, but basic auth username, password or password file is not set!")
-			os.Exit(1)
+			return nil, fmt.Errorf("basic auth is enabled but basic auth username, password or password file is not set")
 		}
 		if config.Environment.Traefik.BasicAuth.Password != "" && config.Environment.Traefik.BasicAuth.PasswordFile != "" {
 			log.Printf("WARNING: Basic auth password and password file is set, content of file will take precedence over password!")
@@ -244,20 +237,16 @@ func Load() {
 		data, err := os.ReadFile(passwordFilePath)
 		if err != nil {
 			if os.IsNotExist(err) {
-				log.Printf("ERROR: No password file found at %s for basic auth.", passwordFilePath)
-				os.Exit(1)
-			} else {
-				log.Printf("ERROR: Could not read password file at %s: %v", passwordFilePath, err)
-				os.Exit(1)
+				return nil, fmt.Errorf("no password file found at %s for basic auth", passwordFilePath)
 			}
-		} else {
-			config.Environment.Traefik.BasicAuth.Password = strings.TrimSpace(string(data))
+			return nil, fmt.Errorf("could not read password file at %s: %w", passwordFilePath, err)
 		}
+		config.Environment.Traefik.BasicAuth.Password = strings.TrimSpace(string(data))
 	}
 
-	log.Printf("Loaded %d router excludes from %s", len(config.Services.Exclude.Routers), ConfigurationFilePath)
-	log.Printf("Loaded %d entrypoint excludes from %s", len(config.Services.Exclude.Entrypoints), ConfigurationFilePath)
-	log.Printf("Loaded %d service overrides from %s", len(config.Services.Overrides), ConfigurationFilePath)
+	log.Printf("Loaded %d router excludes from %s", len(config.Services.Exclude.Routers), path)
+	log.Printf("Loaded %d entrypoint excludes from %s", len(config.Services.Exclude.Entrypoints), path)
+	log.Printf("Loaded %d service overrides from %s", len(config.Services.Overrides), path)
 
 	// Validate configuration version (without basic auth validation since we already did it above)
 	status := ValidateConfigVersion(config.Version, basicAuthWarning)
@@ -265,25 +254,23 @@ func Load() {
 		log.Printf("WARNING: %s", status.WarningMessage)
 	}
 
-	// Now that all validation is complete, lock the mutex and update the global configuration
-	configurationMux.Lock()
-	defer configurationMux.Unlock()
+	// Now that all validation is complete, lock the mutex and store state on the instance
+	config.mu.Lock()
+	defer config.mu.Unlock()
 
-	configuration = config
-	configCompatibilityStatus = status
+	config.compatStatus = status
 
 	// Build map that maps a router name to a ServiceOverride for fast lookups (inside lock)
-	serviceOverrideMap = make(map[string]models.ServiceOverride, len(config.Services.Overrides))
+	config.overrideMap = make(map[string]ServiceOverride, len(config.Services.Overrides))
 	for _, o := range config.Services.Overrides {
-		serviceOverrideMap[o.Service] = o
+		config.overrideMap[o.Service] = o
 	}
 
 	if config.Environment.LogLevel == "debug" {
 		log.Printf("Using effective configuration:")
 		out, err := yaml.Marshal(config)
 		if err != nil {
-			fmt.Printf("Failed to marshal configuration: %v\n", err)
-			return
+			return nil, fmt.Errorf("failed to marshal effective configuration: %w", err)
 		}
 		output := string(out)
 		if config.Environment.Traefik.BasicAuth.Password != "" {
@@ -294,12 +281,14 @@ func Load() {
 		}
 		fmt.Println(output)
 	}
+
+	return &config, nil
 }
 
 // ValidateConfigVersion checks if the configuration version is compatible.
 // It returns a ConfigStatus indicating compatibility and any warning messages.
-func ValidateConfigVersion(configVersion string, basicAuthWarning string) models.ConfigStatus {
-	status := models.ConfigStatus{
+func ValidateConfigVersion(configVersion string, basicAuthWarning string) ConfigStatus {
+	status := ConfigStatus{
 		ConfigVersion:          configVersion,
 		MinimumRequiredVersion: MinimumConfigVersion,
 		IsCompatible:           true,
@@ -333,7 +322,7 @@ func ValidateConfigVersion(configVersion string, basicAuthWarning string) models
 
 // ValidateBasicAuthPassword checks if the basic auth password is configured using only one method.
 // Returns a warning message if multiple password sources are configured.
-func ValidateBasicAuthPassword(config models.TraefikConfig) string {
+func ValidateBasicAuthPassword(config TraefikConfig) string {
 	// If basic auth is not enabled, no validation needed
 	if !config.EnableBasicAuth {
 		return ""
@@ -405,203 +394,4 @@ func CompareVersions(v1, v2 string) int {
 func IsValidUrl(str string) bool {
 	u, err := url.Parse(str)
 	return err == nil && u.Scheme != "" && u.Host != ""
-}
-
-// --- Configuration Accessors ---
-
-// GetTraefikAPIHost returns the Traefik API host URL.
-func GetTraefikAPIHost() string {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-	return configuration.Environment.Traefik.APIHost
-}
-
-// GetSelfhstIconURL returns the base URL for selfh.st icons.
-func GetSelfhstIconURL() string {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-	return configuration.Environment.SelfhstIconURL
-}
-
-// GetLogLevel returns the configured log level.
-func GetLogLevel() string {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-	return configuration.Environment.LogLevel
-}
-
-// GetLanguage returns the configured language code.
-func GetLanguage() string {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-	return configuration.Environment.Language
-}
-
-// GetSearchEngineURL returns the search engine URL template.
-func GetSearchEngineURL() string {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-	return configuration.Environment.SearchEngineURL
-}
-
-// GetRefreshIntervalSeconds returns the refresh interval in seconds.
-func GetRefreshIntervalSeconds() int {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-	return configuration.Environment.RefreshIntervalSeconds
-}
-
-// GetGroupingEnabled returns whether grouping is enabled.
-func GetGroupingEnabled() bool {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-	return configuration.Environment.Grouping.Enabled
-}
-
-// GetGroupingColumns returns the number of columns for grouped display.
-func GetGroupingColumns() int {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-	return configuration.Environment.Grouping.Columns
-}
-
-// GetTagFrequencyThreshold returns the tag frequency threshold for grouping.
-func GetTagFrequencyThreshold() float64 {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-	return configuration.Environment.Grouping.TagFrequencyThreshold
-}
-
-// GetMinServicesPerGroup returns the minimum services required per group.
-func GetMinServicesPerGroup() int {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-	return configuration.Environment.Grouping.MinServicesPerGroup
-}
-
-// GetTraefikConfig returns the complete Traefik configuration.
-func GetTraefikConfig() models.TraefikConfig {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-	return configuration.Environment.Traefik
-}
-
-// GetEnableBasicAuth returns whether basic auth is enabled for Traefik API.
-func GetEnableBasicAuth() bool {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-	return configuration.Environment.Traefik.EnableBasicAuth
-}
-
-// GetBasicAuthUsername returns the basic auth username.
-func GetBasicAuthUsername() string {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-	return configuration.Environment.Traefik.BasicAuth.Username
-}
-
-// GetBasicAuthPassword returns the basic auth password.
-func GetBasicAuthPassword() string {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-	return configuration.Environment.Traefik.BasicAuth.Password
-}
-
-// GetInsecureSkipVerify returns whether SSL verification is skipped.
-func GetInsecureSkipVerify() bool {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-	return configuration.Environment.Traefik.InsecureSkipVerify
-}
-
-// GetServiceOverrideMap returns a copy of the map of service overrides by router name.
-func GetServiceOverrideMap() map[string]models.ServiceOverride {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-	result := make(map[string]models.ServiceOverride, len(serviceOverrideMap))
-	for k, v := range serviceOverrideMap {
-		result[k] = v
-	}
-	return result
-}
-
-// GetExcludeRouters returns a copy of the list of router exclusion patterns.
-func GetExcludeRouters() []string {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-	result := make([]string, len(configuration.Services.Exclude.Routers))
-	copy(result, configuration.Services.Exclude.Routers)
-	return result
-}
-
-// GetExcludeEntrypoints returns a copy of the list of entrypoint exclusion patterns.
-func GetExcludeEntrypoints() []string {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-	result := make([]string, len(configuration.Services.Exclude.Entrypoints))
-	copy(result, configuration.Services.Exclude.Entrypoints)
-	return result
-}
-
-// GetManualServices returns a copy of the list of manually configured services.
-func GetManualServices() []models.ManualService {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-	result := make([]models.ManualService, len(configuration.Services.Manual))
-	copy(result, configuration.Services.Manual)
-	return result
-}
-
-// GetConfigCompatibilityStatus returns the configuration compatibility status.
-func GetConfigCompatibilityStatus() models.ConfigStatus {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-	return configCompatibilityStatus
-}
-
-// GetConfiguration returns a copy of the complete configuration.
-// This should be used sparingly as it returns the entire config.
-func GetConfiguration() models.TralaConfiguration {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-	return configuration
-}
-
-// GetServiceOverride looks up a service override by router name.
-// Returns the override and true if found, or empty override and false if not.
-func GetServiceOverride(routerName string) (models.ServiceOverride, bool) {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-	override, ok := serviceOverrideMap[routerName]
-	return override, ok
-}
-
-// GetIconOverride returns the icon override for a router name, or empty string if none.
-func GetIconOverride(routerName string) string {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-	if override, ok := serviceOverrideMap[routerName]; ok {
-		return override.Icon
-	}
-	return ""
-}
-
-// GetDisplayNameOverride returns the display name override for a router name, or empty string if none.
-func GetDisplayNameOverride(routerName string) string {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-	if override, ok := serviceOverrideMap[routerName]; ok {
-		return override.DisplayName
-	}
-	return ""
-}
-
-// GetGroupOverride returns the group override for a router name, or empty string if none.
-func GetGroupOverride(routerName string) string {
-	configurationMux.RLock()
-	defer configurationMux.RUnlock()
-	if override, ok := serviceOverrideMap[routerName]; ok {
-		return override.Group
-	}
-	return ""
 }

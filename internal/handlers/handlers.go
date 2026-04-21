@@ -111,30 +111,32 @@ func SecurityHeaders(next http.Handler) http.Handler {
 // --- HTTP Handlers ---
 
 // ServeHTMLTemplate renders the HTML template with i18n support using go-i18n.
-func ServeHTMLTemplate(w http.ResponseWriter, r *http.Request) {
-	lang := config.GetLanguage()
+func ServeHTMLTemplate(c *config.TralaConfiguration) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		lang := c.GetLanguage()
 
-	// Create a localizer for the selected language
-	localizer := appi18n.GetLocalizer(lang)
+		// Create a localizer for the selected language
+		localizer := appi18n.GetLocalizer(lang)
 
-	// Set the response content type and execute the pre-parsed template
-	// Set the response content type
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		// Set the response content type and execute the pre-parsed template
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	// Execute the pre-parsed template and pass the request-local Localizer in data.
-	// Templates must call the function like: {{ T .Localizer "message.id" }}
-	data := map[string]interface{}{
-		"Localizer": localizer,
-	}
-	if err := parsedTemplate.Execute(w, data); err != nil {
-		http.Error(w, "Template execution error", http.StatusInternalServerError)
+		// Execute the pre-parsed template and pass the request-local Localizer in data.
+		// Templates must call the function like: {{ T .Localizer "message.id" }}
+		data := map[string]interface{}{
+			"Localizer": localizer,
+		}
+		if err := parsedTemplate.Execute(w, data); err != nil {
+			http.Error(w, "Template execution error", http.StatusInternalServerError)
+		}
 	}
 }
 
 // ServicesHandler is the main API endpoint. It fetches, processes, and returns all service data.
-func ServicesHandler(w http.ResponseWriter, r *http.Request) {
+func ServicesHandler(c *config.TralaConfiguration) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r*http.Request) {
 	// Fetch entrypoints from the Traefik API with pagination support.
-	entryPointsURL := fmt.Sprintf("%s/api/entrypoints", config.GetTraefikAPIHost())
+	entryPointsURL := fmt.Sprintf("%s/api/entrypoints", c.GetTraefikAPIHost())
 	entryPoints, err := traefik.FetchAllPages[models.TraefikEntryPoint](w, entryPointsURL)
 	if err != nil {
 		return // Error already handled by FetchAllPages
@@ -148,7 +150,7 @@ func ServicesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch routers from the Traefik API with pagination support.
-	routersURL := fmt.Sprintf("%s/api/http/routers", config.GetTraefikAPIHost())
+	routersURL := fmt.Sprintf("%s/api/http/routers", c.GetTraefikAPIHost())
 	routers, err := traefik.FetchAllPages[models.TraefikRouter](w, routersURL)
 	if err != nil {
 		return // Error already handled by FetchAllPages
@@ -198,13 +200,15 @@ func ServicesHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(finalServices)
 }
+}
 
 // HealthHandler performs health checks and returns the status.
-func HealthHandler(w http.ResponseWriter, r *http.Request) {
+func HealthHandler(c *config.TralaConfiguration) func (w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
 	// Check if the most important configuration (Traefik API host) is valid
-	traefikAPIHost := config.GetTraefikAPIHost()
-	searchEngineURL := config.GetSearchEngineURL()
-	selfhstIconURL := config.GetSelfhstIconURL()
+	traefikAPIHost := c.GetTraefikAPIHost()
+	searchEngineURL := c.GetSearchEngineURL()
+	selfhstIconURL := c.GetSelfhstIconURL()
 
 	if traefikAPIHost == "" {
 		http.Error(w, "Traefik API host is not set", http.StatusInternalServerError)
@@ -240,18 +244,20 @@ func HealthHandler(w http.ResponseWriter, r *http.Request) {
 	// If we reach here, all checks passed
 	fmt.Fprint(w, "OK")
 }
+}
 
 // StatusHandler returns combined application status information.
-func StatusHandler(w http.ResponseWriter, r *http.Request) {
+func StatusHandler(c *config.TralaConfiguration) func(w http.ResponseWriter, r *http.Request) {
+	return  func(w http.ResponseWriter, r *http.Request) {
 	// Get version information
 	versionInfo := GetVersionInfo()
 
 	// Get configuration status (already stored in global variable)
-	configStatus := config.GetConfigCompatibilityStatus()
+	configStatus := c.GetConfigCompatibilityStatus()
 
 	// Get frontend configuration
-	searchEngineURL := config.GetSearchEngineURL()
-	refreshIntervalSeconds := config.GetRefreshIntervalSeconds()
+	searchEngineURL := c.GetSearchEngineURL()
+	refreshIntervalSeconds := c.GetRefreshIntervalSeconds()
 
 	// Extract service name from search engine URL and find its icon
 	searchEngineIconURL := ""
@@ -268,8 +274,8 @@ func StatusHandler(w http.ResponseWriter, r *http.Request) {
 		SearchEngineURL:        searchEngineURL,
 		SearchEngineIconURL:    searchEngineIconURL,
 		RefreshIntervalSeconds: refreshIntervalSeconds,
-		GroupingEnabled:        config.GetGroupingEnabled(),
-		GroupingColumns:        config.GetGroupingColumns(),
+		GroupingEnabled:        c.GetGroupingEnabled(),
+		GroupingColumns:        c.GetGroupingColumns(),
 	}
 
 	// Combine all status information
@@ -281,6 +287,7 @@ func StatusHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(status)
+}
 }
 
 // --- Helper Functions ---

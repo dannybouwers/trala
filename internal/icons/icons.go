@@ -20,6 +20,13 @@ import (
 // The frontend will use a fallback if icon is empty.
 const DefaultIcon = ""
 
+var conf *config.TralaConfiguration
+
+// Init stores the configuration instance for use by icon functions.
+func Init(c *config.TralaConfiguration) {
+	conf = c
+}
+
 // FindIcon tries all icon-finding methods in order of priority and returns the icon URL.
 // The priority order is:
 // 1. User-defined overrides (from configuration)
@@ -29,7 +36,7 @@ const DefaultIcon = ""
 // 5. HTML parsing for <link> tags
 func FindIcon(routerName, serviceURL string, displayNameReplaced string, reference string) string {
 	// Priority 1: Check user-defined overrides.
-	if iconValue := config.GetIconOverride(routerName); iconValue != "" {
+	if iconValue := conf.GetIconOverride(routerName); iconValue != "" {
 		// Check if it's a full URL
 		if strings.HasPrefix(iconValue, "http://") || strings.HasPrefix(iconValue, "https://") {
 			debugf("[%s] Found icon via override (full URL): %s", routerName, iconValue)
@@ -39,13 +46,13 @@ func FindIcon(routerName, serviceURL string, displayNameReplaced string, referen
 		// Check if it's a filename with valid extension
 		ext := filepath.Ext(iconValue)
 		if ext == ".png" || ext == ".svg" || ext == ".webp" {
-			iconURL := config.GetSelfhstIconURL() + strings.TrimPrefix(ext, ".") + "/" + strings.ToLower(iconValue)
+			iconURL := conf.GetSelfhstIconURL() + strings.TrimPrefix(ext, ".") + "/" + strings.ToLower(iconValue)
 			debugf("[%s] Found icon via override (filename): %s", routerName, iconURL)
 			return iconURL
 		}
 
 		// Fallback to default behavior if extension is not valid
-	iconURL := config.GetSelfhstIconURL() + "png/" + strings.ToLower(iconValue) + ".png"
+		iconURL := conf.GetSelfhstIconURL() + "png/" + strings.ToLower(iconValue) + ".png"
 		debugf("[%s] Found icon via override (fallback): %s", routerName, iconURL)
 		return iconURL
 	}
@@ -131,10 +138,10 @@ func GetSelfHstIconURL(reference string) string {
 		if icon.Reference == reference {
 			// Prefer SVG if available
 			if icon.SVG == "Yes" {
-				return fmt.Sprintf(config.GetSelfhstIconURL()+"svg/%s.svg", icon.Reference)
+				return fmt.Sprintf(conf.GetSelfhstIconURL()+"svg/%s.svg", icon.Reference)
 			}
 			// Fallback to PNG
-			return fmt.Sprintf(config.GetSelfhstIconURL()+"png/%s.png", icon.Reference)
+			return fmt.Sprintf(conf.GetSelfhstIconURL()+"png/%s.png", icon.Reference)
 		}
 	}
 	return ""

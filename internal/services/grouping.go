@@ -6,14 +6,13 @@ import (
 	"math"
 	"sort"
 
-	"server/internal/config"
 	"server/internal/models"
 )
 
 // CalculateGroups implements the grouping algorithm for services.
 // It assigns services to groups based on common tags, respecting any pre-assigned groups.
 func CalculateGroups(services []models.Service) []models.Service {
-	if !config.GetGroupingEnabled() {
+	if !conf.GetGroupingEnabled() {
 		for i := range services {
 			services[i].Group = ""
 		}
@@ -101,8 +100,8 @@ func calculateTagFrequencies(remaining []models.Service) (map[string]int, map[st
 func filterValidTags(remaining []models.Service, tagCount map[string]int) []string {
 	validTags := make([]string, 0)
 	total := len(remaining)
-	threshold := int(config.GetTagFrequencyThreshold() * float64(total))
-	minServicesPerGroup := config.GetMinServicesPerGroup()
+	threshold := int(conf.GetTagFrequencyThreshold() * float64(total))
+	minServicesPerGroup := conf.GetMinServicesPerGroup()
 
 	for tag, count := range tagCount {
 		// Case 1: Skip tags that are too common (above frequency threshold) and don't meet minimum services

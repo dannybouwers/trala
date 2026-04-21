@@ -15,6 +15,13 @@ import (
 	"server/internal/traefik"
 )
 
+var conf *config.TralaConfiguration
+
+// Init stores the configuration instance for use by service functions.
+func Init(c *config.TralaConfiguration) {
+	conf = c
+}
+
 // ProcessRouter takes a raw Traefik router, finds its best icon, and returns the final Service object.
 // It handles router name extraction, URL reconstruction, exclusion checks, and icon/tag discovery.
 // Returns the processed Service and a boolean indicating if the router should be included.
@@ -54,7 +61,7 @@ func ProcessRouter(router models.TraefikRouter, entryPoints map[string]models.Tr
 	}
 
 	// Check if this is the Traefik API service and exclude it
-	traefikAPIHost := config.GetTraefikAPIHost()
+	traefikAPIHost := conf.GetTraefikAPIHost()
 	if traefikAPIHost != "" {
 		if !strings.HasPrefix(traefikAPIHost, "http") {
 			traefikAPIHost = "http://" + traefikAPIHost
@@ -67,7 +74,7 @@ func ProcessRouter(router models.TraefikRouter, entryPoints map[string]models.Tr
 	}
 
 	// Get display name override if available
-	displayName := config.GetDisplayNameOverride(routerName)
+	displayName := conf.GetDisplayNameOverride(routerName)
 	if displayName == "" {
 		routerNameReplaced := strings.ReplaceAll(routerName, "-", " ")
 		displayName = routerNameReplaced
@@ -80,7 +87,7 @@ func ProcessRouter(router models.TraefikRouter, entryPoints map[string]models.Tr
 	tags := icons.FindTags(routerName, reference)
 
 	// get group override if available
-	group := config.GetGroupOverride(routerName)
+	group := conf.GetGroupOverride(routerName)
 
 	return models.Service{
 		Name:     displayName,
@@ -95,7 +102,7 @@ func ProcessRouter(router models.TraefikRouter, entryPoints map[string]models.Tr
 // GetManualServices processes manually configured services and returns them as Service objects.
 // It validates URLs, resolves icons, and applies default values where needed.
 func GetManualServices() []models.Service {
-	manualServices := config.GetManualServices()
+	manualServices := conf.GetManualServices()
 	result := make([]models.Service, 0, len(manualServices))
 
 	for _, manualService := range manualServices {
@@ -118,10 +125,10 @@ func GetManualServices() []models.Service {
 			// Check if it's a filename with valid extension
 			ext := filepath.Ext(iconURL)
 			if ext == ".png" || ext == ".svg" || ext == ".webp" {
-				iconURL = config.GetSelfhstIconURL() + strings.TrimPrefix(ext, ".") + "/" + strings.ToLower(iconURL)
+				iconURL = conf.GetSelfhstIconURL() + strings.TrimPrefix(ext, ".") + "/" + strings.ToLower(iconURL)
 			} else {
 				// Fallback to default behavior if extension is not valid
-				iconURL = config.GetSelfhstIconURL() + "png/" + strings.ToLower(iconURL) + ".png"
+				iconURL = conf.GetSelfhstIconURL() + "png/" + strings.ToLower(iconURL) + ".png"
 			}
 		}
 
@@ -154,7 +161,7 @@ func GetManualServices() []models.Service {
 // IsExcluded checks if a router name is in the exclude list.
 // Supports wildcard patterns (*, ?) and logs invalid patterns.
 func IsExcluded(routerName string) bool {
-	excludePatterns := config.GetExcludeRouters()
+	excludePatterns := conf.GetExcludeRouters()
 
 	for _, exclude := range excludePatterns {
 		match, err := filepath.Match(exclude, routerName)
@@ -173,7 +180,7 @@ func IsExcluded(routerName string) bool {
 // IsEntrypointExcluded checks if an entrypoint name is in the exclude list.
 // Supports wildcard patterns (*, ?) and logs invalid patterns.
 func IsEntrypointExcluded(entryPoints []string) bool {
-	excludePatterns := config.GetExcludeEntrypoints()
+	excludePatterns := conf.GetExcludeEntrypoints()
 
 	for _, ep := range entryPoints {
 		for _, exclude := range excludePatterns {

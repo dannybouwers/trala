@@ -7,9 +7,11 @@ import (
 	"time"
 
 	"server/internal/config"
+	"server/internal/debug"
 	"server/internal/handlers"
 	"server/internal/i18n"
 	"server/internal/icons"
+	"server/internal/services"
 	"server/internal/traefik"
 )
 
@@ -34,7 +36,13 @@ func noDirListingFileServer(dir string) http.Handler {
 
 func main() {
 	// Load configuration
-	config.Load()
+	conf := config.NewTralaConfiguration()
+
+	// Initialize packages with config
+	debug.Init(conf)
+	traefik.Init(conf)
+	services.Init(conf)
+	icons.Init(conf)
 
 	// Initialize HTTP clients
 	traefik.InitializeHTTPClient()
@@ -44,7 +52,7 @@ func main() {
 	icons.InitHTTPClient(externalHTTPClient)
 
 	// Initialize i18n
-	i18n.Init()
+	i18n.Init(conf)
 
 	// Set version info in handlers
 	handlers.SetVersionInfo(version, commit, buildTime)
@@ -59,12 +67,12 @@ func main() {
 
 	// Setup routes
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/services", handlers.ServicesHandler)
-	mux.HandleFunc("/api/status", handlers.StatusHandler)
-	mux.HandleFunc("/api/health", handlers.HealthHandler)
+	mux.HandleFunc("/api/services", handlers.ServicesHandler(conf))
+	mux.HandleFunc("/api/status", handlers.StatusHandler(conf))
+	mux.HandleFunc("/api/health", handlers.HealthHandler(conf))
 	mux.Handle("/static/", http.StripPrefix("/static/", noDirListingFileServer("/app/static")))
 	mux.Handle("/icons/", http.StripPrefix("/icons/", noDirListingFileServer("/icons")))
-	mux.HandleFunc("/", handlers.ServeHTMLTemplate)
+	mux.HandleFunc("/", handlers.ServeHTMLTemplate(conf))
 
 	// Start server
 	log.Println("WARNING: TraLa does not provide authentication. Ensure it is placed behind an authenticating reverse proxy.")
