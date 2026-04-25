@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"os"
@@ -13,7 +14,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"html/template"
 	"time"
 
 	"github.com/nicksnyder/go-i18n/v2/i18n"
@@ -134,160 +134,160 @@ func ServeHTMLTemplate(c *config.TralaConfiguration) http.HandlerFunc {
 
 // ServicesHandler is the main API endpoint. It fetches, processes, and returns all service data.
 func ServicesHandler(c *config.TralaConfiguration) func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r*http.Request) {
-	// Fetch entrypoints from the Traefik API with pagination support.
-	entryPointsURL := fmt.Sprintf("%s/api/entrypoints", c.GetTraefikAPIHost())
-	entryPoints, err := traefik.FetchAllPages[models.TraefikEntryPoint](w, entryPointsURL)
-	if err != nil {
-		return // Error already handled by FetchAllPages
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Fetch entrypoints from the Traefik API with pagination support.
+		entryPointsURL := fmt.Sprintf("%s/api/entrypoints", c.GetTraefikAPIHost())
+		entryPoints, err := traefik.FetchAllPages[models.TraefikEntryPoint](w, entryPointsURL)
+		if err != nil {
+			return // Error already handled by FetchAllPages
+		}
+		debugf("Successfully fetched %d entrypoints from Traefik.", len(entryPoints))
+
+		// Create a map for faster lookups.
+		entryPointsMap := make(map[string]models.TraefikEntryPoint, len(entryPoints))
+		for _, ep := range entryPoints {
+			entryPointsMap[ep.Name] = ep
+		}
+
+		// Fetch routers from the Traefik API with pagination support.
+		routersURL := fmt.Sprintf("%s/api/http/routers", c.GetTraefikAPIHost())
+		routers, err := traefik.FetchAllPages[models.TraefikRouter](w, routersURL)
+		if err != nil {
+			return // Error already handled by FetchAllPages
+		}
+		debugf("Successfully fetched %d routers from Traefik.", len(routers))
+
+		// Process all routers concurrently to find their icons.
+		var wg sync.WaitGroup
+		serviceChan := make(chan models.Service, len(routers))
+
+		for _, router := range routers {
+			wg.Add(1)
+			go func(r models.TraefikRouter) {
+				defer wg.Done()
+				service, ok := services.ProcessRouter(r, entryPointsMap)
+				if ok {
+					serviceChan <- service
+				}
+			}(router)
+		}
+
+		wg.Wait()
+		close(serviceChan)
+
+		// Collect results from Traefik services.
+		traefikServices := make([]models.Service, 0, len(routers))
+		for service := range serviceChan {
+			traefikServices = append(traefikServices, service)
+		}
+
+		// Add manual services
+		manualServices := services.GetManualServices()
+
+		// Merge all services
+		finalServices := make([]models.Service, 0, len(traefikServices)+len(manualServices))
+		finalServices = append(finalServices, traefikServices...)
+		finalServices = append(finalServices, manualServices...)
+
+		// Calculate groups
+		finalServices = services.CalculateGroups(finalServices)
+
+		// Sort by priority (higher priority first)
+		sort.Slice(finalServices, func(i, j int) bool {
+			return finalServices[i].Priority > finalServices[j].Priority
+		})
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(finalServices)
 	}
-	debugf("Successfully fetched %d entrypoints from Traefik.", len(entryPoints))
-
-	// Create a map for faster lookups.
-	entryPointsMap := make(map[string]models.TraefikEntryPoint, len(entryPoints))
-	for _, ep := range entryPoints {
-		entryPointsMap[ep.Name] = ep
-	}
-
-	// Fetch routers from the Traefik API with pagination support.
-	routersURL := fmt.Sprintf("%s/api/http/routers", c.GetTraefikAPIHost())
-	routers, err := traefik.FetchAllPages[models.TraefikRouter](w, routersURL)
-	if err != nil {
-		return // Error already handled by FetchAllPages
-	}
-	debugf("Successfully fetched %d routers from Traefik.", len(routers))
-
-	// Process all routers concurrently to find their icons.
-	var wg sync.WaitGroup
-	serviceChan := make(chan models.Service, len(routers))
-
-	for _, router := range routers {
-		wg.Add(1)
-		go func(r models.TraefikRouter) {
-			defer wg.Done()
-			service, ok := services.ProcessRouter(r, entryPointsMap)
-			if ok {
-				serviceChan <- service
-			}
-		}(router)
-	}
-
-	wg.Wait()
-	close(serviceChan)
-
-	// Collect results from Traefik services.
-	traefikServices := make([]models.Service, 0, len(routers))
-	for service := range serviceChan {
-		traefikServices = append(traefikServices, service)
-	}
-
-	// Add manual services
-	manualServices := services.GetManualServices()
-
-	// Merge all services
-	finalServices := make([]models.Service, 0, len(traefikServices)+len(manualServices))
-	finalServices = append(finalServices, traefikServices...)
-	finalServices = append(finalServices, manualServices...)
-
-	// Calculate groups
-	finalServices = services.CalculateGroups(finalServices)
-
-	// Sort by priority (higher priority first)
-	sort.Slice(finalServices, func(i, j int) bool {
-		return finalServices[i].Priority > finalServices[j].Priority
-	})
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(finalServices)
-}
 }
 
 // HealthHandler performs health checks and returns the status.
-func HealthHandler(c *config.TralaConfiguration) func (w http.ResponseWriter, r *http.Request) {
+func HealthHandler(c *config.TralaConfiguration) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-	// Check if the most important configuration (Traefik API host) is valid
-	traefikAPIHost := c.GetTraefikAPIHost()
-	searchEngineURL := c.GetSearchEngineURL()
-	selfhstIconURL := c.GetSelfhstIconURL()
+		// Check if the most important configuration (Traefik API host) is valid
+		traefikAPIHost := c.GetTraefikAPIHost()
+		searchEngineURL := c.GetSearchEngineURL()
+		selfhstIconURL := c.GetSelfhstIconURL()
 
-	if traefikAPIHost == "" {
-		http.Error(w, "Traefik API host is not set", http.StatusInternalServerError)
-		return
+		if traefikAPIHost == "" {
+			http.Error(w, "Traefik API host is not set", http.StatusInternalServerError)
+			return
+		}
+
+		// Validate SearchEngineURL
+		if !config.IsValidUrl(searchEngineURL) {
+			http.Error(w, "Search Engine URL is invalid", http.StatusInternalServerError)
+			return
+		}
+
+		// Validate SelfhstIconURL
+		if !config.IsValidUrl(selfhstIconURL) {
+			http.Error(w, "Selfhst Icon URL is invalid", http.StatusInternalServerError)
+			return
+		}
+
+		// Check if Traefik is reachable
+		entryPointsURL := fmt.Sprintf("%s/api/entrypoints", traefikAPIHost)
+
+		// Create a context with timeout for the health check
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		// Create and execute the request with context and auth
+		resp, err := traefik.CreateAndExecuteHTTPRequestWithContext(w, ctx, "GET", entryPointsURL)
+		if err != nil {
+			return // Error already handled by CreateAndExecuteHTTPRequestWithContext
+		}
+		defer resp.Body.Close()
+
+		// If we reach here, all checks passed
+		fmt.Fprint(w, "OK")
 	}
-
-	// Validate SearchEngineURL
-	if !config.IsValidUrl(searchEngineURL) {
-		http.Error(w, "Search Engine URL is invalid", http.StatusInternalServerError)
-		return
-	}
-
-	// Validate SelfhstIconURL
-	if !config.IsValidUrl(selfhstIconURL) {
-		http.Error(w, "Selfhst Icon URL is invalid", http.StatusInternalServerError)
-		return
-	}
-
-	// Check if Traefik is reachable
-	entryPointsURL := fmt.Sprintf("%s/api/entrypoints", traefikAPIHost)
-
-	// Create a context with timeout for the health check
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// Create and execute the request with context and auth
-	resp, err := traefik.CreateAndExecuteHTTPRequestWithContext(w, ctx, "GET", entryPointsURL)
-	if err != nil {
-		return // Error already handled by CreateAndExecuteHTTPRequestWithContext
-	}
-	defer resp.Body.Close()
-
-	// If we reach here, all checks passed
-	fmt.Fprint(w, "OK")
-}
 }
 
 // StatusHandler returns combined application status information.
 func StatusHandler(c *config.TralaConfiguration) func(w http.ResponseWriter, r *http.Request) {
-	return  func(w http.ResponseWriter, r *http.Request) {
-	// Get version information
-	versionInfo := GetVersionInfo()
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Get version information
+		versionInfo := GetVersionInfo()
 
-	// Get configuration status (already stored in global variable)
-	configStatus := c.GetConfigCompatibilityStatus()
+		// Get configuration status (already stored in global variable)
+		configStatus := c.GetConfigCompatibilityStatus()
 
-	// Get frontend configuration
-	searchEngineURL := c.GetSearchEngineURL()
-	refreshIntervalSeconds := c.GetRefreshIntervalSeconds()
+		// Get frontend configuration
+		searchEngineURL := c.GetSearchEngineURL()
+		refreshIntervalSeconds := c.GetRefreshIntervalSeconds()
 
-	// Extract service name from search engine URL and find its icon
-	searchEngineIconURL := ""
-	if searchEngineURL != "" {
-		serviceName := services.ExtractServiceNameFromURL(searchEngineURL)
-		if serviceName != "" {
-			displayNameReplaced := strings.ReplaceAll(serviceName, " ", "-")
-			reference := icons.ResolveSelfHstReference(displayNameReplaced)
-			searchEngineIconURL = icons.FindIcon(serviceName, searchEngineURL, serviceName, reference)
+		// Extract service name from search engine URL and find its icon
+		searchEngineIconURL := ""
+		if searchEngineURL != "" {
+			serviceName := services.ExtractServiceNameFromURL(searchEngineURL)
+			if serviceName != "" {
+				displayNameReplaced := strings.ReplaceAll(serviceName, " ", "-")
+				reference := icons.ResolveSelfHstReference(displayNameReplaced)
+				searchEngineIconURL = icons.FindIcon(serviceName, searchEngineURL, serviceName, reference)
+			}
 		}
-	}
 
-	frontendConfig := models.FrontendConfig{
-		SearchEngineURL:        searchEngineURL,
-		SearchEngineIconURL:    searchEngineIconURL,
-		RefreshIntervalSeconds: refreshIntervalSeconds,
-		GroupingEnabled:        c.GetGroupingEnabled(),
-		GroupingColumns:        c.GetGroupingColumns(),
-	}
+		frontendConfig := models.FrontendConfig{
+			SearchEngineURL:        searchEngineURL,
+			SearchEngineIconURL:    searchEngineIconURL,
+			RefreshIntervalSeconds: refreshIntervalSeconds,
+			GroupingEnabled:        c.GetGroupingEnabled(),
+			GroupingColumns:        c.GetGroupingColumns(),
+		}
 
-	// Combine all status information
-	status := models.ApplicationStatus{
-		Version:  versionInfo,
-		Config:   configStatus,
-		Frontend: frontendConfig,
-	}
+		// Combine all status information
+		status := models.ApplicationStatus{
+			Version:  versionInfo,
+			Config:   configStatus,
+			Frontend: frontendConfig,
+		}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(status)
-}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(status)
+	}
 }
 
 // --- Helper Functions ---
