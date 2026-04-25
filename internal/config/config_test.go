@@ -240,11 +240,11 @@ func TestValidateConfigVersion(t *testing.T) {
 func TestValidateBasicAuthPassword(t *testing.T) {
 	// Uses t.Setenv: cannot run t.Parallel.
 	cases := []struct {
-		name         string
-		cfg          TraefikConfig
-		envPassword  string
-		envPwFile    string
-		wantWarning  bool
+		name        string
+		cfg         TraefikConfig
+		envPassword string
+		envPwFile   string
+		wantWarning bool
 	}{
 		{
 			name: "disabled returns empty regardless of env",
@@ -610,7 +610,8 @@ func TestLoadConfiguration_MissingTraefikHost(t *testing.T) {
 	conf, err := LoadConfiguration(nonExistentPath(t))
 	assert.Nil(t, conf)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "traefik API host is not set")
+	assert.Contains(t, err.Error(), "api_host")
+	assert.Contains(t, err.Error(), "is required")
 }
 
 func TestLoadConfiguration_EnvOverrides(t *testing.T) {
@@ -826,4 +827,75 @@ func TestLoadConfiguration_DebugLogLevelMarshalsEffectiveConfig(t *testing.T) {
 	conf, err := LoadConfiguration(nonExistentPath(t))
 	require.NoError(t, err)
 	assert.Equal(t, "debug", conf.GetLogLevel())
+}
+
+func TestLoadConfiguration_ValidationFailsOnInvalidURL(t *testing.T) {
+	clearConfigEnv(t)
+	// Use "http://" which has a scheme but no host, so it fails URL validation
+	// and bypasses the "bare host gets http:// prefix" post-processing.
+	t.Setenv("TRAEFIK_API_HOST", "http://")
+
+	conf, err := LoadConfiguration(nonExistentPath(t))
+	assert.Nil(t, conf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must be a valid URL")
+}
+
+func TestLoadConfiguration_ValidationFailsOnInvalidSelfhstIconURL(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("TRAEFIK_API_HOST", "http://t.local")
+	t.Setenv("SELFHST_ICON_URL", "not-a-url")
+
+	conf, err := LoadConfiguration(nonExistentPath(t))
+	assert.Nil(t, conf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must be a valid URL")
+}
+
+func TestLoadConfiguration_ValidationFailsOnInvalidSearchEngineURL(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("TRAEFIK_API_HOST", "http://t.local")
+	t.Setenv("SEARCH_ENGINE_URL", "not-a-url")
+
+	conf, err := LoadConfiguration(nonExistentPath(t))
+	assert.Nil(t, conf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must be a valid URL")
+}
+
+func TestLoadConfiguration_ValidationFailsOnMissingVersion(t *testing.T) {
+	clearConfigEnv(t)
+	yaml := `
+version: ""
+environment:
+  traefik:
+    api_host: "http://t.local"
+`
+	path := writeConfigFile(t, yaml)
+
+	conf, err := LoadConfiguration(path)
+	assert.Nil(t, conf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "version")
+	assert.Contains(t, err.Error(), "required")
+}
+
+func TestLoadConfiguration_ValidationFailsOnInvalidManualServiceURL(t *testing.T) {
+	clearConfigEnv(t)
+	yaml := `
+version: "3.0"
+environment:
+  traefik:
+    api_host: "http://t.local"
+services:
+  manual:
+    - name: bad-service
+      url: "not-a-url"
+`
+	path := writeConfigFile(t, yaml)
+
+	conf, err := LoadConfiguration(path)
+	assert.Nil(t, conf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must be a valid URL")
 }

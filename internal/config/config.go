@@ -174,13 +174,6 @@ func LoadConfiguration(path string) (*TralaConfiguration, error) {
 		}
 	}
 
-	// Validate LOG_LEVEL
-	validLogLevels := map[string]bool{"info": true, "debug": true, "warn": true, "error": true}
-	if config.Environment.LogLevel != "" && !validLogLevels[config.Environment.LogLevel] {
-		log.Printf("Warning: Unknown LOG_LEVEL '%s', defaulting to 'info'", config.Environment.LogLevel)
-		config.Environment.LogLevel = "info"
-	}
-
 	// After environment overrides, log effective configuration
 	debugLogEffectiveConfig := func(format string, v ...interface{}) {
 		if config.Environment.LogLevel == "debug" {
@@ -213,10 +206,16 @@ func LoadConfiguration(path string) (*TralaConfiguration, error) {
 	}
 
 	// Step 5: post-processing / validation
-	if config.Environment.Traefik.APIHost == "" {
-		return nil, fmt.Errorf("traefik API host is not set: provide via env var TRAEFIK_API_HOST or config file")
+
+	// Sanitize LogLevel: if invalid, fallback to info so Validate() passes
+	validLogLevels := map[string]bool{"info": true, "debug": true, "warn": true, "error": true}
+	if config.Environment.LogLevel != "" && !validLogLevels[strings.ToLower(config.Environment.LogLevel)] {
+		log.Printf("Warning: Unknown LOG_LEVEL '%s', defaulting to 'info'", config.Environment.LogLevel)
+		config.Environment.LogLevel = "info"
 	}
-	if !strings.HasPrefix(config.Environment.Traefik.APIHost, "http://") && !strings.HasPrefix(config.Environment.Traefik.APIHost, "https://") {
+
+	// Only prefix if it's not empty; the 'required' tag will catch empty values during Validate()
+	if config.Environment.Traefik.APIHost != "" && !strings.HasPrefix(config.Environment.Traefik.APIHost, "http://") && !strings.HasPrefix(config.Environment.Traefik.APIHost, "https://") {
 		config.Environment.Traefik.APIHost = "http://" + config.Environment.Traefik.APIHost
 	}
 	if !strings.HasSuffix(config.Environment.SelfhstIconURL, "/") {
@@ -244,6 +243,11 @@ func LoadConfiguration(path string) (*TralaConfiguration, error) {
 		config.Environment.Traefik.BasicAuth.Password = strings.TrimSpace(string(data))
 	}
 
+	// Validate struct-level rules after all overrides are applied.
+	if err := Validate(&config); err != nil {
+		return nil, err
+	}
+
 	log.Printf("Loaded %d router excludes from %s", len(config.Services.Exclude.Routers), path)
 	log.Printf("Loaded %d entrypoint excludes from %s", len(config.Services.Exclude.Entrypoints), path)
 	log.Printf("Loaded %d service overrides from %s", len(config.Services.Overrides), path)
@@ -268,7 +272,7 @@ func LoadConfiguration(path string) (*TralaConfiguration, error) {
 
 	if config.Environment.LogLevel == "debug" {
 		log.Printf("Using effective configuration:")
-		out, err := yaml.Marshal(config)
+		out, err := yaml.Marshal(&config)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal effective configuration: %w", err)
 		}
