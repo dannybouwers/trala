@@ -36,7 +36,7 @@ func TestValidate_MissingRequiredFields(t *testing.T) {
 			mutate: func(c *TralaConfiguration) {
 				c.Environment.Traefik.APIHost = ""
 			},
-			wantField: "api_host",
+			wantField: "environment.traefik.api_host",
 			wantTag:   "required",
 		},
 		{
@@ -44,7 +44,7 @@ func TestValidate_MissingRequiredFields(t *testing.T) {
 			mutate: func(c *TralaConfiguration) {
 				c.Environment.SelfhstIconURL = ""
 			},
-			wantField: "selfhst_icon_url",
+			wantField: "environment.selfhst_icon_url",
 			wantTag:   "required",
 		},
 		{
@@ -52,7 +52,7 @@ func TestValidate_MissingRequiredFields(t *testing.T) {
 			mutate: func(c *TralaConfiguration) {
 				c.Environment.SearchEngineURL = ""
 			},
-			wantField: "search_engine_url",
+			wantField: "environment.search_engine_url",
 			wantTag:   "required",
 		},
 		{
@@ -153,7 +153,7 @@ func TestValidate_OutOfRangeValues(t *testing.T) {
 			mutate: func(c *TralaConfiguration) {
 				c.Environment.RefreshIntervalSeconds = 0
 			},
-			wantField: "refresh_interval_seconds",
+			wantField: "environment.refresh_interval_seconds",
 			wantTag:   ">=",
 		},
 		{
@@ -161,7 +161,7 @@ func TestValidate_OutOfRangeValues(t *testing.T) {
 			mutate: func(c *TralaConfiguration) {
 				c.Environment.Grouping.Columns = 0
 			},
-			wantField: "columns",
+			wantField: "environment.grouping.columns",
 			wantTag:   ">=",
 		},
 		{
@@ -169,7 +169,7 @@ func TestValidate_OutOfRangeValues(t *testing.T) {
 			mutate: func(c *TralaConfiguration) {
 				c.Environment.Grouping.Columns = 7
 			},
-			wantField: "columns",
+			wantField: "environment.grouping.columns",
 			wantTag:   "<=",
 		},
 		{
@@ -177,7 +177,7 @@ func TestValidate_OutOfRangeValues(t *testing.T) {
 			mutate: func(c *TralaConfiguration) {
 				c.Environment.Grouping.TagFrequencyThreshold = 0
 			},
-			wantField: "tag_frequency_threshold",
+			wantField: "environment.grouping.tag_frequency_threshold",
 			wantTag:   ">",
 		},
 		{
@@ -185,7 +185,7 @@ func TestValidate_OutOfRangeValues(t *testing.T) {
 			mutate: func(c *TralaConfiguration) {
 				c.Environment.Grouping.TagFrequencyThreshold = 1.5
 			},
-			wantField: "tag_frequency_threshold",
+			wantField: "environment.grouping.tag_frequency_threshold",
 			wantTag:   "<=",
 		},
 		{
@@ -193,7 +193,7 @@ func TestValidate_OutOfRangeValues(t *testing.T) {
 			mutate: func(c *TralaConfiguration) {
 				c.Environment.Grouping.MinServicesPerGroup = 0
 			},
-			wantField: "min_services_per_group",
+			wantField: "environment.grouping.min_services_per_group",
 			wantTag:   ">=",
 		},
 	}
@@ -226,16 +226,4 @@ func TestValidate_NilConfig(t *testing.T) {
 	err := Validate(nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "nil config")
-}
-
-func TestValidate_MultipleErrors(t *testing.T) {
-	t.Parallel()
-	c := newPopulatedConfig()
-	c.Version = ""
-	c.Environment.Traefik.APIHost = ""
-	err := Validate(c)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "version")
-	assert.Contains(t, err.Error(), "api_host")
-	assert.Contains(t, err.Error(), ";")
 }

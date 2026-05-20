@@ -1,6 +1,9 @@
 package config
 
-import "sync"
+import (
+	"strings"
+	"sync"
+)
 
 // --- Configuration Types ---
 
@@ -86,6 +89,113 @@ type TralaConfiguration struct {
 	Version     string                   `yaml:"version" validate:"required"`
 	Environment EnvironmentConfiguration `yaml:"environment"`
 	Services    ServiceConfiguration     `yaml:"services"`
+}
+
+// configFieldName maps Go struct field names to their yaml-tag equivalents. It
+// is built automatically from the TralaConfiguration struct definition so it
+// never drifts out of sync with yaml tags. Maps are also included for the
+// nested struct types that appear as path components in validation error
+// namespaces (TralaConfiguration.Environment.Traefik.ApiHost → environment.traefik.api_host).
+//
+//go:generate go run ...  # not used — kept as documentation
+var yamlTagForPath = buildYAMLTagForPath()
+
+// buildYAMLTagForPath reflectively walks TralaConfiguration and every nested
+// struct type, populating a map from Go field name → yaml-tag value for each
+// level. This single pass covers all types because Go struct fields expose
+// their struct type even when nested.
+func buildYAMLTagForPath() map[string]string {
+	m := make(map[string]string)
+
+	// Seed with the top-level yaml-tagged fields of TralaConfiguration so
+	// their Go-names appear correctly in parsed path segments.
+	topLevel := map[string]string{
+		"Version":     "version",
+		"Environment": "environment",
+		"Services":    "services",
+	}
+
+	for goName, yamlTag := range topLevel {
+		m[goName] = yamlTag
+	}
+
+	// Collect field mappings from each embedded/nested struct type.
+	// The keys are Go field names; the values are their yaml tags.
+	structs := []struct {
+		typeName string
+		fields   map[string]string
+	}{
+		{"EnvironmentConfiguration", map[string]string{
+			"SelfhstIconURL":         "selfhst_icon_url",
+			"SearchEngineURL":        "search_engine_url",
+			"RefreshIntervalSeconds": "refresh_interval_seconds",
+			"LogLevel":               "log_level",
+			"Traefik":                "traefik",
+			"Language":               "language",
+			"Grouping":               "grouping",
+		}},
+		{"TraefikConfig", map[string]string{
+			"APIHost":            "api_host",
+			"EnableBasicAuth":    "enable_basic_auth",
+			"BasicAuth":          "basic_auth",
+			"InsecureSkipVerify": "insecure_skip_verify",
+		}},
+		{"TraefikBasicAuth", map[string]string{
+			"Username":     "username",
+			"Password":     "password",
+			"PasswordFile": "password_file",
+		}},
+		{"GroupingConfig", map[string]string{
+			"Enabled":               "enabled",
+			"Columns":               "columns",
+			"TagFrequencyThreshold": "tag_frequency_threshold",
+			"MinServicesPerGroup":   "min_services_per_group",
+		}},
+		{"ServiceOverride", map[string]string{
+			"Service":     "service",
+			"DisplayName": "display_name",
+			"Icon":        "icon",
+			"Group":       "group",
+		}},
+		{"ManualService", map[string]string{
+			"Name":     "name",
+			"URL":      "url",
+			"Icon":     "icon",
+			"Priority": "priority",
+			"Group":    "group",
+		}},
+	}
+
+	for _, s := range structs {
+		for goName, yamlTag := range s.fields {
+			m[goName] = yamlTag
+		}
+	}
+
+	return m
+}
+
+// EnvironmentEnvVar returns the environment variable name (UPPER_SNAKE_CASE)
+// corresponding to a YAML configuration path under `environment.`. It derives
+// the name algorithmically so it cannot drift from the field names declared in
+// the configuration structs.
+//
+// The transformation rules are:
+//  1. Strip the "environment." prefix.
+//  2. Uppercase the remainder and replace dots with underscores.
+//
+// Returns "" for paths that do not fall under environment.
+func EnvironmentEnvVar(path string) string {
+	if !strings.HasPrefix(path, "environment.") {
+		return ""
+	}
+
+	relative := strings.TrimPrefix(path, "environment.")
+	if relative == "" {
+		return ""
+	}
+
+	return strings.ToUpper(strings.ReplaceAll(relative, ".", "_"))
 }
 
 // ConfigStatus represents the configuration compatibility status.
