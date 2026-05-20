@@ -36,7 +36,7 @@ func NewTralaConfiguration() *TralaConfiguration {
 func LoadConfiguration(path string) (*TralaConfiguration, error) {
 	// Step 1: defaults
 	config := TralaConfiguration{
-		Version: "",
+		Version: "0.0", // Default to 0.0 to trigger warning if version is not set in config file
 		Environment: EnvironmentConfiguration{
 			SelfhstIconURL:         "https://cdn.jsdelivr.net/gh/selfhst/icons/",
 			SearchEngineURL:        "https://www.google.com/search?q=",
@@ -74,7 +74,7 @@ func LoadConfiguration(path string) (*TralaConfiguration, error) {
 	if err != nil {
 		if os.IsNotExist(err) {
 			log.Printf("Info: No configuration file found at %s. Using defaults + env vars.", path)
-			config.Version = MinimumConfigVersion // Set to minimum required if no config file
+			config.Version = MinimumConfigVersion // Set to minimum required if no config file is found, to avoid version warning
 		} else {
 			log.Printf("Warning: Could not read configuration file at %s: %v", path, err)
 		}

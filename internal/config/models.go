@@ -83,7 +83,7 @@ type TralaConfiguration struct {
 	overrideMap  map[string]ServiceOverride
 	compatStatus ConfigStatus
 
-	Version     string                   `yaml:"version"`
+	Version     string                   `yaml:"version" validate:"required"`
 	Environment EnvironmentConfiguration `yaml:"environment"`
 	Services    ServiceConfiguration     `yaml:"services"`
 }
