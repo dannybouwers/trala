@@ -209,7 +209,9 @@ func LoadConfiguration(path string) (*TralaConfiguration, error) {
 
 	// Sanitize LogLevel: if invalid, fallback to info so Validate() passes
 	validLogLevels := map[string]bool{"info": true, "debug": true, "warn": true, "error": true}
-	if config.Environment.LogLevel != "" && !validLogLevels[strings.ToLower(config.Environment.LogLevel)] {
+	if config.Environment.LogLevel != "" && validLogLevels[strings.ToLower(config.Environment.LogLevel)] {
+		config.Environment.LogLevel = strings.ToLower(config.Environment.LogLevel)
+	} else {
 		log.Printf("Warning: Unknown LOG_LEVEL '%s', defaulting to 'info'", config.Environment.LogLevel)
 		config.Environment.LogLevel = "info"
 	}
