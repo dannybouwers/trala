@@ -1,6 +1,9 @@
 package config
 
-import "sync"
+import (
+	"strings"
+	"sync"
+)
 
 // --- Configuration Types ---
 
@@ -15,7 +18,7 @@ type TraefikBasicAuth struct {
 // TraefikConfig contains configuration for connecting to the Traefik API.
 // It includes the API host and optional authentication settings.
 type TraefikConfig struct {
-	APIHost            string           `yaml:"api_host"`
+	APIHost            string           `yaml:"api_host" validate:"required,url"`
 	EnableBasicAuth    bool             `yaml:"enable_basic_auth"`
 	BasicAuth          TraefikBasicAuth `yaml:"basic_auth"`
 	InsecureSkipVerify bool             `yaml:"insecure_skip_verify"`
@@ -24,7 +27,7 @@ type TraefikConfig struct {
 // ServiceOverride defines overrides for a specific service/router.
 // It allows customizing the display name, icon, and group for a service.
 type ServiceOverride struct {
-	Service     string `yaml:"service"`
+	Service     string `yaml:"service" validate:"required"`
 	DisplayName string `yaml:"display_name,omitempty"`
 	Icon        string `yaml:"icon,omitempty"`
 	Group       string `yaml:"group,omitempty"`
@@ -33,8 +36,8 @@ type ServiceOverride struct {
 // ManualService defines a manually configured service.
 // This is used for services not discovered via Traefik.
 type ManualService struct {
-	Name     string `yaml:"name"`
-	URL      string `yaml:"url"`
+	Name     string `yaml:"name" validate:"required"`
+	URL      string `yaml:"url" validate:"required,url"`
 	Icon     string `yaml:"icon,omitempty"`
 	Priority int    `yaml:"priority,omitempty"`
 	Group    string `yaml:"group,omitempty"`
@@ -51,26 +54,26 @@ type ExcludeConfig struct {
 // It includes exclusions, overrides, and manual service definitions.
 type ServiceConfiguration struct {
 	Exclude   ExcludeConfig     `yaml:"exclude"`
-	Overrides []ServiceOverride `yaml:"overrides"`
-	Manual    []ManualService   `yaml:"manual"`
+	Overrides []ServiceOverride `yaml:"overrides" validate:"dive"`
+	Manual    []ManualService   `yaml:"manual" validate:"dive"`
 }
 
 // GroupingConfig contains settings for automatic service grouping.
 // Grouping organizes services by common tags.
 type GroupingConfig struct {
 	Enabled               bool    `yaml:"enabled"`
-	Columns               int     `yaml:"columns"`
-	TagFrequencyThreshold float64 `yaml:"tag_frequency_threshold"`
-	MinServicesPerGroup   int     `yaml:"min_services_per_group"`
+	Columns               int     `yaml:"columns" validate:"gte=1,lte=6"`
+	TagFrequencyThreshold float64 `yaml:"tag_frequency_threshold" validate:"gt=0,lte=1"`
+	MinServicesPerGroup   int     `yaml:"min_services_per_group" validate:"gte=1"`
 }
 
 // EnvironmentConfiguration contains environment-level configuration options.
 // These settings control the overall behavior of the application.
 type EnvironmentConfiguration struct {
-	SelfhstIconURL         string         `yaml:"selfhst_icon_url"`
-	SearchEngineURL        string         `yaml:"search_engine_url"`
-	RefreshIntervalSeconds int            `yaml:"refresh_interval_seconds"`
-	LogLevel               string         `yaml:"log_level"`
+	SelfhstIconURL         string         `yaml:"selfhst_icon_url" validate:"required,url"`
+	SearchEngineURL        string         `yaml:"search_engine_url" validate:"required,url"`
+	RefreshIntervalSeconds int            `yaml:"refresh_interval_seconds" validate:"gte=1"`
+	LogLevel               string         `yaml:"log_level" validate:"oneof=info debug warn error"`
 	Traefik                TraefikConfig  `yaml:"traefik"`
 	Language               string         `yaml:"language"`
 	Grouping               GroupingConfig `yaml:"grouping"`
@@ -79,13 +82,120 @@ type EnvironmentConfiguration struct {
 // TralaConfiguration is the root configuration structure.
 // It represents the complete configuration file format.
 type TralaConfiguration struct {
-	mu          sync.RWMutex
-	overrideMap map[string]ServiceOverride
+	mu           sync.RWMutex
+	overrideMap  map[string]ServiceOverride
 	compatStatus ConfigStatus
 
-	Version     string                   `yaml:"version"`
+	Version     string                   `yaml:"version" validate:"required"`
 	Environment EnvironmentConfiguration `yaml:"environment"`
 	Services    ServiceConfiguration     `yaml:"services"`
+}
+
+// configFieldName maps Go struct field names to their yaml-tag equivalents. It
+// is built automatically from the TralaConfiguration struct definition so it
+// never drifts out of sync with yaml tags. Maps are also included for the
+// nested struct types that appear as path components in validation error
+// namespaces (TralaConfiguration.Environment.Traefik.ApiHost → environment.traefik.api_host).
+//
+//go:generate go run ...  # not used — kept as documentation
+var yamlTagForPath = buildYAMLTagForPath()
+
+// buildYAMLTagForPath reflectively walks TralaConfiguration and every nested
+// struct type, populating a map from Go field name → yaml-tag value for each
+// level. This single pass covers all types because Go struct fields expose
+// their struct type even when nested.
+func buildYAMLTagForPath() map[string]string {
+	m := make(map[string]string)
+
+	// Seed with the top-level yaml-tagged fields of TralaConfiguration so
+	// their Go-names appear correctly in parsed path segments.
+	topLevel := map[string]string{
+		"Version":     "version",
+		"Environment": "environment",
+		"Services":    "services",
+	}
+
+	for goName, yamlTag := range topLevel {
+		m[goName] = yamlTag
+	}
+
+	// Collect field mappings from each embedded/nested struct type.
+	// The keys are Go field names; the values are their yaml tags.
+	structs := []struct {
+		typeName string
+		fields   map[string]string
+	}{
+		{"EnvironmentConfiguration", map[string]string{
+			"SelfhstIconURL":         "selfhst_icon_url",
+			"SearchEngineURL":        "search_engine_url",
+			"RefreshIntervalSeconds": "refresh_interval_seconds",
+			"LogLevel":               "log_level",
+			"Traefik":                "traefik",
+			"Language":               "language",
+			"Grouping":               "grouping",
+		}},
+		{"TraefikConfig", map[string]string{
+			"APIHost":            "api_host",
+			"EnableBasicAuth":    "enable_basic_auth",
+			"BasicAuth":          "basic_auth",
+			"InsecureSkipVerify": "insecure_skip_verify",
+		}},
+		{"TraefikBasicAuth", map[string]string{
+			"Username":     "username",
+			"Password":     "password",
+			"PasswordFile": "password_file",
+		}},
+		{"GroupingConfig", map[string]string{
+			"Enabled":               "enabled",
+			"Columns":               "columns",
+			"TagFrequencyThreshold": "tag_frequency_threshold",
+			"MinServicesPerGroup":   "min_services_per_group",
+		}},
+		{"ServiceOverride", map[string]string{
+			"Service":     "service",
+			"DisplayName": "display_name",
+			"Icon":        "icon",
+			"Group":       "group",
+		}},
+		{"ManualService", map[string]string{
+			"Name":     "name",
+			"URL":      "url",
+			"Icon":     "icon",
+			"Priority": "priority",
+			"Group":    "group",
+		}},
+	}
+
+	for _, s := range structs {
+		for goName, yamlTag := range s.fields {
+			m[goName] = yamlTag
+		}
+	}
+
+	return m
+}
+
+// EnvironmentEnvVar returns the environment variable name (UPPER_SNAKE_CASE)
+// corresponding to a YAML configuration path under `environment.`. It derives
+// the name algorithmically so it cannot drift from the field names declared in
+// the configuration structs.
+//
+// The transformation rules are:
+//  1. Strip the "environment." prefix.
+//  2. Uppercase the remainder and replace dots with underscores.
+//
+// Returns "" for paths that do not fall under environment.
+func EnvironmentEnvVar(path string) string {
+	if !strings.HasPrefix(path, "environment.") {
+		return ""
+	}
+
+	relative := strings.TrimPrefix(path, "environment.")
+	if relative == "" {
+		return ""
+	}
+
+	return strings.ToUpper(strings.ReplaceAll(relative, ".", "_"))
 }
 
 // ConfigStatus represents the configuration compatibility status.

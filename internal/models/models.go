@@ -62,8 +62,6 @@ type VersionInfo struct {
 	BuildTime string `json:"buildTime"`
 }
 
-
-
 // FrontendConfig represents the configuration data sent to the frontend.
 // It contains settings that the frontend needs for proper operation.
 type FrontendConfig struct {
@@ -77,9 +75,9 @@ type FrontendConfig struct {
 // ApplicationStatus represents the combined status information for the application.
 // It aggregates version, configuration, and frontend status into a single response.
 type ApplicationStatus struct {
-	Version  VersionInfo    `json:"version"`
-	Config   config.ConfigStatus   `json:"config"`
-	Frontend FrontendConfig `json:"frontend"`
+	Version  VersionInfo         `json:"version"`
+	Config   config.ConfigStatus `json:"config"`
+	Frontend FrontendConfig      `json:"frontend"`
 }
 
 // --- SelfHst Types ---
