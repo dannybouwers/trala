@@ -4,10 +4,10 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
 
 // Get the README document specifically
 const docs = await getCollection('docs');
-const readmeDoc = docs.find(doc => doc.id === 'README.md');
+const readmeDoc = docs.find(doc => doc.id === 'readme');
 
 if (!readmeDoc) {
-  throw new Error('README.md not found in docs collection');
+  throw new Error('README not found in docs collection');
 }
 
 const { Content } = await render(readmeDoc);
