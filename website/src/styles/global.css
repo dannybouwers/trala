@@ -3,6 +3,8 @@
 @import 'remark-github-alerts/styles/github-colors-light.css';
 @import 'remark-github-alerts/styles/github-colors-dark-class.css';
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @import "tailwindcss";
 @plugin '@tailwindcss/typography';
 
