@@ -15,18 +15,16 @@
 </div>
 
 <script>
-  import { isDarkMode } from '../utils/theme';
-
   function initHeroScreenshot() {
-    const lightScreenshot = document.getElementById('hero-screenshot-light');
-    const darkScreenshot = document.getElementById('hero-screenshot-dark');
+    var lightScreenshot = document.getElementById('hero-screenshot-light');
+    var darkScreenshot = document.getElementById('hero-screenshot-dark');
     
     if (!lightScreenshot || !darkScreenshot) {
       return;
     }
     
     function updateTheme() {
-      const isDark = isDarkMode();
+      var isDark = document.documentElement.classList.contains('dark');
       
       if (isDark) {
         darkScreenshot.style.display = 'block';
@@ -37,12 +35,10 @@
       }
     }
     
-    // Initial update
     updateTheme();
     
-    // Watch for theme changes
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
+    var observer = new MutationObserver(function(mutations) {
+      mutations.forEach(function(mutation) {
         if (mutation.attributeName === 'class') {
           updateTheme();
         }
@@ -52,7 +48,6 @@
     observer.observe(document.documentElement, { attributes: true });
   }
   
-  // Initialize on page load
   initHeroScreenshot();
   document.addEventListener('astro:page-load', initHeroScreenshot);
 </script>
