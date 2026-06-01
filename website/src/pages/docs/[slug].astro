@@ -4,12 +4,12 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
 
 export async function getStaticPaths() {
   const docs = await getCollection('docs');
-  
-  // Filter out README.md - it's handled by the index.astro page
+
+  // Filter out readme - it's handled by the index.astro page
   return docs
-    .filter(doc => doc.id !== 'README.md')
+    .filter(doc => doc.id !== 'readme')
     .map((doc) => ({
-      params: { slug: doc.id.replace('.md', '') },
+      params: { slug: doc.id },
       props: { doc },
     }));
 }
@@ -17,9 +17,9 @@ export async function getStaticPaths() {
 const { doc } = Astro.props;
 const { Content } = await render(doc);
 
-const currentPath = `/docs/${doc.id.replace('.md', '')}`;
+const currentPath = `/docs/${doc.id}`;
 ---
 
-<DocsLayout title={doc.data.title || doc.id.replace('.md', '')} currentPath={currentPath}>
+<DocsLayout title={doc.data.title || doc.id} currentPath={currentPath}>
   <Content />
 </DocsLayout>

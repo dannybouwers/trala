@@ -1,24 +1,29 @@
 import { defineConfig } from 'astro/config';
-import tailwind from '@astrojs/tailwind';
 import mdx from '@astrojs/mdx';
 import remarkGithubAlerts from 'remark-github-alerts';
+import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   site: 'https://trala.fyi',
   srcDir: './src',
   outDir: './dist',
   publicDir: './public',
+
   integrations: [
-    tailwind(),
     mdx({syntaxHighlight: 'shiki'})
   ],
+
   markdown: {
+    remarkPlugins: [remarkGithubAlerts],
     shikiConfig: {
       themes: {
         light: 'github-light',
         dark: 'dracula'
       }
-    },
-    remarkPlugins: [remarkGithubAlerts]
+    }
+  },
+
+  vite: {
+    plugins: [tailwindcss()]
   }
 });
