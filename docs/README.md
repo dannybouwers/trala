@@ -19,7 +19,7 @@ Everything automatic can be overwritten with a single YAML configuration file, p
 - **Live Search & Sort:** Instantly filter and sort your services by name, URL, or priority.
 - **External Search:** Use the search bar to quickly search the web with your configured search engine.
 - **Lightweight & Multi-Arch:** Built with Go and a minimal Alpine base, the Docker image is small and compatible with `amd64` and `arm64` architectures.
-- **Multi-Language Support:** Available in English, German, and Dutch.
+- **Multi-Language Support:** Available in English, German Dutch and French.
 
 ## Quick start
 
