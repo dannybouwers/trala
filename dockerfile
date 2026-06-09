@@ -36,7 +36,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags "-X main.version=${VERSION} -X ma
 
 ### STAGE 3: Production ###
 # Start with a minimal Alpine image
-FROM alpine:3.23
+FROM alpine:3.24
 
 # Set a working directory
 WORKDIR /app
