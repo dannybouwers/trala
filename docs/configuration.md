@@ -24,7 +24,7 @@ environment:
   # Log level: info, debug
   log_level: info
 
-  # Language: en, de, nl
+  # Language: en, de, nl, fr
   language: nl
 
   # Smart grouping configuration
@@ -88,7 +88,7 @@ services:
 | `REFRESH_INTERVAL_SECONDS` | Auto-refresh interval | `30` |
 | `SEARCH_ENGINE_URL` | Search engine URL | `https://www.google.com/search?q=` |
 | `LOG_LEVEL` | Log level: `info` or `debug` | `info` |
-| `LANGUAGE` | Language: `en`, `de`, or `nl` | `en` |
+| `LANGUAGE` | Language: `en`, `de`, `nl` or `fr` | `en` |
 | `SELFHST_ICON_URL` | Base URL for icon endpoint | `https://cdn.jsdelivr.net/gh/selfhst/icons/` |
 
 ### Grouping Variables
@@ -117,6 +117,7 @@ TraLa supports three languages:
 - `en` — English (default)
 - `de` — German
 - `nl` — Dutch
+- `fr` — French
 
 Set the language using the `LANGUAGE` environment variable or the `language` key in the configuration file.
 
