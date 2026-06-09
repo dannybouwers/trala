@@ -8,7 +8,7 @@ require (
 	github.com/lithammer/fuzzysearch v1.1.8
 	github.com/nicksnyder/go-i18n/v2 v2.6.1
 	github.com/stretchr/testify v1.11.1
-	go.yaml.in/yaml/v4 v4.0.0-rc.4
+	go.yaml.in/yaml/v4 v4.0.0-rc.5
 	golang.org/x/text v0.38.0
 )
 
