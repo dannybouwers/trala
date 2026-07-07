@@ -12,6 +12,7 @@ services:
       - "--api.dashboard=true" # Enable the Traefik dashboard
       - "--providers.docker=true" # Enable Docker provider
       - "--providers.docker.exposedbydefault=false" # Don't expose containers by default
+      - "--providers.docker.constraints=Label(`proxy`,`main`)"
       - "--entrypoints.web.address=:80" # HTTP entrypoint
       - "--entrypoints.web.http.redirections.entrypoint.to=websecure" # Redirect HTTP to HTTPS
       - "--entrypoints.web.http.redirections.entrypoint.scheme=https" # Redirect scheme to HTTPS
@@ -26,6 +27,7 @@ services:
     networks:
       - traefik-net # A shared network
     labels:
+      - "proxy=main"
       - "traefik.enable=true"
       - "traefik.http.routers.traefik.rule=Host(`traefik.localhost`)"
       - "traefik.http.routers.traefik.entrypoints=websecure"
@@ -55,6 +57,7 @@ services:
       # Optional: Set to "debug" for verbose icon-finding logs
       - LOG_LEVEL=debug
     labels:
+      - "proxy=main"
       # --- Traefik Labels to expose TraLa itself ---
       - "traefik.enable=true"
       - "traefik.http.routers.trala.rule=Host(`trala.localhost`)"
@@ -70,6 +73,7 @@ services:
     networks:
       - traefik-net
     labels:
+      - "proxy=main"
       - "traefik.enable=true"
       - "traefik.http.routers.subscription-manager.rule=Host(`subscription-manager.localhost`)"
       - "traefik.http.routers.subscription-manager.entrypoints=websecure"
@@ -81,6 +85,7 @@ services:
     networks:
       - traefik-net
     labels:
+      - "proxy=main"
       - "traefik.enable=true"
       - "traefik.http.routers.firefly-iii.rule=Host(`firefly-iii.localhost`)"
       - "traefik.http.routers.firefly-iii.entrypoints=websecure"
@@ -92,6 +97,7 @@ services:
     networks:
       - traefik-net
     labels:
+      - "proxy=main"
       - "traefik.enable=true"
       - "traefik.http.routers.spliit.rule=Host(`spliit.localhost`)"
       - "traefik.http.routers.spliit.entrypoints=websecure"
@@ -103,6 +109,7 @@ services:
     networks:
       - traefik-net
     labels:
+      - "proxy=main"
       - "traefik.enable=true"
       - "traefik.http.routers.watchstate.rule=Host(`watchstate.localhost`)"
       - "traefik.http.routers.watchstate.entrypoints=websecure"
@@ -114,6 +121,7 @@ services:
     networks:
       - traefik-net
     labels:
+      - "proxy=main"
       - "traefik.enable=true"
       - "traefik.http.routers.jellyfin.rule=Host(`jellyfin.localhost`)"
       - "traefik.http.routers.jellyfin.entrypoints=websecure"
@@ -125,6 +133,7 @@ services:
     networks:
       - traefik-net
     labels:
+      - "proxy=main"
       - "traefik.enable=true"
       - "traefik.http.routers.plex.rule=Host(`plex.localhost`)"
       - "traefik.http.routers.plex.entrypoints=websecure"
@@ -136,6 +145,7 @@ services:
     networks:
       - traefik-net
     labels:
+      - "proxy=main"
       - "traefik.enable=true"
       - "traefik.http.routers.portainer.rule=Host(`portainer.localhost`)"
       - "traefik.http.routers.portainer.entrypoints=websecure"
@@ -147,6 +157,7 @@ services:
     networks:
       - traefik-net
     labels:
+      - "proxy=main"
       - "traefik.enable=true"
       - "traefik.http.routers.unifi-controller.rule=Host(`unifi.localhost`)"
       - "traefik.http.routers.unifi-controller.entrypoints=websecure"
@@ -158,6 +169,7 @@ services:
     networks:
       - traefik-net
     labels:
+      - "proxy=main"
       - "traefik.enable=true"
       - "traefik.http.routers.unknown-service.rule=Host(`unknown.localhost`)"
       - "traefik.http.routers.unknown-service.entrypoints=websecure"
@@ -169,6 +181,7 @@ services:
     networks:
       - traefik-net
     labels:
+      - "proxy=main"
       - "traefik.enable=true"
       - "traefik.http.routers.vaultwarden.rule=Host(`vaultwarden.localhost`)"
       - "traefik.http.routers.vaultwarden.entrypoints=websecure"
@@ -180,6 +193,7 @@ services:
     networks:
       - traefik-net
     labels:
+      - "proxy=main"
       - "traefik.enable=true"
       - "traefik.http.routers.home-assistant.rule=Host(`home-assistant.localhost`)"
       - "traefik.http.routers.home-assistant.entrypoints=websecure"
@@ -191,6 +205,7 @@ services:
     networks:
       - traefik-net
     labels:
+      - "proxy=main"
       - "traefik.enable=true"
       - "traefik.http.routers.nextcloud.rule=Host(`nextcloud.localhost`)"
       - "traefik.http.routers.nextcloud.entrypoints=websecure"
@@ -202,6 +217,7 @@ services:
     networks:
       - traefik-net
     labels:
+      - "proxy=main"
       - "traefik.enable=true"
       - "traefik.http.routers.adguard.rule=Host(`adguard.localhost`)"
       - "traefik.http.routers.adguard.entrypoints=websecure"
@@ -213,7 +229,123 @@ services:
     networks:
       - traefik-net
     labels:
+      - "proxy=main"
       - "traefik.enable=true"
       - "traefik.http.routers.proxmox.rule=Host(`proxmox.localhost`)"
       - "traefik.http.routers.proxmox.entrypoints=websecure"
       - "traefik.http.services.proxmox.loadbalancer.server.port=80"
+
+  # Second proxy (arr)
+  traefik-arr:
+    image: "traefik:latest"
+    container_name: traefik-arr
+    restart: unless-stopped
+    command:
+      - "--api.insecure=true" # Required for the dashboard to access the API
+      - "--api.dashboard=true" # Enable the Traefik dashboard
+      - "--providers.docker=true" # Enable Docker provider
+      - "--providers.docker.exposedbydefault=false" # Don't expose containers by default
+      - "--providers.docker.constraints=Label(`proxy`,`arr`)"
+      - "--entrypoints.http.address=:8000" # HTTP entrypoint
+      - "--entrypoints.http.http.redirections.entrypoint.to=https" # Redirect HTTP to HTTPS
+      - "--entrypoints.http.http.redirections.entrypoint.scheme=https" # Redirect scheme to HTTPS
+      - "--entrypoints.https.address=:8443" # HTTPS entrypoint
+      - "--entrypoints.https.http.tls=true" # Enable TLS for https
+    ports:
+      - "8000:8000" # HTTP
+      - "8443:8443" # HTTPS
+      - "8081:8080" # Traefik dashboard
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro" # Docker socket for provider
+    networks:
+      - traefik-net # A shared network
+    labels:
+      - "proxy=arr"
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefikarr.localhost`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))"
+      - "traefik.http.routers.traefik.entrypoints=https"
+      - "traefik.http.services.traefik.loadbalancer.server.port=8080"
+
+  prowlerarr:
+    image: "traefik/whoami"
+    container_name: prowlerarr
+    networks:
+      - traefik-net
+    labels:
+      - "proxy=arr"
+      - "traefik.enable=true"
+      - "traefik.http.routers.prowlerarr.rule=Host(`prowlerarr.localhost`)"
+      - "traefik.http.routers.prowlerarr.entrypoints=https"
+      - "traefik.http.services.prowlerarr.loadbalancer.server.port=80"
+
+  sonarr:
+    image: "traefik/whoami"
+    container_name: sonarr
+    networks:
+      - traefik-net
+    labels:
+      - "proxy=arr"
+      - "traefik.enable=true"
+      - "traefik.http.routers.sonarr.rule=Host(`sonarr.localhost`)"
+      - "traefik.http.routers.sonarr.entrypoints=https"
+      - "traefik.http.services.sonarr.loadbalancer.server.port=80"
+
+  radarr:
+    image: "traefik/whoami"
+    container_name: radarr
+    networks:
+      - traefik-net
+    labels:
+      - "proxy=arr"
+      - "traefik.enable=true"
+      - "traefik.http.routers.radarr.rule=Host(`radarr.localhost`)"
+      - "traefik.http.routers.radarr.entrypoints=https"
+      - "traefik.http.services.radarr.loadbalancer.server.port=80"
+
+  lidarr:
+    image: "traefik/whoami"
+    container_name: lidarr
+    networks:
+      - traefik-net
+    labels:
+      - "proxy=arr"
+      - "traefik.enable=true"
+      - "traefik.http.routers.lidarr.rule=Host(`lidarr.localhost`)"
+      - "traefik.http.routers.lidarr.entrypoints=https"
+      - "traefik.http.services.lidarr.loadbalancer.server.port=80"
+
+  readarr:
+    image: "traefik/whoami"
+    container_name: readarr
+    networks:
+      - traefik-net
+    labels:
+      - "proxy=arr"
+      - "traefik.enable=true"
+      - "traefik.http.routers.readarr.rule=Host(`readarr.localhost`)"
+      - "traefik.http.routers.readarr.entrypoints=https"
+      - "traefik.http.services.readarr.loadbalancer.server.port=80"
+
+  bazarr:
+    image: "traefik/whoami"
+    container_name: bazarr
+    networks:
+      - traefik-net
+    labels:
+      - "proxy=arr"
+      - "traefik.enable=true"
+      - "traefik.http.routers.bazarr.rule=Host(`bazarr.localhost`)"
+      - "traefik.http.routers.bazarr.entrypoints=https"
+      - "traefik.http.services.bazarr.loadbalancer.server.port=80"
+
+  qbittorrent:
+    image: "traefik/whoami"
+    container_name: qbittorrent
+    networks:
+      - traefik-net
+    labels:
+      - "proxy=arr"
+      - "traefik.enable=true"
+      - "traefik.http.routers.qbittorrent.rule=Host(`qbittorrent.localhost`)"
+      - "traefik.http.routers.qbittorrent.entrypoints=https"
+      - "traefik.http.services.qbittorrent.loadbalancer.server.port=80"
