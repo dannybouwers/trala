@@ -49,7 +49,7 @@ services:
       # - ./icons:/icons:ro
     environment:
       # Required: The internal Docker network address for the Traefik API
-      - TRAEFIK_API_HOST=http://traefik:8080
+      # - TRAEFIK_API_HOST=http://traefik:8080
       # Optional: Change refresh interval
       - REFRESH_INTERVAL_SECONDS=30
       # Optional: Change the search engine

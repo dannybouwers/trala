@@ -23,6 +23,7 @@ import (
 	appi18n "server/internal/i18n"
 	"server/internal/icons"
 	"server/internal/models"
+	"server/internal/providers"
 	"server/internal/services"
 	"server/internal/traefik"
 )
@@ -135,64 +136,35 @@ func ServeHTMLTemplate(c *config.TralaConfiguration) http.HandlerFunc {
 // ServicesHandler is the main API endpoint. It fetches, processes, and returns all service data.
 func ServicesHandler(c *config.TralaConfiguration) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Fetch entrypoints from the Traefik API with pagination support.
-		entryPointsURL := fmt.Sprintf("%s/api/entrypoints", c.GetTraefikAPIHost())
-		entryPoints, err := traefik.FetchAllPages[models.TraefikEntryPoint](w, entryPointsURL)
-		if err != nil {
-			return // Error already handled by FetchAllPages
-		}
-		debugf("Successfully fetched %d entrypoints from Traefik.", len(entryPoints))
+		instances := c.GetTraefikInstances()
+		var allServices []models.Service
 
-		// Create a map for faster lookups.
-		entryPointsMap := make(map[string]models.TraefikEntryPoint, len(entryPoints))
-		for _, ep := range entryPoints {
-			entryPointsMap[ep.Name] = ep
-		}
-
-		// Fetch routers from the Traefik API with pagination support.
-		routersURL := fmt.Sprintf("%s/api/http/routers", c.GetTraefikAPIHost())
-		routers, err := traefik.FetchAllPages[models.TraefikRouter](w, routersURL)
-		if err != nil {
-			return // Error already handled by FetchAllPages
-		}
-		debugf("Successfully fetched %d routers from Traefik.", len(routers))
-
-		// Process all routers concurrently to find their icons.
-		var wg sync.WaitGroup
-		serviceChan := make(chan models.Service, len(routers))
-
-		for _, router := range routers {
-			wg.Add(1)
-			go func(r models.TraefikRouter) {
-				defer wg.Done()
-				service, ok := services.ProcessRouter(r, entryPointsMap)
-				if ok {
-					serviceChan <- service
-				}
-			}(router)
+		for _, instance := range instances {
+			provider := providers.NewTraefikProvider(instance)
+			services, err := provider.FetchServices(r.Context())
+			if err != nil {
+				log.Printf("WARNING: Failed to fetch services from instance %s: %v", instance.Name, err)
+				continue
+			}
+			for _, svc := range services {
+				allServices = append(allServices, models.Service{
+					Name:     svc.Name,
+					URL:      svc.URL,
+					Priority: svc.Priority,
+					Icon:     svc.Icon,
+					Tags:     svc.Tags,
+					Host:     instance.Name,
+				})
+			}
 		}
 
-		wg.Wait()
-		close(serviceChan)
-
-		// Collect results from Traefik services.
-		traefikServices := make([]models.Service, 0, len(routers))
-		for service := range serviceChan {
-			traefikServices = append(traefikServices, service)
-		}
-
-		// Add manual services
 		manualServices := services.GetManualServices()
-
-		// Merge all services
-		finalServices := make([]models.Service, 0, len(traefikServices)+len(manualServices))
-		finalServices = append(finalServices, traefikServices...)
+		finalServices := make([]models.Service, 0, len(allServices)+len(manualServices))
+		finalServices = append(finalServices, allServices...)
 		finalServices = append(finalServices, manualServices...)
 
-		// Calculate groups
 		finalServices = services.CalculateGroups(finalServices)
 
-		// Sort by priority (higher priority first)
 		sort.Slice(finalServices, func(i, j int) bool {
 			return finalServices[i].Priority > finalServices[j].Priority
 		})
@@ -205,43 +177,43 @@ func ServicesHandler(c *config.TralaConfiguration) func(w http.ResponseWriter, r
 // HealthHandler performs health checks and returns the status.
 func HealthHandler(c *config.TralaConfiguration) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Check if the most important configuration (Traefik API host) is valid
-		traefikAPIHost := c.GetTraefikAPIHost()
-		searchEngineURL := c.GetSearchEngineURL()
-		selfhstIconURL := c.GetSelfhstIconURL()
+		instances := c.GetTraefikInstances()
 
-		if traefikAPIHost == "" {
-			http.Error(w, "Traefik API host is not set", http.StatusInternalServerError)
+		if len(instances) == 0 {
+			http.Error(w, "No Traefik instances configured", http.StatusInternalServerError)
 			return
 		}
 
-		// Validate SearchEngineURL
+		searchEngineURL := c.GetSearchEngineURL()
+		selfhstIconURL := c.GetSelfhstIconURL()
+
 		if !config.IsValidUrl(searchEngineURL) {
 			http.Error(w, "Search Engine URL is invalid", http.StatusInternalServerError)
 			return
 		}
 
-		// Validate SelfhstIconURL
 		if !config.IsValidUrl(selfhstIconURL) {
 			http.Error(w, "Selfhst Icon URL is invalid", http.StatusInternalServerError)
 			return
 		}
 
-		// Check if Traefik is reachable
-		entryPointsURL := fmt.Sprintf("%s/api/entrypoints", traefikAPIHost)
-
-		// Create a context with timeout for the health check
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		// Create and execute the request with context and auth
-		resp, err := traefik.CreateAndExecuteHTTPRequestWithContext(w, ctx, "GET", entryPointsURL)
-		if err != nil {
-			return // Error already handled by CreateAndExecuteHTTPRequestWithContext
+		var failedInstances []string
+		for _, instance := range instances {
+			entryPointsURL := fmt.Sprintf("%s/api/entrypoints", instance.APIHost)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_, err := traefik.CreateAndExecuteHTTPRequestWithInstance(ctx, "GET", entryPointsURL, instance)
+			cancel()
+			if err != nil {
+				failedInstances = append(failedInstances, instance.Name)
+				log.Printf("WARNING: Health check failed for Traefik instance %s: %v", instance.Name, err)
+			}
 		}
-		defer resp.Body.Close()
 
-		// If we reach here, all checks passed
+		if len(failedInstances) > 0 {
+			http.Error(w, fmt.Sprintf("Traefik instances unreachable: %s", strings.Join(failedInstances, ", ")), http.StatusServiceUnavailable)
+			return
+		}
+
 		fmt.Fprint(w, "OK")
 	}
 }
@@ -249,17 +221,11 @@ func HealthHandler(c *config.TralaConfiguration) func(w http.ResponseWriter, r *
 // StatusHandler returns combined application status information.
 func StatusHandler(c *config.TralaConfiguration) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Get version information
 		versionInfo := GetVersionInfo()
-
-		// Get configuration status (already stored in global variable)
 		configStatus := c.GetConfigCompatibilityStatus()
-
-		// Get frontend configuration
 		searchEngineURL := c.GetSearchEngineURL()
 		refreshIntervalSeconds := c.GetRefreshIntervalSeconds()
 
-		// Extract service name from search engine URL and find its icon
 		searchEngineIconURL := ""
 		if searchEngineURL != "" {
 			serviceName := services.ExtractServiceNameFromURL(searchEngineURL)
@@ -270,15 +236,19 @@ func StatusHandler(c *config.TralaConfiguration) func(w http.ResponseWriter, r *
 			}
 		}
 
+		instances := c.GetTraefikInstances()
+		multiHost := len(instances) > 1
+
 		frontendConfig := models.FrontendConfig{
 			SearchEngineURL:        searchEngineURL,
 			SearchEngineIconURL:    searchEngineIconURL,
 			RefreshIntervalSeconds: refreshIntervalSeconds,
 			GroupingEnabled:        c.GetGroupingEnabled(),
 			GroupingColumns:        c.GetGroupingColumns(),
+			MultiHost:              multiHost,
+			MixServices:            false,
 		}
 
-		// Combine all status information
 		status := models.ApplicationStatus{
 			Version:  versionInfo,
 			Config:   configStatus,

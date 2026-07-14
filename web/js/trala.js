@@ -45,12 +45,16 @@ const configWarning = document.getElementById('config-warning');
 const groupToggle = document.getElementById('group-toggle');
 const groupControls = document.getElementById('group-controls');
 const expandCollapseAll = document.getElementById('expand-collapse-all');
+const hostControls = document.getElementById('host-controls');
+const mixToggle = document.getElementById('mix-toggle');
 
 let allServices = [];
 let allExpanded = true;
 let refreshIntervalId = null;
 let currentSort = 'name';
 let groupingEnabled = false; // Will be set after fetching server config
+let multiHost = false;
+let mixServices = false;
 const colors = ['bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-yellow-500', 'bg-lime-500', 'bg-green-500', 'bg-emerald-500', 'bg-teal-500', 'bg-cyan-500', 'bg-sky-500', 'bg-blue-500', 'bg-indigo-500', 'bg-violet-500', 'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500', 'bg-rose-500'];
 
 const getColorFromString = (str) => { let hash = 0; for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); } return colors[Math.abs(hash % colors.length)]; };
@@ -89,8 +93,8 @@ const getCardGridClasses = (groupColumns) => {
     return `group-content grid grid-cols-2 xl:grid-cols-${cardColumns} gap-4`;
 };
 const setApiLoading = (isLoading) => { apiLoadingBar.classList.toggle('loading', isLoading); };
-const showErrorPage = (message) => { serviceGrid.classList.add('hidden'); sortControls.classList.add('hidden'); groupControls.classList.add('hidden'); errorPage.classList.remove('hidden'); errorMessage.textContent = message; };
-const hideErrorPage = () => { serviceGrid.classList.remove('hidden'); sortControls.classList.remove('hidden'); groupControls.classList.remove('hidden'); errorPage.classList.add('hidden'); };
+const showErrorPage = (message) => { serviceGrid.classList.add('hidden'); sortControls.classList.add('hidden'); groupControls.classList.add('hidden'); if (hostControls) hostControls.classList.add('hidden'); errorPage.classList.remove('hidden'); errorMessage.textContent = message; };
+const hideErrorPage = () => { serviceGrid.classList.remove('hidden'); sortControls.classList.remove('hidden'); groupControls.classList.remove('hidden'); if (hostControls) hostControls.classList.remove('hidden'); errorPage.classList.add('hidden'); };
 
 const updateGreeting = () => {
     const hour = new Date().getHours();
@@ -162,6 +166,82 @@ const renderUngroupedView = (servicesToRender) => {
     }
 };
 
+const renderMultiHostView = (servicesToRender) => {
+    serviceGrid.className = '';
+    serviceGrid.innerHTML = '';
+    if (servicesToRender.length === 0) {
+        serviceGrid.innerHTML = searchInput.value ? `<p class="text-center text-gray-500 dark:text-gray-400">No services found for "${escapeHtml(searchInput.value)}".</p>` : '';
+        return;
+    }
+
+    const grouped = servicesToRender.reduce((acc, service) => {
+        const host = service.host || 'unknown';
+        if (!acc[host]) acc[host] = [];
+        acc[host].push(service);
+        return acc;
+    }, {});
+
+    const sortedHosts = Object.keys(grouped).sort();
+    sortedHosts.forEach(host => {
+        const hostDiv = document.createElement('div');
+        hostDiv.className = 'host-section mb-8';
+        const header = document.createElement('h2');
+        header.className = 'text-2xl font-bold mb-4 cursor-pointer border-b border-gray-300 dark:border-gray-700 pb-2';
+        header.textContent = host;
+        let hostExpanded = true;
+        header.addEventListener('click', () => {
+            hostExpanded = !hostExpanded;
+            content.style.display = hostExpanded ? 'block' : 'none';
+        });
+        hostDiv.appendChild(header);
+        const content = document.createElement('div');
+        content.className = 'host-content';
+        content.style.display = allExpanded ? 'block' : 'none';
+
+        if (groupingEnabled) {
+            const FALLBACK_GROUP_NAME = getTranslation('uncategorized');
+            const hostGrouped = grouped[host].reduce((acc, service) => {
+                const group = service.group || FALLBACK_GROUP_NAME;
+                if (!acc[group]) acc[group] = [];
+                acc[group].push(service);
+                return acc;
+            }, {});
+            const sortedGroups = Object.keys(hostGrouped).sort();
+            sortedGroups.forEach(group => {
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'group-section mb-6';
+                const groupHeader = document.createElement('h3');
+                groupHeader.className = 'text-lg font-semibold mb-3 cursor-pointer border-b border-gray-200 dark:border-gray-700 pb-1';
+                groupHeader.textContent = group;
+                let groupExpanded = true;
+                groupHeader.addEventListener('click', () => {
+                    groupExpanded = !groupExpanded;
+                    groupContent.style.display = groupExpanded ? 'grid' : 'none';
+                });
+                groupDiv.appendChild(groupHeader);
+                const groupContent = document.createElement('div');
+                groupContent.className = getCardGridClasses(GROUPING_COLUMNS);
+                groupContent.style.display = allExpanded ? 'grid' : 'none';
+                hostGrouped[group].sort((a, b) => b.priority - a.priority).forEach(service => {
+                    const card = createServiceCard(service);
+                    groupContent.appendChild(card);
+                });
+                groupDiv.appendChild(groupContent);
+                content.appendChild(groupDiv);
+            });
+        } else {
+            content.className = GRID_CLASSES_UNGROUPED;
+            grouped[host].sort((a, b) => b.priority - a.priority).forEach(service => {
+                const card = createServiceCard(service);
+                content.appendChild(card);
+            });
+        }
+
+        hostDiv.appendChild(content);
+        serviceGrid.appendChild(hostDiv);
+    });
+};
+
 // In grouped mode, services are organized into collapsible sections with headers, each containing a grid of services
 const renderGroupedView = (servicesToRender) => {
     serviceGrid.className = getGroupedGridClasses(GROUPING_COLUMNS);
@@ -202,11 +282,19 @@ const renderGroupedView = (servicesToRender) => {
     });
 };
 
-const renderServices = (servicesToRender) => {
+const renderMixedView = (servicesToRender) => {
     if (!groupingEnabled) {
         renderUngroupedView(servicesToRender);
     } else {
         renderGroupedView(servicesToRender);
+    }
+};
+
+const renderServices = (servicesToRender) => {
+    if (multiHost && !mixServices) {
+        renderMultiHostView(servicesToRender);
+    } else {
+        renderMixedView(servicesToRender);
     }
 };
 
@@ -296,11 +384,22 @@ const initialize = () => {
         applyFiltersAndSort();
     });
 
+    if (mixToggle) {
+        mixToggle.addEventListener('click', () => {
+            mixServices = !mixServices;
+            localStorage.setItem('mixServices', mixServices);
+            mixToggle.classList.toggle('active', mixServices);
+            applyFiltersAndSort();
+        });
+    }
+
     expandCollapseAll.addEventListener('click', () => {
         allExpanded = !allExpanded;
-        const groupContents = document.querySelectorAll('.group-content');
-        groupContents.forEach(content => {
+        document.querySelectorAll('.group-content').forEach(content => {
             content.style.display = allExpanded ? 'grid' : 'none';
+        });
+        document.querySelectorAll('.host-content').forEach(content => {
+            content.style.display = allExpanded ? 'block' : 'none';
         });
     });
 
@@ -359,7 +458,6 @@ const initialize = () => {
                 if (status.frontend.groupingEnabled !== undefined) {
                     groupingEnabled = status.frontend.groupingEnabled;
                     groupControls.style.display = status.frontend.groupingEnabled ? 'flex' : 'none';
-                    // Load persisted toggle state if available
                     const storedGrouping = localStorage.getItem('groupingEnabled');
                     if (storedGrouping !== null) {
                         groupingEnabled = storedGrouping === 'true';
@@ -370,6 +468,21 @@ const initialize = () => {
                 // Update grouped columns configuration
                 if (status.frontend.groupingColumns !== undefined) {
                     GROUPING_COLUMNS = status.frontend.groupingColumns;
+                }
+
+                // Update multi-host configuration
+                if (status.frontend.multiHost !== undefined) {
+                    multiHost = status.frontend.multiHost;
+                    if (hostControls) {
+                        hostControls.style.display = multiHost ? 'flex' : 'none';
+                    }
+                    const storedMix = localStorage.getItem('mixServices');
+                    if (storedMix !== null) {
+                        mixServices = storedMix === 'true';
+                    }
+                    if (mixToggle) {
+                        mixToggle.classList.toggle('active', mixServices);
+                    }
                 }
             }
             

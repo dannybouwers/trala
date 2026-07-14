@@ -43,6 +43,8 @@ func LoadConfiguration(path string) (*TralaConfiguration, error) {
 			RefreshIntervalSeconds: 30,
 			LogLevel:               "info",
 			Traefik: TraefikConfig{
+				Instances:         nil,
+				IsMulti:           false,
 				APIHost:            "",
 				EnableBasicAuth:    false,
 				InsecureSkipVerify: false,
@@ -99,14 +101,19 @@ func LoadConfiguration(path string) (*TralaConfiguration, error) {
 		debugLog("  - Service overrides: %d items", len(config.Services.Overrides))
 	}
 
-	// Step 3: validate basic auth password configuration before environment overrides
+	// Step 3: detect format and normalize to instances slice
+	if err := normalizeTraefikConfig(&config); err != nil {
+		return nil, err
+	}
+
+	// Step 4: validate basic auth password configuration before environment overrides
 	// This ensures we check both the original config values and environment variables
 	basicAuthWarning := ValidateBasicAuthPassword(config.Environment.Traefik)
 	if basicAuthWarning != "" {
 		log.Printf("WARNING: %s", basicAuthWarning)
 	}
 
-	// Step 4: environment overrides
+	// Step 5: environment overrides
 	if v := os.Getenv("SELFHST_ICON_URL"); v != "" {
 		config.Environment.SelfhstIconURL = v
 	}
@@ -120,25 +127,54 @@ func LoadConfiguration(path string) (*TralaConfiguration, error) {
 			log.Printf("Warning: Invalid REFRESH_INTERVAL_SECONDS '%s', using %d", v, config.Environment.RefreshIntervalSeconds)
 		}
 	}
-	if v := os.Getenv("TRAEFIK_API_HOST"); v != "" {
-		config.Environment.Traefik.APIHost = v
-	}
-	if v := os.Getenv("TRAEFIK_BASIC_AUTH_USERNAME"); v != "" {
-		config.Environment.Traefik.BasicAuth.Username = v
-	}
-	if v := os.Getenv("TRAEFIK_BASIC_AUTH_PASSWORD"); v != "" {
-		config.Environment.Traefik.BasicAuth.Password = v
-	}
-	if v := os.Getenv("TRAEFIK_BASIC_AUTH_PASSWORD_FILE"); v != "" {
-		config.Environment.Traefik.BasicAuth.PasswordFile = v
-	}
-	if v := os.Getenv("TRAEFIK_INSECURE_SKIP_VERIFY"); v != "" {
-		if skipVerify, err := strconv.ParseBool(v); err == nil {
-			config.Environment.Traefik.InsecureSkipVerify = skipVerify
-		} else {
-			log.Printf("Warning: Invalid TRAEFIK_INSECURE_SKIP_VERIFY '%s', using %t", v, config.Environment.Traefik.InsecureSkipVerify)
+
+	// Environment variables only apply to single-instance mode
+	if !config.Environment.Traefik.IsMulti {
+		if len(config.Environment.Traefik.Instances) == 0 {
+			config.Environment.Traefik.Instances = []TraefikInstanceConfig{{}}
+		}
+		inst := &config.Environment.Traefik.Instances[0]
+		if v := os.Getenv("TRAEFIK_API_HOST"); v != "" {
+			inst.APIHost = v
+		}
+		if v := os.Getenv("TRAEFIK_BASIC_AUTH_USERNAME"); v != "" {
+			inst.BasicAuth.Username = v
+		}
+		if v := os.Getenv("TRAEFIK_BASIC_AUTH_PASSWORD"); v != "" {
+			inst.BasicAuth.Password = v
+		}
+		if v := os.Getenv("TRAEFIK_BASIC_AUTH_PASSWORD_FILE"); v != "" {
+			inst.BasicAuth.PasswordFile = v
+		}
+		if v := os.Getenv("TRAEFIK_INSECURE_SKIP_VERIFY"); v != "" {
+			if skipVerify, err := strconv.ParseBool(v); err == nil {
+				inst.InsecureSkipVerify = skipVerify
+			} else {
+				log.Printf("Warning: Invalid TRAEFIK_INSECURE_SKIP_VERIFY '%s', using %t", v, inst.InsecureSkipVerify)
+			}
+		}
+	} else {
+		hasTraefikEnv := false
+		if os.Getenv("TRAEFIK_API_HOST") != "" {
+			hasTraefikEnv = true
+		}
+		if os.Getenv("TRAEFIK_BASIC_AUTH_USERNAME") != "" {
+			hasTraefikEnv = true
+		}
+		if os.Getenv("TRAEFIK_BASIC_AUTH_PASSWORD") != "" {
+			hasTraefikEnv = true
+		}
+		if os.Getenv("TRAEFIK_BASIC_AUTH_PASSWORD_FILE") != "" {
+			hasTraefikEnv = true
+		}
+		if os.Getenv("TRAEFIK_INSECURE_SKIP_VERIFY") != "" {
+			hasTraefikEnv = true
+		}
+		if hasTraefikEnv {
+			log.Printf("WARNING: Multi-instance mode detected: TRAEFIK_API_HOST and related env vars are ignored. Use configuration file instead.")
 		}
 	}
+
 	if v := os.Getenv("LOG_LEVEL"); v != "" {
 		config.Environment.LogLevel = v
 	}
@@ -182,7 +218,11 @@ func LoadConfiguration(path string) (*TralaConfiguration, error) {
 	}
 
 	debugLogEffectiveConfig("=== Effective Configuration ===")
-	debugLogEffectiveConfig("Traefik API: %s", config.Environment.Traefik.APIHost)
+	var apiHost string
+	if !config.Environment.Traefik.IsMulti && len(config.Environment.Traefik.Instances) > 0 {
+		apiHost = config.Environment.Traefik.Instances[0].APIHost
+	}
+	debugLogEffectiveConfig("Traefik API: %s", apiHost)
 	debugLogEffectiveConfig("Log Level: %s", config.Environment.LogLevel)
 	debugLogEffectiveConfig("Language: %s", config.Environment.Language)
 	debugLogEffectiveConfig("Refresh Interval: %d seconds", config.Environment.RefreshIntervalSeconds)
@@ -205,7 +245,7 @@ func LoadConfiguration(path string) (*TralaConfiguration, error) {
 			m.Name, m.Name, m.URL, m.Icon, m.Group)
 	}
 
-	// Step 5: post-processing / validation
+	// Step 6: post-processing / validation
 
 	// Sanitize LogLevel: if invalid, fallback to info so Validate() passes
 	validLogLevels := map[string]bool{"info": true, "debug": true, "warn": true, "error": true}
@@ -217,24 +257,37 @@ func LoadConfiguration(path string) (*TralaConfiguration, error) {
 	}
 
 	// Only prefix if it's not empty; the 'required' tag will catch empty values during Validate()
-	if config.Environment.Traefik.APIHost != "" && !strings.HasPrefix(config.Environment.Traefik.APIHost, "http://") && !strings.HasPrefix(config.Environment.Traefik.APIHost, "https://") {
-		config.Environment.Traefik.APIHost = "http://" + config.Environment.Traefik.APIHost
+	var singleInst *TraefikInstanceConfig
+	if !config.Environment.Traefik.IsMulti && len(config.Environment.Traefik.Instances) > 0 {
+		singleInst = &config.Environment.Traefik.Instances[0]
+	}
+	if singleInst != nil && singleInst.APIHost != "" && !strings.HasPrefix(singleInst.APIHost, "http://") && !strings.HasPrefix(singleInst.APIHost, "https://") {
+		singleInst.APIHost = "http://" + singleInst.APIHost
+	}
+	for i := range config.Environment.Traefik.Instances {
+		if config.Environment.Traefik.Instances[i].APIHost != "" && !strings.HasPrefix(config.Environment.Traefik.Instances[i].APIHost, "http://") && !strings.HasPrefix(config.Environment.Traefik.Instances[i].APIHost, "https://") {
+			config.Environment.Traefik.Instances[i].APIHost = "http://" + config.Environment.Traefik.Instances[i].APIHost
+		}
 	}
 	if !strings.HasSuffix(config.Environment.SelfhstIconURL, "/") {
 		config.Environment.SelfhstIconURL += "/"
 	}
 
-	if config.Environment.Traefik.EnableBasicAuth {
-		if config.Environment.Traefik.BasicAuth.Username == "" || (config.Environment.Traefik.BasicAuth.Password == "" && config.Environment.Traefik.BasicAuth.PasswordFile == "") {
+	// Single-instance: read basic auth password file at config load time (existing behavior)
+	if singleInst != nil && singleInst.EnableBasicAuth {
+		if singleInst.BasicAuth.Username == "" || (singleInst.BasicAuth.Password == "" && singleInst.BasicAuth.PasswordFile == "") {
 			return nil, fmt.Errorf("basic auth is enabled but basic auth username, password or password file is not set")
 		}
-		if config.Environment.Traefik.BasicAuth.Password != "" && config.Environment.Traefik.BasicAuth.PasswordFile != "" {
+		if singleInst.BasicAuth.Password != "" && singleInst.BasicAuth.PasswordFile != "" {
 			log.Printf("WARNING: Basic auth password and password file is set, content of file will take precedence over password!")
 		}
 	}
 
-	passwordFilePath := config.Environment.Traefik.BasicAuth.PasswordFile
-	if config.Environment.Traefik.EnableBasicAuth && passwordFilePath != "" {
+	passwordFilePath := ""
+	if singleInst != nil {
+		passwordFilePath = singleInst.BasicAuth.PasswordFile
+	}
+	if singleInst != nil && singleInst.EnableBasicAuth && passwordFilePath != "" {
 		data, err := os.ReadFile(passwordFilePath)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -242,11 +295,20 @@ func LoadConfiguration(path string) (*TralaConfiguration, error) {
 			}
 			return nil, fmt.Errorf("could not read password file at %s: %w", passwordFilePath, err)
 		}
-		config.Environment.Traefik.BasicAuth.Password = strings.TrimSpace(string(data))
+		singleInst.BasicAuth.Password = strings.TrimSpace(string(data))
 	}
 
 	// Validate struct-level rules after all overrides are applied.
 	if err := Validate(&config); err != nil {
+		return nil, err
+	}
+
+	if err := postProcessTraefikConfig(&config); err != nil {
+		return nil, err
+	}
+
+	// Validate multi-instance specific rules
+	if err := ValidateTraefikConfig(config.Environment.Traefik); err != nil {
 		return nil, err
 	}
 
@@ -279,16 +341,102 @@ func LoadConfiguration(path string) (*TralaConfiguration, error) {
 			return nil, fmt.Errorf("failed to marshal effective configuration: %w", err)
 		}
 		output := string(out)
-		if config.Environment.Traefik.BasicAuth.Password != "" {
-			output = strings.ReplaceAll(output, config.Environment.Traefik.BasicAuth.Password, "***REDACTED***")
+		if len(config.Environment.Traefik.Instances) > 0 && config.Environment.Traefik.Instances[0].BasicAuth.Password != "" {
+			output = strings.ReplaceAll(output, config.Environment.Traefik.Instances[0].BasicAuth.Password, "***REDACTED***")
 		}
-		if config.Environment.Traefik.BasicAuth.PasswordFile != "" {
-			output = strings.ReplaceAll(output, config.Environment.Traefik.BasicAuth.PasswordFile, "***REDACTED***")
+		if len(config.Environment.Traefik.Instances) > 0 && config.Environment.Traefik.Instances[0].BasicAuth.PasswordFile != "" {
+			output = strings.ReplaceAll(output, config.Environment.Traefik.Instances[0].BasicAuth.PasswordFile, "***REDACTED***")
 		}
 		fmt.Println(output)
 	}
 
 	return &config, nil
+}
+
+// normalizeTraefikConfig detects the config format (single vs multi instance) and normalizes.
+// Supports both legacy single-instance format (fields on TraefikConfig) and new multi-instance format.
+func normalizeTraefikConfig(config *TralaConfiguration) error {
+	traefik := &config.Environment.Traefik
+
+	// Check if multi-instance format is used (instances slice is populated)
+	if len(traefik.Instances) > 0 {
+		traefik.IsMulti = true
+		// Convert any single-instance fields to first instance if not already set
+		if traefik.APIHost != "" && (len(traefik.Instances) == 0 || traefik.Instances[0].APIHost == "") {
+			// Migrate legacy fields to first instance
+			if len(traefik.Instances) == 0 {
+				traefik.Instances = append(traefik.Instances, TraefikInstanceConfig{})
+			}
+			traefik.Instances[0].APIHost = traefik.APIHost
+			traefik.Instances[0].EnableBasicAuth = traefik.EnableBasicAuth
+			traefik.Instances[0].BasicAuth = traefik.BasicAuth
+			traefik.Instances[0].InsecureSkipVerify = traefik.InsecureSkipVerify
+		}
+		// Clear legacy single-instance fields to avoid confusion
+		traefik.APIHost = ""
+		traefik.EnableBasicAuth = false
+		traefik.BasicAuth = TraefikBasicAuth{}
+		traefik.InsecureSkipVerify = false
+		return nil
+	}
+
+	// Single-instance format: check if legacy fields are set
+	if traefik.APIHost != "" || traefik.EnableBasicAuth || traefik.BasicAuth.Username != "" || traefik.BasicAuth.Password != "" || traefik.BasicAuth.PasswordFile != "" || traefik.InsecureSkipVerify {
+		traefik.IsMulti = false
+		// Create a single instance from legacy fields
+		traefik.Instances = []TraefikInstanceConfig{{
+			APIHost:            traefik.APIHost,
+			EnableBasicAuth:    traefik.EnableBasicAuth,
+			BasicAuth:          traefik.BasicAuth,
+			InsecureSkipVerify: traefik.InsecureSkipVerify,
+		}}
+		// Clear legacy fields
+		traefik.APIHost = ""
+		traefik.EnableBasicAuth = false
+		traefik.BasicAuth = TraefikBasicAuth{}
+		traefik.InsecureSkipVerify = false
+		return nil
+	}
+
+	// No config provided - will be caught by validation later
+	traefik.IsMulti = false
+	return nil
+}
+
+// postProcessTraefikConfig derives instance names from api_host URLs and handles duplicates.
+func postProcessTraefikConfig(config *TralaConfiguration) error {
+	instances := config.Environment.Traefik.Instances
+	nameCount := make(map[string]int)
+
+	for i := range instances {
+		if instances[i].Name == "" {
+			instances[i].Name = DefaultInstanceName(instances[i].APIHost)
+			if instances[i].Name == "" {
+				instances[i].Name = strconv.Itoa(i)
+			}
+		}
+		nameCount[instances[i].Name]++
+	}
+
+	for i := range instances {
+		if nameCount[instances[i].Name] > 1 {
+			instances[i].Name = fmt.Sprintf("%s-%d", instances[i].Name, i+1)
+		}
+	}
+	return nil
+}
+
+// ValidateTraefikConfig validates the Traefik configuration using the instances slice.
+func ValidateTraefikConfig(config TraefikConfig) error {
+	if len(config.Instances) == 0 {
+		return fmt.Errorf("traefik.instances: at least one traefik instance is required")
+	}
+	for i, inst := range config.Instances {
+		if inst.APIHost == "" {
+			return fmt.Errorf("traefik.instances[%d]: api_host is required", i)
+		}
+	}
+	return nil
 }
 
 // ValidateConfigVersion checks if the configuration version is compatible.
@@ -315,7 +463,6 @@ func ValidateConfigVersion(configVersion string, basicAuthWarning string) Config
 
 	// Merge with basic auth warning if present
 	if basicAuthWarning != "" {
-		// If there's already a warning message, append to it
 		if status.WarningMessage != "" {
 			status.WarningMessage += " " + basicAuthWarning
 		} else {
@@ -329,39 +476,38 @@ func ValidateConfigVersion(configVersion string, basicAuthWarning string) Config
 // ValidateBasicAuthPassword checks if the basic auth password is configured using only one method.
 // Returns a warning message if multiple password sources are configured.
 func ValidateBasicAuthPassword(config TraefikConfig) string {
-	// If basic auth is not enabled, no validation needed
-	if !config.EnableBasicAuth {
-		return ""
+	// Only validate for single-instance mode
+	if !config.IsMulti && len(config.Instances) > 0 {
+		inst := config.Instances[0]
+		if inst.EnableBasicAuth {
+			passwordSources := 0
+
+			// Check config file password
+			if inst.BasicAuth.Password != "" {
+				passwordSources++
+			}
+
+			// Check config file password file
+			if inst.BasicAuth.PasswordFile != "" {
+				passwordSources++
+			}
+
+			// Check environment variable password
+			if os.Getenv("TRAEFIK_BASIC_AUTH_PASSWORD") != "" {
+				passwordSources++
+			}
+
+			// Check environment variable password file
+			if os.Getenv("TRAEFIK_BASIC_AUTH_PASSWORD_FILE") != "" {
+				passwordSources++
+			}
+
+			// If more than one password source is configured, it's a warning
+			if passwordSources > 1 {
+				return "Basic auth password is configured using multiple methods. Please use only one method: either password in config file, password file, or environment variable."
+			}
+		}
 	}
-
-	// Count the number of password sources that are set
-	passwordSources := 0
-
-	// Check config file password
-	if config.BasicAuth.Password != "" {
-		passwordSources++
-	}
-
-	// Check config file password file
-	if config.BasicAuth.PasswordFile != "" {
-		passwordSources++
-	}
-
-	// Check environment variable password
-	if os.Getenv("TRAEFIK_BASIC_AUTH_PASSWORD") != "" {
-		passwordSources++
-	}
-
-	// Check environment variable password file
-	if os.Getenv("TRAEFIK_BASIC_AUTH_PASSWORD_FILE") != "" {
-		passwordSources++
-	}
-
-	// If more than one password source is configured, it's a warning
-	if passwordSources > 1 {
-		return "Basic auth password is configured using multiple methods. Please use only one method: either password in config file, password file, or environment variable."
-	}
-
 	return ""
 }
 
