@@ -155,18 +155,19 @@ const createServiceCard = (service) => {
 };
 
 // In ungrouped mode, services are displayed in a single flat grid
-const renderUngroupedView = (servicesToRender) => {
-    serviceGrid.className = GRID_CLASSES_UNGROUPED;
-    serviceGrid.innerHTML = '';
-    if (servicesToRender.length === 0 && searchInput.value) { serviceGrid.innerHTML = `<p class="col-span-full text-center text-gray-500 dark:text-gray-400">No services found for "${escapeHtml(searchInput.value)}".</p>`; return; }
+const renderUngroupedView = (servicesToRender, container = serviceGrid) => {
+    container.className = GRID_CLASSES_UNGROUPED;
+    container.innerHTML = '';
+    if (servicesToRender.length === 0 && searchInput.value) { container.innerHTML = `<p class="col-span-full text-center text-gray-500 dark:text-gray-400">No services found for "${escapeHtml(searchInput.value)}".</p>`; return; }
 
     for (const service of servicesToRender) {
         const card = createServiceCard(service);
-        serviceGrid.appendChild(card);
+        container.appendChild(card);
     }
 };
 
-const renderMultiHostView = (servicesToRender) => {
+// In multi-host mode, services are grouped by host, each with a collapsible header, and reuse the mixed view rendering
+const renderHostView = (servicesToRender) => {
     serviceGrid.className = '';
     serviceGrid.innerHTML = '';
     if (servicesToRender.length === 0) {
@@ -188,68 +189,32 @@ const renderMultiHostView = (servicesToRender) => {
         const header = document.createElement('h2');
         header.className = 'text-2xl font-bold mb-4 cursor-pointer border-b border-gray-300 dark:border-gray-700 pb-2';
         header.textContent = host;
+        const content = document.createElement('div');
+        content.className = 'host-content';
+        content.style.display = allExpanded ? 'block' : 'none';
         let hostExpanded = true;
         header.addEventListener('click', () => {
             hostExpanded = !hostExpanded;
             content.style.display = hostExpanded ? 'block' : 'none';
         });
         hostDiv.appendChild(header);
-        const content = document.createElement('div');
-        content.className = 'host-content';
-        content.style.display = allExpanded ? 'block' : 'none';
-
-        if (groupingEnabled) {
-            const FALLBACK_GROUP_NAME = getTranslation('uncategorized');
-            const hostGrouped = grouped[host].reduce((acc, service) => {
-                const group = service.group || FALLBACK_GROUP_NAME;
-                if (!acc[group]) acc[group] = [];
-                acc[group].push(service);
-                return acc;
-            }, {});
-            const sortedGroups = Object.keys(hostGrouped).sort();
-            sortedGroups.forEach(group => {
-                const groupDiv = document.createElement('div');
-                groupDiv.className = 'group-section mb-6';
-                const groupHeader = document.createElement('h3');
-                groupHeader.className = 'text-lg font-semibold mb-3 cursor-pointer border-b border-gray-200 dark:border-gray-700 pb-1';
-                groupHeader.textContent = group;
-                let groupExpanded = true;
-                groupHeader.addEventListener('click', () => {
-                    groupExpanded = !groupExpanded;
-                    groupContent.style.display = groupExpanded ? 'grid' : 'none';
-                });
-                groupDiv.appendChild(groupHeader);
-                const groupContent = document.createElement('div');
-                groupContent.className = getCardGridClasses(GROUPING_COLUMNS);
-                groupContent.style.display = allExpanded ? 'grid' : 'none';
-                hostGrouped[group].sort((a, b) => b.priority - a.priority).forEach(service => {
-                    const card = createServiceCard(service);
-                    groupContent.appendChild(card);
-                });
-                groupDiv.appendChild(groupContent);
-                content.appendChild(groupDiv);
-            });
-        } else {
-            content.className = GRID_CLASSES_UNGROUPED;
-            grouped[host].sort((a, b) => b.priority - a.priority).forEach(service => {
-                const card = createServiceCard(service);
-                content.appendChild(card);
-            });
-        }
-
         hostDiv.appendChild(content);
         serviceGrid.appendChild(hostDiv);
+
+        const inner = document.createElement('div');
+        content.appendChild(inner);
+        renderMixedView(grouped[host], inner);
     });
 };
 
 // In grouped mode, services are organized into collapsible sections with headers, each containing a grid of services
-const renderGroupedView = (servicesToRender) => {
-    serviceGrid.className = getGroupedGridClasses(GROUPING_COLUMNS);
+const renderGroupedView = (servicesToRender, container = serviceGrid) => {
+    container.className = getGroupedGridClasses(GROUPING_COLUMNS);
     if (servicesToRender.length === 0) {
-        serviceGrid.innerHTML = searchInput.value ? `<p class="text-center text-gray-500 dark:text-gray-400">No services found for "${escapeHtml(searchInput.value)}".</p>` : '';
+        container.innerHTML = searchInput.value ? `<p class="text-center text-gray-500 dark:text-gray-400">No services found for "${escapeHtml(searchInput.value)}".</p>` : '';
         return;
     }
-    serviceGrid.innerHTML = '';
+    container.innerHTML = '';
     const FALLBACK_GROUP_NAME = getTranslation('uncategorized');
     const grouped = servicesToRender.reduce((acc, service) => {
         const group = service.group || FALLBACK_GROUP_NAME;
@@ -278,23 +243,23 @@ const renderGroupedView = (servicesToRender) => {
             content.appendChild(card);
         });
         groupDiv.appendChild(content);
-        serviceGrid.appendChild(groupDiv);
+        container.appendChild(groupDiv);
     });
 };
 
-const renderMixedView = (servicesToRender) => {
+const renderMixedView = (servicesToRender, container = serviceGrid) => {
     if (!groupingEnabled) {
-        renderUngroupedView(servicesToRender);
+        renderUngroupedView(servicesToRender, container);
     } else {
-        renderGroupedView(servicesToRender);
+        renderGroupedView(servicesToRender, container);
     }
 };
 
 const renderServices = (servicesToRender) => {
     if (multiHost && !mixServices) {
-        renderMultiHostView(servicesToRender);
+        renderHostView(servicesToRender);
     } else {
-        renderMixedView(servicesToRender);
+        renderMixedView(servicesToRender, serviceGrid);
     }
 };
 
