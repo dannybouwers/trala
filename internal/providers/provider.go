@@ -9,6 +9,7 @@ type Service struct {
 	Priority int
 	Icon     string
 	Tags     []string
+	Group    string
 }
 
 // Provider defines the interface for fetching services from a Traefik instance.

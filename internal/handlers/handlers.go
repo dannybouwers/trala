@@ -146,16 +146,17 @@ func ServicesHandler(c *config.TralaConfiguration) func(w http.ResponseWriter, r
 				log.Printf("WARNING: Failed to fetch services from instance %s: %v", instance.Name, err)
 				continue
 			}
-			for _, svc := range services {
-				allServices = append(allServices, models.Service{
-					Name:     svc.Name,
-					URL:      svc.URL,
-					Priority: svc.Priority,
-					Icon:     svc.Icon,
-					Tags:     svc.Tags,
-					Host:     instance.Name,
-				})
-			}
+		for _, svc := range services {
+			allServices = append(allServices, models.Service{
+				Name:     svc.Name,
+				URL:      svc.URL,
+				Priority: svc.Priority,
+				Icon:     svc.Icon,
+				Tags:     svc.Tags,
+				Group:    svc.Group,
+				Host:     instance.Name,
+			})
+		}
 		}
 
 		manualServices := services.GetManualServices()

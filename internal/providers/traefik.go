@@ -51,6 +51,7 @@ func (p *TraefikProvider) FetchServices(ctx context.Context) ([]Service, error) 
 				Priority: svc.Priority,
 				Icon:     svc.Icon,
 				Tags:     svc.Tags,
+				Group:    svc.Group,
 			})
 		}
 	}
