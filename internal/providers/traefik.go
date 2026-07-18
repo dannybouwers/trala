@@ -26,12 +26,12 @@ func NewTraefikProvider(instance config.TraefikInstanceConfig) *TraefikProvider 
 
 // FetchServices retrieves all services from the Traefik instance.
 func (p *TraefikProvider) FetchServices(ctx context.Context) ([]Service, error) {
-	entryPoints, err := traefik.FetchAllPagesWithInstanceAuth[models.TraefikEntryPoint](ctx, p.Instance.APIHost+"/api/entrypoints", p.Instance)
+	entryPoints, err := traefik.FetchAllPagesWithInstanceAuth[models.TraefikEntryPoint](ctx, p.HTTPClient, p.Instance.APIHost+"/api/entrypoints", p.Instance)
 	if err != nil {
 		return nil, err
 	}
 
-	routers, err := traefik.FetchAllPagesWithInstanceAuth[models.TraefikRouter](ctx, p.Instance.APIHost+"/api/http/routers", p.Instance)
+	routers, err := traefik.FetchAllPagesWithInstanceAuth[models.TraefikRouter](ctx, p.HTTPClient, p.Instance.APIHost+"/api/http/routers", p.Instance)
 	if err != nil {
 		return nil, err
 	}

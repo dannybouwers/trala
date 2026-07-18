@@ -252,7 +252,7 @@ func TestValidateBasicAuthPassword(t *testing.T) {
 		envPwFile   string
 		wantWarning bool
 	}{
-{
+		{
 			name: "disabled returns empty regardless of env",
 			cfg: TraefikConfig{
 				Instances: []TraefikInstanceConfig{

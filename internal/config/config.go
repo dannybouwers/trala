@@ -43,8 +43,8 @@ func LoadConfiguration(path string) (*TralaConfiguration, error) {
 			RefreshIntervalSeconds: 30,
 			LogLevel:               "info",
 			Traefik: TraefikConfig{
-				Instances:         nil,
-				IsMulti:           false,
+				Instances:          nil,
+				IsMulti:            false,
 				APIHost:            "",
 				EnableBasicAuth:    false,
 				InsecureSkipVerify: false,
@@ -154,24 +154,19 @@ func LoadConfiguration(path string) (*TralaConfiguration, error) {
 			}
 		}
 	} else {
-		hasTraefikEnv := false
-		if os.Getenv("TRAEFIK_API_HOST") != "" {
-			hasTraefikEnv = true
+		// In multi-instance mode, the legacy single-instance env vars do not apply.
+		traefikEnvKeys := []string{
+			"TRAEFIK_API_HOST",
+			"TRAEFIK_BASIC_AUTH_USERNAME",
+			"TRAEFIK_BASIC_AUTH_PASSWORD",
+			"TRAEFIK_BASIC_AUTH_PASSWORD_FILE",
+			"TRAEFIK_INSECURE_SKIP_VERIFY",
 		}
-		if os.Getenv("TRAEFIK_BASIC_AUTH_USERNAME") != "" {
-			hasTraefikEnv = true
-		}
-		if os.Getenv("TRAEFIK_BASIC_AUTH_PASSWORD") != "" {
-			hasTraefikEnv = true
-		}
-		if os.Getenv("TRAEFIK_BASIC_AUTH_PASSWORD_FILE") != "" {
-			hasTraefikEnv = true
-		}
-		if os.Getenv("TRAEFIK_INSECURE_SKIP_VERIFY") != "" {
-			hasTraefikEnv = true
-		}
-		if hasTraefikEnv {
-			log.Printf("WARNING: Multi-instance mode detected: TRAEFIK_API_HOST and related env vars are ignored. Use configuration file instead.")
+		for _, key := range traefikEnvKeys {
+			if os.Getenv(key) != "" {
+				log.Printf("WARNING: Multi-instance mode detected: %s and related env vars are ignored. Use configuration file instead.", key)
+				break
+			}
 		}
 	}
 
@@ -361,9 +356,8 @@ func normalizeTraefikConfig(config *TralaConfiguration) error {
 	// Check if multi-instance format is used (instances slice is populated)
 	if len(traefik.Instances) > 0 {
 		traefik.IsMulti = true
-		// Convert any single-instance fields to first instance if not already set
-		if traefik.APIHost != "" && (len(traefik.Instances) == 0 || traefik.Instances[0].APIHost == "") {
-			// Migrate legacy fields to first instance
+		// Migrate any legacy single-instance fields onto the first instance.
+		if traefik.APIHost != "" {
 			if len(traefik.Instances) == 0 {
 				traefik.Instances = append(traefik.Instances, TraefikInstanceConfig{})
 			}

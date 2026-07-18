@@ -119,15 +119,16 @@ func CreateHTTPRequestWithInstanceAuthAndContext(ctx context.Context, method, ur
 	return req, nil
 }
 
-// CreateAndExecuteHTTPRequestWithInstance creates an authenticated HTTP request for a specific instance.
-func CreateAndExecuteHTTPRequestWithInstance(ctx context.Context, method, url string, instance config.TraefikInstanceConfig) (*http.Response, error) {
+// CreateAndExecuteHTTPRequestWithInstance creates an authenticated HTTP request for a specific
+// instance and executes it using the provided client. The caller should pass a shared
+// *http.Client (e.g. from CreateHTTPClientForInstance) rather than creating a new one per call.
+func CreateAndExecuteHTTPRequestWithInstance(ctx context.Context, client *http.Client, method, url string, instance config.TraefikInstanceConfig) (*http.Response, error) {
 	req, err := CreateHTTPRequestWithInstanceAuthAndContext(ctx, method, url, instance)
 	if err != nil {
 		log.Printf("ERROR: Could not create request: %v", err)
 		return nil, err
 	}
 
-	client := CreateHTTPClientForInstance(instance.InsecureSkipVerify)
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Printf("ERROR: Could not fetch from %s: %v", url, err)
@@ -145,8 +146,9 @@ func CreateAndExecuteHTTPRequestWithInstance(ctx context.Context, method, url st
 
 // --- Pagination ---
 
-// FetchAllPagesWithInstanceAuth fetches all pages using per-instance authentication.
-func FetchAllPagesWithInstanceAuth[T any](ctx context.Context, baseURL string, instance config.TraefikInstanceConfig) ([]T, error) {
+// FetchAllPagesWithInstanceAuth fetches all pages using per-instance authentication and the
+// provided shared client.
+func FetchAllPagesWithInstanceAuth[T any](ctx context.Context, client *http.Client, baseURL string, instance config.TraefikInstanceConfig) ([]T, error) {
 	var allItems []T
 	currentURL := baseURL
 
@@ -157,7 +159,6 @@ func FetchAllPagesWithInstanceAuth[T any](ctx context.Context, baseURL string, i
 			return nil, err
 		}
 
-		client := CreateHTTPClientForInstance(instance.InsecureSkipVerify)
 		resp, err := client.Do(req)
 		if err != nil {
 			log.Printf("ERROR: Could not fetch from %s: %v", currentURL, err)

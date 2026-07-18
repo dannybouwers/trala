@@ -197,11 +197,20 @@ func HealthHandler(c *config.TralaConfiguration) func(w http.ResponseWriter, r *
 			return
 		}
 
+		// One shared client per insecure-skip-verify setting, reused across instances.
+		clients := map[bool]*http.Client{}
+		getClient := func(skip bool) *http.Client {
+			if clients[skip] == nil {
+				clients[skip] = traefik.CreateHTTPClientForInstance(skip)
+			}
+			return clients[skip]
+		}
+
 		var failedInstances []string
 		for _, instance := range instances {
 			entryPointsURL := fmt.Sprintf("%s/api/entrypoints", instance.APIHost)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			_, err := traefik.CreateAndExecuteHTTPRequestWithInstance(ctx, "GET", entryPointsURL, instance)
+			_, err := traefik.CreateAndExecuteHTTPRequestWithInstance(ctx, getClient(instance.InsecureSkipVerify), "GET", entryPointsURL, instance)
 			cancel()
 			if err != nil {
 				failedInstances = append(failedInstances, instance.Name)

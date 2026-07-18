@@ -33,18 +33,18 @@ type TraefikConfig struct {
 
 // UnmarshalYAML implements custom YAML unmarshaling for TraefikConfig.
 // It supports both formats:
-// 1. Direct sequence under traefik: (legacy multi-instance format from plan)
-//    traefik:
-//      - api_host: http://traefik:8080
-//      - api_host: http://traefik-arr:8080
-// 2. Explicit instances key
-//    traefik:
-//      instances:
-//        - api_host: http://traefik:8080
-//        - api_host: http://traefik-arr:8080
-// 3. Single-instance legacy format
-//    traefik:
-//      api_host: http://traefik:8080
+//  1. Direct sequence under traefik: (legacy multi-instance format from plan)
+//     traefik:
+//     - api_host: http://traefik:8080
+//     - api_host: http://traefik-arr:8080
+//  2. Explicit instances key
+//     traefik:
+//     instances:
+//     - api_host: http://traefik:8080
+//     - api_host: http://traefik-arr:8080
+//  3. Single-instance legacy format
+//     traefik:
+//     api_host: http://traefik:8080
 func (t *TraefikConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	// Try to unmarshal as a slice of instances first (format 1: direct sequence)
 	var instances []TraefikInstanceConfig
@@ -65,6 +65,8 @@ func (t *TraefikConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	t.BasicAuth = aux.BasicAuth
 	t.InsecureSkipVerify = aux.InsecureSkipVerify
 	t.Instances = aux.Instances
+	// Unlike the bare-list format above, an `instances:` key with a single entry is only
+	// multi-instance when no legacy single-instance fields are also set.
 	t.IsMulti = len(aux.Instances) > 1 || (len(aux.Instances) == 1 && aux.APIHost == "" && !aux.EnableBasicAuth)
 	return nil
 }
@@ -124,13 +126,13 @@ type GroupingConfig struct {
 // EnvironmentConfiguration contains environment-level configuration options.
 // These settings control the overall behavior of the application.
 type EnvironmentConfiguration struct {
-	SelfhstIconURL         string           `yaml:"selfhst_icon_url" validate:"required,url"`
-	SearchEngineURL        string           `yaml:"search_engine_url" validate:"required,url"`
-	RefreshIntervalSeconds int              `yaml:"refresh_interval_seconds" validate:"gte=1"`
-	LogLevel               string           `yaml:"log_level" validate:"oneof=info debug warn error"`
-	Traefik                TraefikConfig    `yaml:"traefik"`
-	Language               string           `yaml:"language"`
-	Grouping               GroupingConfig   `yaml:"grouping"`
+	SelfhstIconURL         string         `yaml:"selfhst_icon_url" validate:"required,url"`
+	SearchEngineURL        string         `yaml:"search_engine_url" validate:"required,url"`
+	RefreshIntervalSeconds int            `yaml:"refresh_interval_seconds" validate:"gte=1"`
+	LogLevel               string         `yaml:"log_level" validate:"oneof=info debug warn error"`
+	Traefik                TraefikConfig  `yaml:"traefik"`
+	Language               string         `yaml:"language"`
+	Grouping               GroupingConfig `yaml:"grouping"`
 }
 
 // TralaConfiguration is the root configuration structure.
@@ -221,7 +223,7 @@ func buildYAMLTagForPath() map[string]string {
 			"Name":     "name",
 			"URL":      "url",
 			"Icon":     "icon",
-			"Priority":  "priority",
+			"Priority": "priority",
 			"Group":    "group",
 			"Host":     "host",
 		}},
