@@ -14,6 +14,7 @@ A simple, modern, and dynamic dashboard for your Traefik services. This applicat
 Everything automatic can be overwritten with a single YAML configuration file, providing ultimate customization control.
 
 ### Additional Features
+- **Multi-Host Support:** Aggregate services from multiple Traefik instances into one dashboard. See [Multi-Host](/docs/multi_host).
 - **Manual Services:** Add custom services to your dashboard that aren't managed by Traefik.
 - **Service Exclusion:** Hide specific services from the dashboard using router and entry point name exclusions.
 - **Live Search & Sort:** Instantly filter and sort your services by name, URL, or priority.

@@ -50,6 +50,7 @@ services:
 | `icon` | No | Custom icon (URL or filename). See [Icons](/docs/icons) for details. | Auto-detected |
 | `priority` | No | Sort priority (higher = first) | 50 |
 | `group` | No | Assign to a specific group | Auto-grouped |
+| `host` | No | Name of the Traefik instance this service belongs to (multi-host mode). Defaults to the first configured instance. | First instance |
 
 > [!NOTE]
-> Manual services are merged with Traefik-discovered services and use the same icon detection logic.
+> Manual services are merged with Traefik-discovered services and use the same icon detection logic. In [multi-host mode](/docs/multi_host), the `host` option controls which host section a manual service appears under.

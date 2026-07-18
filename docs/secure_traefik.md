@@ -4,6 +4,9 @@ This guide covers how to secure access to the Traefik API when using TraLa.
 
 ## Traefik API Access Methods
 
+> [!NOTE]
+> When TraLa is configured with [multiple Traefik instances](/docs/multi_host), basic auth is configured **per instance** inside the `traefik.instances` list. The examples below show a single instance; repeat the `enable_basic_auth` and `basic_auth` block for each instance that needs authentication.
+
 Instead of using `--api.insecure=true` in your Traefik configuration, you can create a dedicated router for the API. This approach allows fine-grained control over API access and security.
 
  - [Define a router rule](#router-rule) for accessing the Traefik API from other services. This will not add security.

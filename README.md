@@ -11,6 +11,7 @@ A modern, dynamic dashboard for Traefik services.
 - **Manual Services** — Add custom services not managed by Traefik
 - **Multi-Language** — Available in English, German, and Dutch
 - **Multi-Arch** — Built for amd64 and arm64 architectures
+- **Multi-Host** — Aggregate services from multiple Traefik instances into one dashboard
 
 ## Screenshots
 
