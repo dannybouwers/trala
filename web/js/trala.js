@@ -176,7 +176,8 @@ const renderHostView = (servicesToRender) => {
     }
 
     const grouped = servicesToRender.reduce((acc, service) => {
-        const host = service.host || 'unknown';
+        const FALLBACK_HOST_NAME = getTranslation('unknown');
+        const host = service.host || FALLBACK_HOST_NAME;
         if (!acc[host]) acc[host] = [];
         acc[host].push(service);
         return acc;
