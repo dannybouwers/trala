@@ -42,10 +42,11 @@ const errorMessage = document.getElementById('error-message');
 const greetingText = document.getElementById('greeting-text');
 const clock = document.getElementById('clock');
 const configWarning = document.getElementById('config-warning');
-const groupToggle = document.getElementById('group-toggle');
 const groupControls = document.getElementById('group-controls');
+const groupingButtons = document.getElementById('group-buttons');
+const groupToggle = document.getElementById('group-toggle');
 const expandCollapseAll = document.getElementById('expand-collapse-all');
-const hostControls = document.getElementById('host-controls');
+const multiHostBottons = document.getElementById('multi-host-buttons');
 const mixToggle = document.getElementById('mix-toggle');
 
 let allServices = [];
@@ -93,8 +94,8 @@ const getCardGridClasses = (groupColumns) => {
     return `group-content grid grid-cols-2 xl:grid-cols-${cardColumns} gap-4`;
 };
 const setApiLoading = (isLoading) => { apiLoadingBar.classList.toggle('loading', isLoading); };
-const showErrorPage = (message) => { serviceGrid.classList.add('hidden'); sortControls.classList.add('hidden'); groupControls.classList.add('hidden'); if (hostControls) hostControls.classList.add('hidden'); errorPage.classList.remove('hidden'); errorMessage.textContent = message; };
-const hideErrorPage = () => { serviceGrid.classList.remove('hidden'); sortControls.classList.remove('hidden'); groupControls.classList.remove('hidden'); if (hostControls) hostControls.classList.remove('hidden'); errorPage.classList.add('hidden'); };
+const showErrorPage = (message) => { serviceGrid.classList.add('hidden'); sortControls.classList.add('hidden'); groupControls.classList.add('hidden'); errorPage.classList.remove('hidden'); errorMessage.textContent = message; };
+const hideErrorPage = () => { serviceGrid.classList.remove('hidden'); sortControls.classList.remove('hidden'); groupControls.classList.remove('hidden'); errorPage.classList.add('hidden'); };
 
 const updateGreeting = () => {
     const hour = new Date().getHours();
@@ -420,12 +421,16 @@ const initialize = () => {
                     };
                 }
 
+                if (status.frontend.groupingEnabled || status.frontend.multiHost) {
+                    groupControls.style.display = 'flex';
+                }
+
                 // Update grouping configuration
                 if (status.frontend.groupingEnabled !== undefined) {
                     groupingEnabled = status.frontend.groupingEnabled;
-                    groupControls.style.display = status.frontend.groupingEnabled ? 'flex' : 'none';
+                    groupingButtons.style.display = status.frontend.groupingEnabled ? '' : 'none';
                     const storedGrouping = localStorage.getItem('groupingEnabled');
-                    if (storedGrouping !== null) {
+                    if (storedGrouping !== null && groupingEnabled) {
                         groupingEnabled = storedGrouping === 'true';
                     }
                     groupToggle.classList.toggle('active', groupingEnabled);
@@ -439,16 +444,12 @@ const initialize = () => {
                 // Update multi-host configuration
                 if (status.frontend.multiHost !== undefined) {
                     multiHost = status.frontend.multiHost;
-                    if (hostControls) {
-                        hostControls.style.display = multiHost ? 'flex' : 'none';
-                    }
+                    multiHostBottons.style.display = multiHost ? '' : 'none';
                     const storedMix = localStorage.getItem('mixServices');
                     if (storedMix !== null) {
                         mixServices = storedMix === 'true';
                     }
-                    if (mixToggle) {
-                        mixToggle.classList.toggle('active', mixServices);
-                    }
+                    mixToggle.classList.toggle('active', mixServices);
                 }
             }
             
