@@ -10,7 +10,7 @@ Add a `traefik` block that contains a list of `instances`. Each instance support
 
 ```yaml
 # configuration.yml
-version: 3.3
+version: 4.0
 
 environment:
   traefik:

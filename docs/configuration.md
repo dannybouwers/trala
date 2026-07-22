@@ -8,7 +8,7 @@ A sample configuration file:
 
 ```yaml
 # TraLa Configuration File
-version: 3.3
+version: 4.0
 
 # Environment settings
 environment:

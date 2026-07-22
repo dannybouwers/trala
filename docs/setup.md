@@ -125,7 +125,7 @@ A configuration file provides more customization options:
 
 ```yaml
 # configuration.yml
-version: 3.3
+version: 4.0
 
 environment:
   selfhst_icon_url: https://cdn.jsdelivr.net/gh/selfhst/icons/
