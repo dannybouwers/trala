@@ -34,9 +34,11 @@ func TestValidate_MissingRequiredFields(t *testing.T) {
 		{
 			name: "missing api host",
 			mutate: func(c *TralaConfiguration) {
-				c.Environment.Traefik.APIHost = ""
+				if len(c.Environment.Traefik.Instances) > 0 {
+					c.Environment.Traefik.Instances[0].APIHost = ""
+				}
 			},
-			wantField: "environment.traefik.api_host",
+			wantField: "environment.traefik.instances[0].api_host",
 			wantTag:   "required",
 		},
 		{
@@ -104,7 +106,9 @@ func TestValidate_InvalidURLs(t *testing.T) {
 		{
 			name: "invalid api host",
 			mutate: func(c *TralaConfiguration) {
-				c.Environment.Traefik.APIHost = "not-a-url"
+				if len(c.Environment.Traefik.Instances) > 0 {
+					c.Environment.Traefik.Instances[0].APIHost = "not-a-url"
+				}
 			},
 		},
 		{

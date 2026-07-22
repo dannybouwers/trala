@@ -71,14 +71,20 @@ func newPopulatedConfig() *TralaConfiguration {
 			LogLevel:               "debug",
 			Language:               "nl",
 			Traefik: TraefikConfig{
-				APIHost:            "https://traefik.example",
-				EnableBasicAuth:    true,
-				InsecureSkipVerify: true,
-				BasicAuth: TraefikBasicAuth{
-					Username:     "alice",
-					Password:     "s3cret",
-					PasswordFile: "/etc/secrets/pw",
+				Instances: []TraefikInstanceConfig{
+					{
+						Name:               "traefik.example",
+						APIHost:            "https://traefik.example",
+						EnableBasicAuth:    true,
+						InsecureSkipVerify: true,
+						BasicAuth: TraefikBasicAuth{
+							Username:     "alice",
+							Password:     "s3cret",
+							PasswordFile: "/etc/secrets/pw",
+						},
+					},
 				},
+				IsMulti: false,
 			},
 			Grouping: GroupingConfig{
 				Enabled:               true,
@@ -249,8 +255,10 @@ func TestValidateBasicAuthPassword(t *testing.T) {
 		{
 			name: "disabled returns empty regardless of env",
 			cfg: TraefikConfig{
-				EnableBasicAuth: false,
-				BasicAuth:       TraefikBasicAuth{Password: "x", PasswordFile: "/y"},
+				Instances: []TraefikInstanceConfig{
+					{EnableBasicAuth: false, BasicAuth: TraefikBasicAuth{Password: "x", PasswordFile: "/y"}},
+				},
+				IsMulti: false,
 			},
 			envPassword: "env-pass",
 			envPwFile:   "/env-pw-file",
@@ -259,23 +267,30 @@ func TestValidateBasicAuthPassword(t *testing.T) {
 		{
 			name: "only config password",
 			cfg: TraefikConfig{
-				EnableBasicAuth: true,
-				BasicAuth:       TraefikBasicAuth{Password: "x"},
+				Instances: []TraefikInstanceConfig{
+					{EnableBasicAuth: true, BasicAuth: TraefikBasicAuth{Password: "x"}},
+				},
+				IsMulti: false,
 			},
 			wantWarning: false,
 		},
 		{
 			name: "only config password file",
 			cfg: TraefikConfig{
-				EnableBasicAuth: true,
-				BasicAuth:       TraefikBasicAuth{PasswordFile: "/y"},
+				Instances: []TraefikInstanceConfig{
+					{EnableBasicAuth: true, BasicAuth: TraefikBasicAuth{PasswordFile: "/y"}},
+				},
+				IsMulti: false,
 			},
 			wantWarning: false,
 		},
 		{
 			name: "only env password",
 			cfg: TraefikConfig{
-				EnableBasicAuth: true,
+				Instances: []TraefikInstanceConfig{
+					{EnableBasicAuth: true},
+				},
+				IsMulti: false,
 			},
 			envPassword: "env-pass",
 			wantWarning: false,
@@ -283,7 +298,10 @@ func TestValidateBasicAuthPassword(t *testing.T) {
 		{
 			name: "only env password file",
 			cfg: TraefikConfig{
-				EnableBasicAuth: true,
+				Instances: []TraefikInstanceConfig{
+					{EnableBasicAuth: true},
+				},
+				IsMulti: false,
 			},
 			envPwFile:   "/env-pw-file",
 			wantWarning: false,
@@ -291,8 +309,10 @@ func TestValidateBasicAuthPassword(t *testing.T) {
 		{
 			name: "config password + env password",
 			cfg: TraefikConfig{
-				EnableBasicAuth: true,
-				BasicAuth:       TraefikBasicAuth{Password: "x"},
+				Instances: []TraefikInstanceConfig{
+					{EnableBasicAuth: true, BasicAuth: TraefikBasicAuth{Password: "x"}},
+				},
+				IsMulti: false,
 			},
 			envPassword: "env-pass",
 			wantWarning: true,
@@ -300,16 +320,20 @@ func TestValidateBasicAuthPassword(t *testing.T) {
 		{
 			name: "config password + config password file",
 			cfg: TraefikConfig{
-				EnableBasicAuth: true,
-				BasicAuth:       TraefikBasicAuth{Password: "x", PasswordFile: "/y"},
+				Instances: []TraefikInstanceConfig{
+					{EnableBasicAuth: true, BasicAuth: TraefikBasicAuth{Password: "x", PasswordFile: "/y"}},
+				},
+				IsMulti: false,
 			},
 			wantWarning: true,
 		},
 		{
 			name: "all four sources",
 			cfg: TraefikConfig{
-				EnableBasicAuth: true,
-				BasicAuth:       TraefikBasicAuth{Password: "x", PasswordFile: "/y"},
+				Instances: []TraefikInstanceConfig{
+					{EnableBasicAuth: true, BasicAuth: TraefikBasicAuth{Password: "x", PasswordFile: "/y"}},
+				},
+				IsMulti: false,
 			},
 			envPassword: "env-pass",
 			envPwFile:   "/env-pw-file",
@@ -338,7 +362,6 @@ func TestTralaConfiguration_Getters(t *testing.T) {
 	t.Parallel()
 	c := newPopulatedConfig()
 
-	assert.Equal(t, "https://traefik.example", c.GetTraefikAPIHost())
 	assert.Equal(t, "https://icons.example/", c.GetSelfhstIconURL())
 	assert.Equal(t, "debug", c.GetLogLevel())
 	assert.Equal(t, "nl", c.GetLanguage())
@@ -348,14 +371,21 @@ func TestTralaConfiguration_Getters(t *testing.T) {
 	assert.Equal(t, 4, c.GetGroupingColumns())
 	assert.InDelta(t, 0.75, c.GetTagFrequencyThreshold(), 1e-9)
 	assert.Equal(t, 3, c.GetMinServicesPerGroup())
-	assert.True(t, c.GetEnableBasicAuth())
-	assert.Equal(t, "alice", c.GetBasicAuthUsername())
-	assert.Equal(t, "s3cret", c.GetBasicAuthPassword())
-	assert.True(t, c.GetInsecureSkipVerify())
 
-	tr := c.GetTraefikConfig()
-	assert.Equal(t, "https://traefik.example", tr.APIHost)
-	assert.Equal(t, "alice", tr.BasicAuth.Username)
+	instances := c.GetTraefikInstances()
+	require.Len(t, instances, 1)
+	assert.Equal(t, "traefik.example", instances[0].Name)
+	assert.Equal(t, "https://traefik.example", instances[0].APIHost)
+	assert.True(t, instances[0].EnableBasicAuth)
+	assert.Equal(t, "alice", instances[0].BasicAuth.Username)
+	assert.Equal(t, "s3cret", instances[0].BasicAuth.Password)
+	assert.True(t, instances[0].InsecureSkipVerify)
+
+	inst, ok := c.GetTraefikInstance("traefik.example")
+	require.True(t, ok)
+	assert.Equal(t, "https://traefik.example", inst.APIHost)
+
+	assert.Equal(t, []string{"traefik.example"}, c.GetTraefikInstanceNames())
 
 	status := c.GetConfigCompatibilityStatus()
 	assert.Equal(t, "3.1", status.ConfigVersion)
@@ -464,7 +494,7 @@ func TestTralaConfiguration_ConcurrentReads(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < iters; j++ {
-				_ = c.GetTraefikAPIHost()
+				_ = c.GetTraefikInstances()
 				_ = c.GetSelfhstIconURL()
 				_ = c.GetLogLevel()
 				_ = c.GetLanguage()
@@ -500,10 +530,10 @@ func TestLoadConfiguration_DefaultsWhenFileMissing(t *testing.T) {
 	assert.Equal(t, 3, conf.GetGroupingColumns())
 	assert.InDelta(t, 0.9, conf.GetTagFrequencyThreshold(), 1e-9)
 	assert.Equal(t, 2, conf.GetMinServicesPerGroup())
-	assert.Equal(t, "http://traefik.local", conf.GetTraefikAPIHost(),
+	assert.Equal(t, "http://traefik.local", conf.GetTraefikInstances()[0].APIHost,
 		"bare host should be prefixed with http://")
-	assert.False(t, conf.GetEnableBasicAuth())
-	assert.False(t, conf.GetInsecureSkipVerify())
+	assert.False(t, conf.GetTraefikInstances()[0].EnableBasicAuth)
+	assert.False(t, conf.GetTraefikInstances()[0].InsecureSkipVerify)
 	assert.Empty(t, conf.GetExcludeRouters())
 	assert.Empty(t, conf.GetExcludeEntrypoints())
 	assert.Empty(t, conf.GetManualServices())
@@ -561,8 +591,8 @@ services:
 	assert.Equal(t, 15, conf.GetRefreshIntervalSeconds())
 	assert.Equal(t, "warn", conf.GetLogLevel())
 	assert.Equal(t, "fr", conf.GetLanguage())
-	assert.Equal(t, "https://traefik.example", conf.GetTraefikAPIHost())
-	assert.True(t, conf.GetInsecureSkipVerify())
+	assert.Equal(t, "https://traefik.example", conf.GetTraefikInstances()[0].APIHost)
+	assert.True(t, conf.GetTraefikInstances()[0].InsecureSkipVerify)
 	assert.False(t, conf.GetGroupingEnabled())
 	assert.Equal(t, 5, conf.GetGroupingColumns())
 	assert.InDelta(t, 0.5, conf.GetTagFrequencyThreshold(), 1e-9)
@@ -648,10 +678,10 @@ environment:
 	assert.Equal(t, "https://env-icons.example/", conf.GetSelfhstIconURL())
 	assert.Equal(t, "https://env-search.example/?q=", conf.GetSearchEngineURL())
 	assert.Equal(t, 77, conf.GetRefreshIntervalSeconds())
-	assert.Equal(t, "https://env-traefik.example", conf.GetTraefikAPIHost())
-	assert.Equal(t, "bob", conf.GetBasicAuthUsername())
-	assert.Equal(t, "envpass", conf.GetBasicAuthPassword())
-	assert.True(t, conf.GetInsecureSkipVerify())
+	assert.Equal(t, "https://env-traefik.example", conf.GetTraefikInstances()[0].APIHost)
+	assert.Equal(t, "bob", conf.GetTraefikInstances()[0].BasicAuth.Username)
+	assert.Equal(t, "envpass", conf.GetTraefikInstances()[0].BasicAuth.Password)
+	assert.True(t, conf.GetTraefikInstances()[0].InsecureSkipVerify)
 	assert.Equal(t, "debug", conf.GetLogLevel())
 	assert.Equal(t, "de", conf.GetLanguage())
 	assert.False(t, conf.GetGroupingEnabled())
@@ -676,7 +706,7 @@ func TestLoadConfiguration_EnvInvalidValuesKeepDefaults(t *testing.T) {
 
 	// Defaults preserved when env values are invalid.
 	assert.Equal(t, 30, conf.GetRefreshIntervalSeconds())
-	assert.False(t, conf.GetInsecureSkipVerify())
+	assert.False(t, conf.GetTraefikInstances()[0].InsecureSkipVerify)
 	assert.True(t, conf.GetGroupingEnabled())
 	assert.InDelta(t, 0.9, conf.GetTagFrequencyThreshold(), 1e-9)
 	assert.Equal(t, 2, conf.GetMinServicesPerGroup())
@@ -700,21 +730,21 @@ func TestLoadConfiguration_APIHostSchemePrefix(t *testing.T) {
 		t.Setenv("TRAEFIK_API_HOST", "traefik.local")
 		conf, err := LoadConfiguration(nonExistentPath(t))
 		require.NoError(t, err)
-		assert.Equal(t, "http://traefik.local", conf.GetTraefikAPIHost())
+		assert.Equal(t, "http://traefik.local", conf.GetTraefikInstances()[0].APIHost)
 	})
 
 	t.Run("https host is preserved", func(t *testing.T) {
 		t.Setenv("TRAEFIK_API_HOST", "https://traefik.local")
 		conf, err := LoadConfiguration(nonExistentPath(t))
 		require.NoError(t, err)
-		assert.Equal(t, "https://traefik.local", conf.GetTraefikAPIHost())
+		assert.Equal(t, "https://traefik.local", conf.GetTraefikInstances()[0].APIHost)
 	})
 
 	t.Run("http host is preserved", func(t *testing.T) {
 		t.Setenv("TRAEFIK_API_HOST", "http://traefik.local")
 		conf, err := LoadConfiguration(nonExistentPath(t))
 		require.NoError(t, err)
-		assert.Equal(t, "http://traefik.local", conf.GetTraefikAPIHost())
+		assert.Equal(t, "http://traefik.local", conf.GetTraefikInstances()[0].APIHost)
 	})
 }
 
@@ -767,10 +797,10 @@ environment:
 	require.NoError(t, err)
 	require.NotNil(t, conf)
 
-	assert.Equal(t, "file-password", conf.GetBasicAuthPassword(),
+	assert.Equal(t, "file-password", conf.GetTraefikInstances()[0].BasicAuth.Password,
 		"password file contents should be trimmed and used as password")
-	assert.True(t, conf.GetEnableBasicAuth())
-	assert.Equal(t, "alice", conf.GetBasicAuthUsername())
+	assert.True(t, conf.GetTraefikInstances()[0].EnableBasicAuth)
+	assert.Equal(t, "alice", conf.GetTraefikInstances()[0].BasicAuth.Username)
 }
 
 func TestLoadConfiguration_BasicAuthPasswordFileMissing(t *testing.T) {
