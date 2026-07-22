@@ -1,7 +1,7 @@
 # TraLa Configuration File
-# Version 3.3
+# Version 4.0
 
-version: 3.3
+version: 4.0
 
 # Environment settings (optional, environment variables take precedence)
 environment:
