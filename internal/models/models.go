@@ -43,6 +43,7 @@ type Service struct {
 	Icon     string   `json:"icon"`
 	Tags     []string `json:"tags"`
 	Group    string   `json:"group"`
+	Host     string   `json:"host"`
 }
 
 // IconAndTags represents the icon URL and associated tags for a service.
@@ -70,6 +71,8 @@ type FrontendConfig struct {
 	RefreshIntervalSeconds int    `json:"refreshIntervalSeconds"`
 	GroupingEnabled        bool   `json:"groupingEnabled"`
 	GroupingColumns        int    `json:"groupingColumns"`
+	MultiHost              bool   `json:"multiHost"`
+	MixServices            bool   `json:"mixServices"`
 }
 
 // ApplicationStatus represents the combined status information for the application.

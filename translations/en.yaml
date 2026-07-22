@@ -43,5 +43,11 @@ grouping: "Grouping"
 # Button label for expand/collapse all groups
 expand_collapse_all: "Expand/Collapse All"
 
+# Button label for mixing services across hosts
+mix_services: "Mix Hosts"
+
 # Fallback group name for uncategorized services
 uncategorized: "Uncategorized"
+
+# Fallback group name for unknown host names
+unknown: "Unknown"

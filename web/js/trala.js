@@ -42,15 +42,20 @@ const errorMessage = document.getElementById('error-message');
 const greetingText = document.getElementById('greeting-text');
 const clock = document.getElementById('clock');
 const configWarning = document.getElementById('config-warning');
-const groupToggle = document.getElementById('group-toggle');
 const groupControls = document.getElementById('group-controls');
+const groupingButtons = document.getElementById('group-buttons');
+const groupToggle = document.getElementById('group-toggle');
 const expandCollapseAll = document.getElementById('expand-collapse-all');
+const multiHostBottons = document.getElementById('multi-host-buttons');
+const mixToggle = document.getElementById('mix-toggle');
 
 let allServices = [];
 let allExpanded = true;
 let refreshIntervalId = null;
 let currentSort = 'name';
 let groupingEnabled = false; // Will be set after fetching server config
+let multiHost = false;
+let mixServices = false;
 const colors = ['bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-yellow-500', 'bg-lime-500', 'bg-green-500', 'bg-emerald-500', 'bg-teal-500', 'bg-cyan-500', 'bg-sky-500', 'bg-blue-500', 'bg-indigo-500', 'bg-violet-500', 'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500', 'bg-rose-500'];
 
 const getColorFromString = (str) => { let hash = 0; for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); } return colors[Math.abs(hash % colors.length)]; };
@@ -151,25 +156,67 @@ const createServiceCard = (service) => {
 };
 
 // In ungrouped mode, services are displayed in a single flat grid
-const renderUngroupedView = (servicesToRender) => {
-    serviceGrid.className = GRID_CLASSES_UNGROUPED;
-    serviceGrid.innerHTML = '';
-    if (servicesToRender.length === 0 && searchInput.value) { serviceGrid.innerHTML = `<p class="col-span-full text-center text-gray-500 dark:text-gray-400">No services found for "${escapeHtml(searchInput.value)}".</p>`; return; }
+const renderUngroupedView = (servicesToRender, container = serviceGrid) => {
+    container.className = GRID_CLASSES_UNGROUPED;
+    container.innerHTML = '';
+    if (servicesToRender.length === 0 && searchInput.value) { container.innerHTML = `<p class="col-span-full text-center text-gray-500 dark:text-gray-400">No services found for "${escapeHtml(searchInput.value)}".</p>`; return; }
 
     for (const service of servicesToRender) {
         const card = createServiceCard(service);
-        serviceGrid.appendChild(card);
+        container.appendChild(card);
     }
 };
 
-// In grouped mode, services are organized into collapsible sections with headers, each containing a grid of services
-const renderGroupedView = (servicesToRender) => {
-    serviceGrid.className = getGroupedGridClasses(GROUPING_COLUMNS);
+// In multi-host mode, services are grouped by host, each with a collapsible header, and reuse the mixed view rendering
+const renderHostView = (servicesToRender) => {
+    serviceGrid.className = '';
+    serviceGrid.innerHTML = '';
     if (servicesToRender.length === 0) {
         serviceGrid.innerHTML = searchInput.value ? `<p class="text-center text-gray-500 dark:text-gray-400">No services found for "${escapeHtml(searchInput.value)}".</p>` : '';
         return;
     }
-    serviceGrid.innerHTML = '';
+
+    const grouped = servicesToRender.reduce((acc, service) => {
+        const FALLBACK_HOST_NAME = getTranslation('unknown');
+        const host = service.host || FALLBACK_HOST_NAME;
+        if (!acc[host]) acc[host] = [];
+        acc[host].push(service);
+        return acc;
+    }, {});
+
+    const sortedHosts = Object.keys(grouped).sort();
+    sortedHosts.forEach(host => {
+        const hostDiv = document.createElement('div');
+        hostDiv.className = 'host-section mb-8';
+        const header = document.createElement('h2');
+        header.className = 'text-2xl font-bold mb-4 cursor-pointer border-b border-gray-300 dark:border-gray-700 pb-2';
+        header.textContent = host;
+        const content = document.createElement('div');
+        content.className = 'host-content';
+        content.style.display = allExpanded ? 'block' : 'none';
+        let hostExpanded = true;
+        header.addEventListener('click', () => {
+            hostExpanded = !hostExpanded;
+            content.style.display = hostExpanded ? 'block' : 'none';
+        });
+        hostDiv.appendChild(header);
+        hostDiv.appendChild(content);
+        serviceGrid.appendChild(hostDiv);
+
+        const inner = document.createElement('div');
+        content.appendChild(inner);
+        renderMixedView(grouped[host], inner);
+    });
+};
+
+// In grouped mode, services are organized into collapsible sections with headers, each containing a grid of services
+const renderGroupedView = (servicesToRender, container = serviceGrid) => {
+    container.className = getGroupedGridClasses(GROUPING_COLUMNS);
+    if (servicesToRender.length === 0) {
+        container.innerHTML = searchInput.value ? `<p class="text-center text-gray-500 dark:text-gray-400">No services found for "${escapeHtml(searchInput.value)}".</p>` : '';
+        return;
+    }
+    container.innerHTML = '';
     const FALLBACK_GROUP_NAME = getTranslation('uncategorized');
     const grouped = servicesToRender.reduce((acc, service) => {
         const group = service.group || FALLBACK_GROUP_NAME;
@@ -198,15 +245,23 @@ const renderGroupedView = (servicesToRender) => {
             content.appendChild(card);
         });
         groupDiv.appendChild(content);
-        serviceGrid.appendChild(groupDiv);
+        container.appendChild(groupDiv);
     });
 };
 
-const renderServices = (servicesToRender) => {
+const renderMixedView = (servicesToRender, container = serviceGrid) => {
     if (!groupingEnabled) {
-        renderUngroupedView(servicesToRender);
+        renderUngroupedView(servicesToRender, container);
     } else {
-        renderGroupedView(servicesToRender);
+        renderGroupedView(servicesToRender, container);
+    }
+};
+
+const renderServices = (servicesToRender) => {
+    if (multiHost && !mixServices) {
+        renderHostView(servicesToRender);
+    } else {
+        renderMixedView(servicesToRender, serviceGrid);
     }
 };
 
@@ -296,11 +351,22 @@ const initialize = () => {
         applyFiltersAndSort();
     });
 
+    if (mixToggle) {
+        mixToggle.addEventListener('click', () => {
+            mixServices = !mixServices;
+            localStorage.setItem('mixServices', mixServices);
+            mixToggle.classList.toggle('active', mixServices);
+            applyFiltersAndSort();
+        });
+    }
+
     expandCollapseAll.addEventListener('click', () => {
         allExpanded = !allExpanded;
-        const groupContents = document.querySelectorAll('.group-content');
-        groupContents.forEach(content => {
+        document.querySelectorAll('.group-content').forEach(content => {
             content.style.display = allExpanded ? 'grid' : 'none';
+        });
+        document.querySelectorAll('.host-content').forEach(content => {
+            content.style.display = allExpanded ? 'block' : 'none';
         });
     });
 
@@ -355,13 +421,16 @@ const initialize = () => {
                     };
                 }
 
+                if (status.frontend.groupingEnabled || status.frontend.multiHost) {
+                    groupControls.style.display = 'flex';
+                }
+
                 // Update grouping configuration
                 if (status.frontend.groupingEnabled !== undefined) {
                     groupingEnabled = status.frontend.groupingEnabled;
-                    groupControls.style.display = status.frontend.groupingEnabled ? 'flex' : 'none';
-                    // Load persisted toggle state if available
+                    groupingButtons.style.display = status.frontend.groupingEnabled ? '' : 'none';
                     const storedGrouping = localStorage.getItem('groupingEnabled');
-                    if (storedGrouping !== null) {
+                    if (storedGrouping !== null && groupingEnabled) {
                         groupingEnabled = storedGrouping === 'true';
                     }
                     groupToggle.classList.toggle('active', groupingEnabled);
@@ -370,6 +439,17 @@ const initialize = () => {
                 // Update grouped columns configuration
                 if (status.frontend.groupingColumns !== undefined) {
                     GROUPING_COLUMNS = status.frontend.groupingColumns;
+                }
+
+                // Update multi-host configuration
+                if (status.frontend.multiHost !== undefined) {
+                    multiHost = status.frontend.multiHost;
+                    multiHostBottons.style.display = multiHost ? '' : 'none';
+                    const storedMix = localStorage.getItem('mixServices');
+                    if (storedMix !== null) {
+                        mixServices = storedMix === 'true';
+                    }
+                    mixToggle.classList.toggle('active', mixServices);
                 }
             }
             

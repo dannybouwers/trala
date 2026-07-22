@@ -25,17 +25,14 @@ func Init(c *config.TralaConfiguration) {
 // ProcessRouter takes a raw Traefik router, finds its best icon, and returns the final Service object.
 // It handles router name extraction, URL reconstruction, exclusion checks, and icon/tag discovery.
 // Returns the processed Service and a boolean indicating if the router should be included.
-func ProcessRouter(router models.TraefikRouter, entryPoints map[string]models.TraefikEntryPoint) (models.Service, bool) {
+func ProcessRouter(router models.TraefikRouter, entryPoints map[string]models.TraefikEntryPoint, instanceName string) (models.Service, bool) {
 	routerName := strings.Split(router.Name, "@")[0]
 
 	// Remove entrypoint name from the beginning of router name (case-insensitive)
 	if len(router.EntryPoints) > 0 {
 		entryPointName := router.EntryPoints[0]
-		// Create the pattern to match: entrypoint name followed by a dash
 		prefix := entryPointName + "-"
-		// Check if router name starts with the entrypoint name (case-insensitive)
 		if len(routerName) > len(prefix) && strings.HasPrefix(strings.ToLower(routerName), strings.ToLower(prefix)) {
-			// Remove the entrypoint prefix
 			routerName = routerName[len(prefix):]
 			debugf("Removed entrypoint prefix '%s' from router name, new name: '%s'", prefix, routerName)
 		}
@@ -48,32 +45,31 @@ func ProcessRouter(router models.TraefikRouter, entryPoints map[string]models.Tr
 		return models.Service{}, false
 	}
 
-	// Check if this router should be excluded
 	if IsExcluded(routerName) {
 		debugf("Excluding router: %s", routerName)
 		return models.Service{}, false
 	}
 
-	// Check if this router should be excluded based on entrypoints
 	if IsEntrypointExcluded(router.EntryPoints) {
 		debugf("Excluding router %s due to entrypoint exclusion", routerName)
 		return models.Service{}, false
 	}
 
-	// Check if this is the Traefik API service and exclude it
-	traefikAPIHost := conf.GetTraefikAPIHost()
-	if traefikAPIHost != "" {
-		if !strings.HasPrefix(traefikAPIHost, "http") {
-			traefikAPIHost = "http://" + traefikAPIHost
-		}
-		apiURL := traefikAPIHost + "/api"
-		if serviceURL == apiURL {
-			debugf("Excluding router %s because it's the Traefik API service", routerName)
-			return models.Service{}, false
+	instances := conf.GetTraefikInstances()
+	for _, inst := range instances {
+		traefikAPIHost := inst.APIHost
+		if traefikAPIHost != "" {
+			if !strings.HasPrefix(traefikAPIHost, "http") {
+				traefikAPIHost = "http://" + traefikAPIHost
+			}
+			apiURL := traefikAPIHost + "/api"
+			if serviceURL == apiURL {
+				debugf("Excluding router %s because it's the Traefik API service for instance %s", routerName, inst.Name)
+				return models.Service{}, false
+			}
 		}
 	}
 
-	// Get display name override if available
 	displayName := conf.GetDisplayNameOverride(routerName)
 	if displayName == "" {
 		routerNameReplaced := strings.ReplaceAll(routerName, "-", " ")
@@ -86,7 +82,6 @@ func ProcessRouter(router models.TraefikRouter, entryPoints map[string]models.Tr
 	iconURL := icons.FindIcon(routerName, serviceURL, displayNameReplaced, reference)
 	tags := icons.FindTags(routerName, reference)
 
-	// get group override if available
 	group := conf.GetGroupOverride(routerName)
 
 	return models.Service{
@@ -96,6 +91,7 @@ func ProcessRouter(router models.TraefikRouter, entryPoints map[string]models.Tr
 		Icon:     iconURL,
 		Tags:     tags,
 		Group:    group,
+		Host:     instanceName,
 	}, true
 }
 
@@ -105,8 +101,13 @@ func GetManualServices() []models.Service {
 	manualServices := conf.GetManualServices()
 	result := make([]models.Service, 0, len(manualServices))
 
+	instances := conf.GetTraefikInstances()
+	defaultHost := ""
+	if len(instances) > 0 {
+		defaultHost = instances[0].Name
+	}
+
 	for _, manualService := range manualServices {
-		// Validate URL
 		if !config.IsValidUrl(manualService.URL) {
 			log.Printf("Warning: Invalid URL for manual service '%s': %s", manualService.Name, manualService.URL)
 			continue
@@ -115,30 +116,28 @@ func GetManualServices() []models.Service {
 		displayNameReplaced := strings.ReplaceAll(manualService.Name, " ", "-")
 		reference := icons.ResolveSelfHstReference(displayNameReplaced)
 
-		// Find icon using the same logic as for Traefik services
 		iconURL := manualService.Icon
 		if iconURL == "" {
-			// If no icon is specified, try to find one automatically
 			iconURL = icons.FindIcon(manualService.Name, manualService.URL, displayNameReplaced, reference)
 		} else if !strings.HasPrefix(iconURL, "http://") && !strings.HasPrefix(iconURL, "https://") {
-			// If icon is specified, check if it's a full URL or just a filename
-			// Check if it's a filename with valid extension
 			ext := filepath.Ext(iconURL)
 			if ext == ".png" || ext == ".svg" || ext == ".webp" {
 				iconURL = conf.GetSelfhstIconURL() + strings.TrimPrefix(ext, ".") + "/" + strings.ToLower(iconURL)
 			} else {
-				// Fallback to default behavior if extension is not valid
 				iconURL = conf.GetSelfhstIconURL() + "png/" + strings.ToLower(iconURL) + ".png"
 			}
 		}
 
-		// get tags from manual service
 		tags := icons.FindTags(manualService.Name, reference)
 
-		// Default priority if not specified
 		priority := manualService.Priority
 		if priority == 0 {
-			priority = 50 // Default priority for manual services
+			priority = 50
+		}
+
+		host := manualService.Host
+		if host == "" {
+			host = defaultHost
 		}
 
 		service := models.Service{
@@ -148,11 +147,12 @@ func GetManualServices() []models.Service {
 			Icon:     iconURL,
 			Tags:     tags,
 			Group:    manualService.Group,
+			Host:     host,
 		}
 
 		result = append(result, service)
-		debugf("Added manual service: %s (URL: %s, Icon: %s, Priority: %d, Group: %s)",
-			manualService.Name, manualService.URL, iconURL, priority, manualService.Group)
+		debugf("Added manual service: %s (URL: %s, Icon: %s, Priority: %d, Group: %s, Host: %s)",
+			manualService.Name, manualService.URL, iconURL, priority, manualService.Group, host)
 	}
 
 	return result

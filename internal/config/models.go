@@ -1,11 +1,75 @@
 package config
 
 import (
+	"net/url"
 	"strings"
 	"sync"
 )
 
-// --- Configuration Types ---
+// TraefikInstanceConfig contains configuration for a single Traefik instance.
+type TraefikInstanceConfig struct {
+	Name               string           `yaml:"name,omitempty"`
+	APIHost            string           `yaml:"api_host" validate:"required,url"`
+	EnableBasicAuth    bool             `yaml:"enable_basic_auth"`
+	BasicAuth          TraefikBasicAuth `yaml:"basic_auth"`
+	InsecureSkipVerify bool             `yaml:"insecure_skip_verify"`
+}
+
+// TraefikConfig contains configuration for connecting to one or more Traefik instances.
+// Supports both single-instance (legacy) and multi-instance formats.
+type TraefikConfig struct {
+	// Single-instance fields (legacy format)
+	APIHost            string           `yaml:"api_host"`
+	EnableBasicAuth    bool             `yaml:"enable_basic_auth"`
+	BasicAuth          TraefikBasicAuth `yaml:"basic_auth"`
+	InsecureSkipVerify bool             `yaml:"insecure_skip_verify"`
+
+	// Multi-instance fields (new format)
+	Instances []TraefikInstanceConfig `yaml:"instances" validate:"dive"`
+
+	// Internal: set after parsing
+	IsMulti bool `yaml:"-"`
+}
+
+// UnmarshalYAML implements custom YAML unmarshaling for TraefikConfig.
+// It supports both formats:
+//  1. Direct sequence under traefik: (legacy multi-instance format from plan)
+//     traefik:
+//     - api_host: http://traefik:8080
+//     - api_host: http://traefik-arr:8080
+//  2. Explicit instances key
+//     traefik:
+//     instances:
+//     - api_host: http://traefik:8080
+//     - api_host: http://traefik-arr:8080
+//  3. Single-instance legacy format
+//     traefik:
+//     api_host: http://traefik:8080
+func (t *TraefikConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	// Try to unmarshal as a slice of instances first (format 1: direct sequence)
+	var instances []TraefikInstanceConfig
+	if err := unmarshal(&instances); err == nil {
+		t.Instances = instances
+		t.IsMulti = len(instances) > 1 || len(instances) == 1 // even single element in list is multi-instance mode
+		return nil
+	}
+
+	// Try to unmarshal as a map with instances key (format 2)
+	type alias TraefikConfig
+	aux := alias{}
+	if err := unmarshal(&aux); err != nil {
+		return err
+	}
+	t.APIHost = aux.APIHost
+	t.EnableBasicAuth = aux.EnableBasicAuth
+	t.BasicAuth = aux.BasicAuth
+	t.InsecureSkipVerify = aux.InsecureSkipVerify
+	t.Instances = aux.Instances
+	// Unlike the bare-list format above, an `instances:` key with a single entry is only
+	// multi-instance when no legacy single-instance fields are also set.
+	t.IsMulti = len(aux.Instances) > 1 || (len(aux.Instances) == 1 && aux.APIHost == "" && !aux.EnableBasicAuth)
+	return nil
+}
 
 // TraefikBasicAuth contains basic authentication credentials for Traefik API access.
 // Password can be provided directly or via a file path.
@@ -13,15 +77,6 @@ type TraefikBasicAuth struct {
 	Username     string `yaml:"username"`
 	Password     string `yaml:"password"`
 	PasswordFile string `yaml:"password_file"`
-}
-
-// TraefikConfig contains configuration for connecting to the Traefik API.
-// It includes the API host and optional authentication settings.
-type TraefikConfig struct {
-	APIHost            string           `yaml:"api_host" validate:"required,url"`
-	EnableBasicAuth    bool             `yaml:"enable_basic_auth"`
-	BasicAuth          TraefikBasicAuth `yaml:"basic_auth"`
-	InsecureSkipVerify bool             `yaml:"insecure_skip_verify"`
 }
 
 // ServiceOverride defines overrides for a specific service/router.
@@ -41,6 +96,7 @@ type ManualService struct {
 	Icon     string `yaml:"icon,omitempty"`
 	Priority int    `yaml:"priority,omitempty"`
 	Group    string `yaml:"group,omitempty"`
+	Host     string `yaml:"host,omitempty"`
 }
 
 // ExcludeConfig defines patterns for excluding routers and entrypoints.
@@ -135,6 +191,12 @@ func buildYAMLTagForPath() map[string]string {
 			"Grouping":               "grouping",
 		}},
 		{"TraefikConfig", map[string]string{
+			"Instances": "instances",
+			"Single":    "single",
+			"IsMulti":   "is_multi",
+		}},
+		{"TraefikInstanceConfig", map[string]string{
+			"Name":               "name",
 			"APIHost":            "api_host",
 			"EnableBasicAuth":    "enable_basic_auth",
 			"BasicAuth":          "basic_auth",
@@ -163,6 +225,7 @@ func buildYAMLTagForPath() map[string]string {
 			"Icon":     "icon",
 			"Priority": "priority",
 			"Group":    "group",
+			"Host":     "host",
 		}},
 	}
 
@@ -253,13 +316,6 @@ func (c *TralaConfiguration) GetConfiguration() TralaConfiguration {
 	}
 }
 
-// GetTraefikAPIHost returns the Traefik API host URL.
-func (c *TralaConfiguration) GetTraefikAPIHost() string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.Environment.Traefik.APIHost
-}
-
 // GetSelfhstIconURL returns the base URL for selfh.st icons.
 func (c *TralaConfiguration) GetSelfhstIconURL() string {
 	c.mu.RLock()
@@ -323,39 +379,36 @@ func (c *TralaConfiguration) GetMinServicesPerGroup() int {
 	return c.Environment.Grouping.MinServicesPerGroup
 }
 
-// GetTraefikConfig returns the complete Traefik configuration.
-func (c *TralaConfiguration) GetTraefikConfig() TraefikConfig {
+// GetTraefikInstances returns all configured Traefik instances.
+func (c *TralaConfiguration) GetTraefikInstances() []TraefikInstanceConfig {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.Environment.Traefik
+
+	instances := c.Environment.Traefik.Instances
+	result := make([]TraefikInstanceConfig, len(instances))
+	copy(result, instances)
+	return result
 }
 
-// GetEnableBasicAuth returns whether basic auth is enabled for Traefik API.
-func (c *TralaConfiguration) GetEnableBasicAuth() bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.Environment.Traefik.EnableBasicAuth
+// GetTraefikInstance returns a specific Traefik instance by name.
+func (c *TralaConfiguration) GetTraefikInstance(name string) (TraefikInstanceConfig, bool) {
+	instances := c.GetTraefikInstances()
+	for _, inst := range instances {
+		if inst.Name == name {
+			return inst, true
+		}
+	}
+	return TraefikInstanceConfig{}, false
 }
 
-// GetBasicAuthUsername returns the basic auth username.
-func (c *TralaConfiguration) GetBasicAuthUsername() string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.Environment.Traefik.BasicAuth.Username
-}
-
-// GetBasicAuthPassword returns the basic auth password.
-func (c *TralaConfiguration) GetBasicAuthPassword() string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.Environment.Traefik.BasicAuth.Password
-}
-
-// GetInsecureSkipVerify returns whether SSL verification is skipped.
-func (c *TralaConfiguration) GetInsecureSkipVerify() bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.Environment.Traefik.InsecureSkipVerify
+// GetTraefikInstanceNames returns the names of all configured Traefik instances.
+func (c *TralaConfiguration) GetTraefikInstanceNames() []string {
+	instances := c.GetTraefikInstances()
+	names := make([]string, len(instances))
+	for i, inst := range instances {
+		names[i] = inst.Name
+	}
+	return names
 }
 
 // GetServiceOverrideMap returns a copy of the map of service overrides by router name.
@@ -406,4 +459,19 @@ func (c *TralaConfiguration) GetGroupOverride(routerName string) string {
 		return override.Group
 	}
 	return ""
+}
+
+// DefaultInstanceName derives a default instance name from an API host URL.
+func DefaultInstanceName(apiHost string) string {
+	u, err := url.Parse(apiHost)
+	if err != nil {
+		return ""
+	}
+
+	hostname := u.Hostname()
+	if hostname == "" {
+		return ""
+	}
+
+	return hostname
 }

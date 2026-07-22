@@ -16,6 +16,7 @@
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 antialiased"
       data-uncategorized="{{ T .Localizer "uncategorized" }}"
+      data-unknown="{{ T .Localizer "unknown" }}"
       data-greeting-night="{{ T .Localizer "greeting_night" }}"
       data-greeting-morning="{{ T .Localizer "greeting_morning" }}"
       data-greeting-afternoon="{{ T .Localizer "greeting_afternoon" }}"
@@ -59,8 +60,13 @@
             <button data-sort="priority" class="sort-btn px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">{{ T .Localizer "priority" }}</button>
         </div>
         <div id="group-controls" class="flex justify-center gap-2 mb-8" style="display: none;">
-            <button id="group-toggle" class="sort-btn px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">{{ T .Localizer "grouping" }}</button>
-            <button id="expand-collapse-all" class="sort-btn px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">{{ T .Localizer "expand_collapse_all" }}</button>
+            <span id="multi-host-buttons">
+                <button id="mix-toggle" class="sort-btn px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">{{ T .Localizer "mix_services" }}</button>
+            </span>
+            <span id="group-buttons">
+                <button id="group-toggle" class="sort-btn px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">{{ T .Localizer "grouping" }}</button>
+                <button id="expand-collapse-all" class="sort-btn px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">{{ T .Localizer "expand_collapse_all" }}</button>
+            </span>
         </div>
         <main id="service-grid"></main>
         <div id="error-page" class="hidden text-center py-16">

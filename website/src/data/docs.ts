@@ -5,6 +5,7 @@ export const docs = [
   { path: '/docs/configuration', title: 'Configuration' },
   { path: '/docs/icons', title: 'Icons' },
   { path: '/docs/services', title: 'Services' },
+  { path: '/docs/multi_host', title: 'Multi-Host' },
   { path: '/docs/grouping', title: 'Grouping' },
   { path: '/docs/manual_services', title: 'Manual Services' },
   { path: '/docs/search', title: 'Search' },

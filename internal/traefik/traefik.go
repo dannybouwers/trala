@@ -41,9 +41,16 @@ var (
 // --- HTTP Client Initialization ---
 
 // InitializeHTTPClient initializes the HTTP client for Traefik API calls.
-// It configures TLS settings based on the configuration (may disable SSL verification).
+// It configures TLS settings based on the single-instance configuration (may disable SSL verification).
 func InitializeHTTPClient() {
-	// Create Traefik HTTP client (may have SSL verification disabled)
+	insecureSkipVerify := false
+	if conf != nil {
+		instances := conf.GetTraefikInstances()
+		if len(instances) > 0 && instances[0].InsecureSkipVerify {
+			insecureSkipVerify = true
+		}
+	}
+
 	traefikTransport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
@@ -57,8 +64,7 @@ func InitializeHTTPClient() {
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 
-	// Configure TLS for Traefik client based on configuration
-	if conf.GetInsecureSkipVerify() {
+	if insecureSkipVerify {
 		traefikTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 		log.Printf("WARNING: SSL certificate verification is disabled for Traefik API connections")
 	} else {
@@ -71,76 +77,66 @@ func InitializeHTTPClient() {
 	}
 }
 
-// --- HTTP Request Helpers ---
+// CreateHTTPClientForInstance creates an HTTP client for a specific Traefik instance.
+func CreateHTTPClientForInstance(insecureSkipVerify bool) *http.Client {
+	traefikTransport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
 
-// CreateHTTPRequestWithAuth creates an HTTP request with basic auth if enabled in configuration.
-func CreateHTTPRequestWithAuth(method, url string) (*http.Request, error) {
-	return CreateHTTPRequestWithAuthAndContext(context.Background(), method, url)
+	if insecureSkipVerify {
+		traefikTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	} else {
+		traefikTransport.TLSClientConfig = &tls.Config{}
+	}
+
+	return &http.Client{
+		Timeout:   5 * time.Second,
+		Transport: traefikTransport,
+	}
 }
 
-// CreateHTTPRequestWithAuthAndContext creates an HTTP request with context and basic auth if enabled in configuration.
-func CreateHTTPRequestWithAuthAndContext(ctx context.Context, method, url string) (*http.Request, error) {
+// CreateHTTPRequestWithInstanceAuthAndContext creates an HTTP request with context and basic auth for a specific instance.
+func CreateHTTPRequestWithInstanceAuthAndContext(ctx context.Context, method, url string, instance config.TraefikInstanceConfig) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, method, url, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	// Set basic auth option if enabled
-	if conf.GetEnableBasicAuth() {
-		debugf("Setting basic auth")
-		req.SetBasicAuth(conf.GetBasicAuthUsername(), conf.GetBasicAuthPassword())
+	if instance.EnableBasicAuth {
+		debugf("Setting basic auth for instance %s", instance.Name)
+		req.SetBasicAuth(instance.BasicAuth.Username, instance.BasicAuth.Password)
 	}
 
 	return req, nil
 }
 
-// CreateAndExecuteHTTPRequest creates an authenticated HTTP request, executes it, and handles common errors.
-// Returns the response and error, or writes an HTTP error response and returns nil.
-func CreateAndExecuteHTTPRequest(w http.ResponseWriter, method, url string) (*http.Response, error) {
-	req, err := CreateHTTPRequestWithAuth(method, url)
+// CreateAndExecuteHTTPRequestWithInstance creates an authenticated HTTP request for a specific
+// instance and executes it using the provided client. The caller should pass a shared
+// *http.Client (e.g. from CreateHTTPClientForInstance) rather than creating a new one per call.
+func CreateAndExecuteHTTPRequestWithInstance(ctx context.Context, client *http.Client, method, url string, instance config.TraefikInstanceConfig) (*http.Response, error) {
+	req, err := CreateHTTPRequestWithInstanceAuthAndContext(ctx, method, url, instance)
 	if err != nil {
 		log.Printf("ERROR: Could not create request: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return nil, err
 	}
 
-	resp, err := HTTPClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		log.Printf("ERROR: Could not fetch from %s: %v", url, err)
-		http.Error(w, "Could not connect to API", http.StatusBadGateway)
 		return nil, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("ERROR: API returned non-200 status: %s", resp.Status)
-		http.Error(w, "Received non-200 status from API", http.StatusBadGateway)
-		resp.Body.Close()
-		return nil, fmt.Errorf("non-200 status: %s", resp.Status)
-	}
-
-	return resp, nil
-}
-
-// CreateAndExecuteHTTPRequestWithContext creates an authenticated HTTP request with context, executes it, and handles common errors.
-// Returns the response and error, or writes an HTTP error response and returns nil.
-func CreateAndExecuteHTTPRequestWithContext(w http.ResponseWriter, ctx context.Context, method, url string) (*http.Response, error) {
-	req, err := CreateHTTPRequestWithAuthAndContext(ctx, method, url)
-	if err != nil {
-		log.Printf("ERROR: Could not create request: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return nil, err
-	}
-
-	resp, err := HTTPClient.Do(req)
-	if err != nil {
-		log.Printf("ERROR: Could not fetch from %s: %v", url, err)
-		http.Error(w, "Could not connect to API", http.StatusBadGateway)
-		return nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("ERROR: API returned non-200 status: %s", resp.Status)
-		http.Error(w, "Received non-200 status from API", http.StatusBadGateway)
 		resp.Body.Close()
 		return nil, fmt.Errorf("non-200 status: %s", resp.Status)
 	}
@@ -150,69 +146,52 @@ func CreateAndExecuteHTTPRequestWithContext(w http.ResponseWriter, ctx context.C
 
 // --- Pagination ---
 
-// FetchAllPages fetches all pages of data from a paginated Traefik API endpoint.
-// It handles the X-Next-Page header to iterate through all pages.
-func FetchAllPages[T any](w http.ResponseWriter, baseURL string) ([]T, error) {
+// FetchAllPagesWithInstanceAuth fetches all pages using per-instance authentication and the
+// provided shared client.
+func FetchAllPagesWithInstanceAuth[T any](ctx context.Context, client *http.Client, baseURL string, instance config.TraefikInstanceConfig) ([]T, error) {
 	var allItems []T
 	currentURL := baseURL
 
 	for {
-		// Create request with context
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-
-		req, err := CreateHTTPRequestWithAuthAndContext(ctx, "GET", currentURL)
+		req, err := CreateHTTPRequestWithInstanceAuthAndContext(ctx, "GET", currentURL, instance)
 		if err != nil {
-			cancel()
 			log.Printf("ERROR: Could not create request for %s: %v", currentURL, err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return nil, err
 		}
 
-		resp, err := HTTPClient.Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
-			cancel()
 			log.Printf("ERROR: Could not fetch from %s: %v", currentURL, err)
-			http.Error(w, "Could not connect to API", http.StatusBadGateway)
 			return nil, err
 		}
 
 		if resp.StatusCode != http.StatusOK {
 			log.Printf("ERROR: API returned non-200 status: %s", resp.Status)
-			http.Error(w, "Received non-200 status from API", http.StatusBadGateway)
 			resp.Body.Close()
-			cancel()
 			return nil, fmt.Errorf("non-200 status: %s", resp.Status)
 		}
 
-		// Decode the current page
 		var items []T
 		if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
 			log.Printf("ERROR: Could not decode API response from %s: %v", currentURL, err)
-			http.Error(w, "Invalid JSON from API", http.StatusInternalServerError)
 			resp.Body.Close()
-			cancel()
 			return nil, err
 		}
 		resp.Body.Close()
-		cancel()
 
 		allItems = append(allItems, items...)
 
-		// Check for next page
 		nextPage := resp.Header.Get("X-Next-Page")
 		if nextPage == "" || nextPage == "1" {
-			// No more pages
 			break
 		}
 
-		// Construct URL for next page
 		parsedURL, err := url.Parse(currentURL)
 		if err != nil {
 			log.Printf("ERROR: Could not parse URL %s: %v", currentURL, err)
 			break
 		}
 
-		// Add or update the page query parameter
 		query := parsedURL.Query()
 		query.Set("page", nextPage)
 		parsedURL.RawQuery = query.Encode()
@@ -227,80 +206,63 @@ func FetchAllPages[T any](w http.ResponseWriter, baseURL string) ([]T, error) {
 // DetermineProtocol determines the correct protocol (http/https) for a service
 // based on TLS configuration in both router and entrypoint.
 func DetermineProtocol(router models.TraefikRouter, entryPoint models.TraefikEntryPoint) string {
-	// Primary method: Check router TLS configuration (highest priority)
-	// This is the most reliable indicator of whether a service should use HTTPS
 	if router.TLS != nil {
 		tlsStr := string(*router.TLS)
-		// Check for non-empty, non-null TLS configuration
 		if tlsStr != "null" && tlsStr != "{}" && tlsStr != "" {
 			return "https"
 		}
 	}
 
-	// Secondary method: Check entrypoint TLS configuration
-	// The TLS field is a json.RawMessage, so we need to check various possible values
 	if entryPoint.HTTP.TLS != nil {
 		tlsStr := string(entryPoint.HTTP.TLS)
-		// Check for non-empty, non-null TLS configuration
 		if tlsStr != "null" && tlsStr != "{}" && tlsStr != "" {
 			return "https"
 		}
 	}
 
-	// Default to HTTP
 	return "http"
 }
 
 // ReconstructURL extracts the base URL from a Traefik rule and determines the protocol and port
 // based on the router's entrypoint.
 func ReconstructURL(router models.TraefikRouter, entryPoints map[string]models.TraefikEntryPoint) string {
-	// Find the hostname using regex. This is more reliable than splitting.
 	hostMatches := hostRegex.FindStringSubmatch(router.Rule)
 	if len(hostMatches) < 2 {
-		return "" // No Host(`...`) found, cannot proceed.
+		return ""
 	}
 	hostname := hostMatches[1]
 
-	// Find an optional PathPrefix.
 	path := ""
 	pathMatches := pathRegex.FindStringSubmatch(router.Rule)
 	if len(pathMatches) >= 2 {
 		path = pathMatches[1]
 	}
 
-	// Clean up the path.
 	if path != "" && !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
 	path = strings.TrimSuffix(path, "/")
 
-	// Determine protocol and port via the entrypoint.
 	if len(router.EntryPoints) == 0 {
 		debugf("[%s] Router has no entrypoints defined. Cannot determine URL.", router.Name)
 		return ""
 	}
-	entryPointName := router.EntryPoints[0] // Use the first specified entrypoint
+	entryPointName := router.EntryPoints[0]
 	entryPoint, ok := entryPoints[entryPointName]
 	if !ok {
 		debugf("[%s] Entrypoint '%s' not found in Traefik configuration.", router.Name, entryPointName)
 		return ""
 	}
 
-	// Use the enhanced protocol detection logic
 	protocol := DetermineProtocol(router, entryPoint)
-
-	// Address is in the format ":port"
 	port := strings.TrimPrefix(entryPoint.Address, ":")
 
-	// Omit the port if it's the default for the protocol.
 	if (protocol == "http" && port == "80") || (protocol == "https" && port == "443") {
 		return fmt.Sprintf("%s://%s%s", protocol, hostname, path)
 	}
 
 	return fmt.Sprintf("%s://%s:%s%s", protocol, hostname, port, path)
 }
-
-// --- Helper Functions ---
 
 // debugf is a wrapper for the shared debug utility
 var debugf = debug.Debugf

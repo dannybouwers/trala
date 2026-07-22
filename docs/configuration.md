@@ -34,8 +34,9 @@ environment:
     tag_frequency_threshold: 0.9
     min_services_per_group: 2
 
-  # Traefik API configuration
+  # Traefik API configuration (single or multiple instances)
   traefik:
+    # Legacy single-instance format
     api_host: http://traefik:8080
     enable_basic_auth: false
     insecure_skip_verify: false
@@ -43,6 +44,17 @@ environment:
       username: username
       password: password
       password_file: /run/secrets/basic_auth_password
+
+    # Multi-instance format (recommended for more than one Traefik proxy)
+    # instances:
+    #   - name: public
+    #     api_host: http://traefik:8080
+    #   - name: arr
+    #     api_host: http://traefik-arr:8080
+    #     enable_basic_auth: true
+    #     basic_auth:
+    #       username: proxy
+    #       password_file: /run/secrets/basic_auth_password
 ```
 
 ### Mounting the Configuration File
@@ -109,6 +121,46 @@ services:
 | `TRAEFIK_BASIC_AUTH_USERNAME` | Basic auth username | - |
 | `TRAEFIK_BASIC_AUTH_PASSWORD` | Basic auth password | - |
 | `TRAEFIK_BASIC_AUTH_PASSWORD_FILE` | Path to password file | - |
+
+
+## Traefik Configuration
+
+TraLa connects to one or more [Traefik instances](/docs/multi_host). Both the legacy single-instance format and the new multi-instance list are supported.
+
+### Single Instance (legacy)
+
+```yaml
+environment:
+  traefik:
+    api_host: http://traefik:8080
+    enable_basic_auth: false
+    insecure_skip_verify: false
+    basic_auth:
+      username: username
+      password: password
+      password_file: /run/secrets/basic_auth_password
+```
+
+### Multiple Instances
+
+```yaml
+environment:
+  traefik:
+    instances:
+      - name: public
+        api_host: http://traefik:8080
+      - name: arr
+        api_host: http://traefik-arr:8080
+        enable_basic_auth: true
+        basic_auth:
+          username: proxy
+          password_file: /run/secrets/basic_auth_password
+```
+
+When an `instances` list is present (with more than one entry), TraLa runs in **multi-host mode**, which adds a per-host view and a "Mix Hosts" toggle in the dashboard. See [Multi-Host Support](/docs/multi_host) for details.
+
+> [!NOTE]
+> Environment variables override file values for the **single-instance** format only. In multi-host mode the `TRAEFIK_*` variables are ignored - configure each instance in the file instead.
 
 ## Language Settings
 

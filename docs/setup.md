@@ -139,9 +139,16 @@ environment:
     tag_frequency_threshold: 0.9
     min_services_per_group: 2
   traefik:
+    # Single instance (legacy):
     api_host: http://traefik:8080
     enable_basic_auth: false
     insecure_skip_verify: false
+    # Or multiple instances (see Multi-Host docs):
+    # instances:
+    #   - name: public
+    #     api_host: http://traefik:8080
+    #   - name: arr
+    #     api_host: http://traefik-arr:8080
 
 services:
   exclude:
@@ -178,6 +185,8 @@ Now that you have TraLa running, explore these features to customize your dashbo
 | **Service Management** | Exclude, override, or manually add services | [Services](/docs/services) |
 | **Smart Grouping** | Auto-group services by tags | [Grouping](/docs/grouping) |
 | **Manual Services** | Add custom services and assign groups | [Manual Services](/docs/manual_services) |
+| **Multi-Host** | Aggregate services from multiple Traefik instances | [Multi-Host](/docs/multi_host) |
+
 | **Custom Icons** | Use selfh.st icons or your own | [Icons](/docs/icons) |
 | **External Search** | Configure search engine | [Search](/docs/search) |
 | **Security** | Secure Traefik API access | [Secure Traefik](/docs/secure_traefik) |
