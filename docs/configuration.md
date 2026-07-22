@@ -157,7 +157,7 @@ environment:
           password_file: /run/secrets/basic_auth_password
 ```
 
-When an `instances` list is present (even with a single entry), TraLa runs in **multi-host mode**, which adds a per-host view and a "Mix Hosts" toggle in the dashboard. See [Multi-Host Support](/docs/multi_host) for details.
+When an `instances` list is present (with more than one entry), TraLa runs in **multi-host mode**, which adds a per-host view and a "Mix Hosts" toggle in the dashboard. See [Multi-Host Support](/docs/multi_host) for details.
 
 > [!NOTE]
 > Environment variables override file values for the **single-instance** format only. In multi-host mode the `TRAEFIK_*` variables are ignored - configure each instance in the file instead.

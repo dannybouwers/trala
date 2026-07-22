@@ -36,11 +36,13 @@ For the full documentation, visit **[trala.fyi](https://www.trala.fyi)**.
 - [Quick Start](docs/README.md)
 - [Setup](docs/setup.md)
 - [Configuration](docs/configuration.md)
-- [Services](docs/services.md)
-- [Grouping](docs/grouping.md)
 - [Icons](docs/icons.md)
+- [Services](docs/services.md)
+- [Multi-Host](/docs/multi_host.md)
+- [Grouping](docs/grouping.md)
+- [Manual Services](/docs/manual_services)
 - [Search](docs/search.md)
-- [Security](docs/security.md)
+- [Secure Traefik](/docs/secure_traefik.md)
 
 ## 🤝 Contributing
 

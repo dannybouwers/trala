@@ -38,7 +38,7 @@ environment:
 | `insecure_skip_verify` | No | Skip TLS certificate verification for this instance's API. Default `false`. |
 
 > [!NOTE]
-> The list can contain a single entry. A `traefik` block with an `instances` list — even one item — is treated as **multi-host mode**, which enables the host view and controls in the UI.
+> The list can contain a single entry. A `traefik` block with an `instances` list with one item is treated as **single-host mode**, which hides the host view and controls in the UI.
 
 ## Supported configuration formats
 
