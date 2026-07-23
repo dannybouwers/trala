@@ -31,6 +31,39 @@ type TraefikConfig struct {
 	IsMulti bool `yaml:"-"`
 }
 
+// MarshalYAML implements custom YAML marshaling for TraefikConfig.
+// It only outputs the canonical format: instances for multi-instance mode,
+// or legacy single-instance fields derived from the first instance for
+// single-instance mode. This avoids dumping both notations simultaneously.
+func (t TraefikConfig) MarshalYAML() (interface{}, error) {
+	if t.IsMulti {
+		return struct {
+			Instances []TraefikInstanceConfig `yaml:"instances"`
+		}{
+			Instances: t.Instances,
+		}, nil
+	}
+	if len(t.Instances) > 0 {
+		inst := t.Instances[0]
+		return struct {
+			APIHost            string           `yaml:"api_host"`
+			EnableBasicAuth    bool             `yaml:"enable_basic_auth"`
+			BasicAuth          TraefikBasicAuth `yaml:"basic_auth"`
+			InsecureSkipVerify bool             `yaml:"insecure_skip_verify"`
+		}{
+			APIHost:            inst.APIHost,
+			EnableBasicAuth:    inst.EnableBasicAuth,
+			BasicAuth:          inst.BasicAuth,
+			InsecureSkipVerify: inst.InsecureSkipVerify,
+		}, nil
+	}
+	return struct {
+		Instances []TraefikInstanceConfig `yaml:"instances"`
+	}{
+		Instances: nil,
+	}, nil
+}
+
 // UnmarshalYAML implements custom YAML unmarshaling for TraefikConfig.
 // It supports both formats:
 //  1. Direct sequence under traefik: (legacy multi-instance format from plan)
