@@ -316,6 +316,7 @@ func LoadConfiguration(path string) (*TralaConfiguration, error) {
 	log.Printf("Loaded %d router excludes from %s", len(config.Services.Exclude.Routers), path)
 	log.Printf("Loaded %d entrypoint excludes from %s", len(config.Services.Exclude.Entrypoints), path)
 	log.Printf("Loaded %d service overrides from %s", len(config.Services.Overrides), path)
+	log.Printf("Loaded %d hosts from %s", len(config.Environment.Traefik.Instances), path)
 
 	// Validate configuration version (without basic auth validation since we already did it above)
 	status := ValidateConfigVersion(config.Version, basicAuthWarning)
