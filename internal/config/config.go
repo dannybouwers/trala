@@ -286,9 +286,15 @@ func LoadConfiguration(path string) (*TralaConfiguration, error) {
 		data, err := os.ReadFile(passwordFilePath)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return nil, fmt.Errorf("no password file found at %s for basic auth", passwordFilePath)
+				if config.Environment.LogLevel == "debug" {
+					log.Printf("DEBUG: no password file found at %s for basic auth", passwordFilePath)
+				}
+				return nil, fmt.Errorf("no password file found for basic auth")
 			}
-			return nil, fmt.Errorf("could not read password file at %s: %w", passwordFilePath, err)
+			if config.Environment.LogLevel == "debug" {
+				log.Printf("DEBUG: could not read password file at %s: %v", passwordFilePath, err)
+			}
+			return nil, fmt.Errorf("could not read password file for basic auth")
 		}
 		singleInst.BasicAuth.Password = strings.TrimSpace(string(data))
 	}
