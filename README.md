@@ -50,6 +50,8 @@ Contributions are welcome! Please read the [development guide](docs/development.
 
 ## 🌐 Translations
 
+[![Translation status](https://hosted.weblate.org/widget/trala/trala/svg-badge.svg)](https://hosted.weblate.org/engage/trala/)
+
 TraLa is available in multiple languages, and translations are managed through [Weblate](https://hosted.weblate.org/git/trala/trala/). You can:
 
 - Submit translation suggestions as an anonymous user
