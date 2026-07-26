@@ -108,6 +108,17 @@ cd website && npm run preview
 
 For complete building and testing instructions, see the [Development Guide](docs/development.md).
 
+## Translations
+
+TraLa uses [Weblate](https://hosted.weblate.org/git/trala/trala/) to manage translations. Here's how the translation workflow works:
+
+- **Submitting translations**: Anonymous users can submit translation suggestions. Registered users can edit existing translations directly.
+- **Sync**: Translation updates and new submissions are synced from the linked Weblate repository.
+- **Auto-commit schedule**: All translation changes are committed to a pull request at least every 8 hours.
+- **Quality gates**: Only translations that do not have the "needs editing", "needs rewriting", or "needs checking" status are committed. Translations marked with these flags are skipped from auto-commit.
+
+To contribute translations, visit the project on Weblate and start translating.
+
 ## Development Setup
 
 To set up your local development environment:
