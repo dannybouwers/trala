@@ -14,7 +14,7 @@ search: "Search"
 clear_search: "Clear search"
 
 # Placeholder text for the search field
-search_placeholder: "Filter services or search the web..."
+search_placeholder: "Filter services or search the web…"
 
 # Button label to sort by the name of a service
 name: "Name"
