@@ -14,7 +14,7 @@ search: "Zoeken"
 clear_search: "Zoekopdracht wissen"
 
 # Placeholder text for the search field
-search_placeholder: "Services filteren of op het web zoeken..."
+search_placeholder: "Services filteren of op het web zoeken…"
 
 # Button label to sort by the name of a service
 name: "Naam"
