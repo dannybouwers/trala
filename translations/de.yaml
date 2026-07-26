@@ -14,7 +14,7 @@ search: "Suche"
 clear_search: "Suche löschen"
 
 # Placeholder text for the search field
-search_placeholder: "Dienste filtern oder im Internet suchen..."
+search_placeholder: "Dienste filtern oder im Internet suchen…"
 
 # Button label to sort by the name of a service
 name: "Name"
