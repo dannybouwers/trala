@@ -45,3 +45,5 @@ expand_collapse_all: "Développer/Réduire tout"
 
 # Fallback group name for uncategorized services
 uncategorized: "Non classé"
+mix_services: Mélanger les hôtes
+unknown: Inconnue
