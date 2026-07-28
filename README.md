@@ -48,6 +48,18 @@ For the full documentation, visit **[trala.fyi](https://www.trala.fyi)**.
 
 Contributions are welcome! Please read the [development guide](docs/development.md) for setup instructions.
 
+## 🌐 Translations
+
+[![Translation status](https://hosted.weblate.org/widget/trala/trala/svg-badge.svg)](https://hosted.weblate.org/engage/trala/)
+
+TraLa is available in multiple languages, and translations are managed through [Weblate](https://hosted.weblate.org/git/trala/trala/). You can:
+
+- Submit translation suggestions as an anonymous user
+- Edit existing translations if you have a registered account
+- Review and translate new strings as they are added
+
+See the [Contributing Guide](CONTRIBUTING.md) for more details on the translation workflow.
+
 ## 📜 License
 
 MIT License — see the [LICENSE](LICENSE) file for details.
