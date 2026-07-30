@@ -1,0 +1,18 @@
+title: TraLa - Traefiki teenuse avaleht
+error: Vaat kus lops! Midagi läks nüüd viltu.
+fetch_error: Teenuste laadimine ei õnnestunud.
+search: Otsi
+clear_search: Tühjenda otsing
+search_placeholder: Filtreeri teenuseid või otsi veebist…
+name: Nimi
+url: Võrguaadress
+priority: Olulisus
+greeting_night: Head ööd
+greeting_morning: Tere hommikust
+greeting_afternoon: Tere päevast
+greeting_evening: Tere õhtust
+grouping: Rühmitamine
+expand_collapse_all: Laienda/ahenda kõik
+uncategorized: Kategoriseerimata
+unknown: Pole teada
+mix_services: Erinevad hostid
