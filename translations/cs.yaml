@@ -1,1 +1,18 @@
-{}
+title: TraLa – stránka přehledu o Traefik
+error: Jejda – něco se pokazilo.
+fetch_error: Nebylo možné získat služby.
+search: Hledat
+clear_search: Vyčistit hledání
+search_placeholder: Filtrovat služby nebo hledat na webu…
+name: Název
+url: URL
+priority: Priorita
+greeting_night: Dobrou noc
+greeting_morning: Dobré ráno
+greeting_afternoon: Dobré odpoledne
+greeting_evening: Dobré dopoledne
+grouping: Seskupování
+expand_collapse_all: Rozbalit/sbalit vše
+mix_services: Promíchat hostitele
+uncategorized: Nezařazeno
+unknown: Neznámé
