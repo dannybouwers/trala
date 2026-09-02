@@ -52,7 +52,7 @@ Contributions are welcome! Please read the [development guide](docs/development.
 
 [![Translation status](https://hosted.weblate.org/widget/trala/trala/matrix-auto.svg)](https://hosted.weblate.org/engage/trala/)
 
-TraLa is available in multiple languages, and translations are managed through [Weblate](https://hosted.weblate.org/git/trala/trala/). You can:
+TraLa is available in multiple languages, and translations are managed through [Weblate](https://hosted.weblate.org/projects/trala/). You can:
 
 - Submit translation suggestions as an anonymous user
 - Edit existing translations if you have a registered account
