@@ -9,7 +9,7 @@ A modern, dynamic dashboard for Traefik services.
 - **Smart Grouping** — Automatically group services based on tags
 - **Light/Dark Mode** — Automatic theme based on OS settings
 - **Manual Services** — Add custom services not managed by Traefik
-- **Multi-Language** — Available in English, German, and Dutch
+- **Multi-Language** — Available in e.g. English, German, Dutch and French
 - **Multi-Arch** — Built for amd64 and arm64 architectures
 - **Multi-Host** — Aggregate services from multiple Traefik instances into one dashboard
 
@@ -50,7 +50,7 @@ Contributions are welcome! Please read the [development guide](docs/development.
 
 ## 🌐 Translations
 
-[![Translation status](https://hosted.weblate.org/widget/trala/trala/svg-badge.svg)](https://hosted.weblate.org/engage/trala/)
+[![Translation status](https://hosted.weblate.org/widget/trala/trala/matrix-auto.svg)](https://hosted.weblate.org/engage/trala/)
 
 TraLa is available in multiple languages, and translations are managed through [Weblate](https://hosted.weblate.org/git/trala/trala/). You can:
 

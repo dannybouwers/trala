@@ -20,7 +20,7 @@ Everything automatic can be overwritten with a single YAML configuration file, p
 - **Live Search & Sort:** Instantly filter and sort your services by name, URL, or priority.
 - **External Search:** Use the search bar to quickly search the web with your configured search engine.
 - **Lightweight & Multi-Arch:** Built with Go and a minimal Alpine base, the Docker image is small and compatible with `amd64` and `arm64` architectures.
-- **Multi-Language Support:** Available in English, German, Dutch and French.
+- **Multi-Language Support:** Available in e.g. English, German, Dutch and French. See [Weblate](https://hosted.weblate.org/git/trala/trala/) for all available languages.
 
 ## Quick start
 
