@@ -24,7 +24,7 @@ environment:
   # Log level: info, debug
   log_level: info
 
-  # Language: en, de, nl, fr
+  # Language: ISO 639-1 codes (e.g. en, de, nl, fr)
   language: nl
 
   # Smart grouping configuration
@@ -100,7 +100,7 @@ services:
 | `REFRESH_INTERVAL_SECONDS` | Auto-refresh interval | `30` |
 | `SEARCH_ENGINE_URL` | Search engine URL | `https://www.google.com/search?q=` |
 | `LOG_LEVEL` | Log level: `info` or `debug` | `info` |
-| `LANGUAGE` | Language: `en`, `de`, `nl` or `fr` | `en` |
+| `LANGUAGE` | Language: ISO 639-1 code (see [Weblate](https://hosted.weblate.org/projects/trala/) for available translations) | `en` |
 | `SELFHST_ICON_URL` | Base URL for icon endpoint | `https://cdn.jsdelivr.net/gh/selfhst/icons/` |
 
 ### Grouping Variables
@@ -164,7 +164,9 @@ When an `instances` list is present (with more than one entry), TraLa runs in **
 
 ## Language Settings
 
-TraLa supports three languages:
+TraLa supports multiple languages. Translations are managed via [Weblate](https://hosted.weblate.org/projects/trala/). Languages are set using [ISO 639-1](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes) two-letter language codes.
+
+Available languages include, but are not limited to:
 
 - `en` — English (default)
 - `de` — German
@@ -172,6 +174,8 @@ TraLa supports three languages:
 - `fr` — French
 
 Set the language using the `LANGUAGE` environment variable or the `language` key in the configuration file.
+
+To contribute a new translation, visit the [TraLa project on Weblate](https://hosted.weblate.org/engage/trala/).
 
 ## Logging
 
