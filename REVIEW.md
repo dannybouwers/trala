@@ -12,13 +12,23 @@ Focus on what matters most, in order:
 
 1. **Correctness and safety** — Does it work, and is it secure? Watch for
    secrets, unvalidated input, and unsafe Traefik API handling.
-2. **Project alignment** — Does the change fit TraLa's goals (auto-discovery,
+2. **Best Practices** — Does the code follow industry best practices for the
+   language and framework in use (Go, Astro, etc.)? Flag shortcuts that trade
+   clarity, safety, or maintainability for speed.
+3. **Functional Comments** — Are complex or non-obvious decisions explained with
+   clear, concise comments? Flag logic that is hard to follow without context.
+4. **Project alignment** — Does the change fit TraLa's goals (auto-discovery,
    icon detection, smart grouping, light/dark, multi-language, multi-arch)?
-3. **Focused scope** — One PR should address one concern. Flag PRs that mix
-   unrelated changes and suggest splitting them.
-4. **Consistency** — Style, naming, and structure should match the existing
+5. **Automation First** — Prefer solutions that automate tasks by default, with
+   manual overrides only where absolutely necessary. Highlight opportunities to
+   replace manual processes with automation.
+6. **Focused scope** — One PR should address one concern. Flag PRs that mix
+   unrelated changes and suggest splitting them. Large PRs (more than ~10 files
+   or touching unrelated concerns) should be split into focused, incremental
+   PRs that are reviewable in a single session and allow for incremental testing.
+7. **Consistency** — Style, naming, and structure should match the existing
    Go and web code.
-5. **Testability** — Can the change be verified with the demo stack or the
+8. **Testability** — Can the change be verified with the demo stack or the
    website build? Encourage testing, don't demand it for docs-only changes.
 
 ## What to skip
