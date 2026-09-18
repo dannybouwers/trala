@@ -33,7 +33,7 @@ COPY internal internal/
 # Build the application as a statically linked binary with version info
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildTime=${BUILD_TIME}" -o /server ./cmd/server/
 
-### STAGE 4: Dowload bundled data
+### STAGE 3: Download bundled data
 FROM alpine:3.24 AS downloader
 
 WORKDIR /app
