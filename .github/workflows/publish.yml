@@ -37,6 +37,12 @@ jobs:
           username: ${{ env.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
+      - name: Download bundled icon data
+        run: |
+          mkdir -p internal/icons/data
+          curl -sL https://raw.githubusercontent.com/selfhst/icons/refs/heads/main/index.json -o internal/icons/data/selfhst-icons.json
+          curl -sL https://raw.githubusercontent.com/selfhst/cdn/refs/heads/main/directory/integrations/trala.json -o internal/icons/data/selfhst-apps.json
+
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v6

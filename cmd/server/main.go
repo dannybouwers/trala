@@ -48,7 +48,7 @@ func main() {
 	traefik.InitializeHTTPClient()
 
 	// Create external HTTP client for icon discovery (always has SSL verification enabled)
-	externalHTTPClient := &http.Client{Timeout: 5 * time.Second}
+	externalHTTPClient := &http.Client{Timeout: 30 * time.Second}
 	icons.InitHTTPClient(externalHTTPClient)
 
 	// Initialize i18n

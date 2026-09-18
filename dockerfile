@@ -50,6 +50,9 @@ COPY --exclude=*.src.css --exclude=html/index.html web /app/static/
 # Copy the translations code
 COPY translations/* /app/translations/
 
+# Copy the bundled icon/tag data files for offline fallback
+COPY internal/icons/data/ /app/data/
+
 # Copy the compiled Tailwind CSS from the tailwind-builder stage
 COPY --from=tailwind-builder /app/src/tailwind.css /app/static/css/tailwind.css
 
