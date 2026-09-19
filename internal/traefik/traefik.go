@@ -256,6 +256,7 @@ func ReconstructURL(router models.TraefikRouter, entryPoints map[string]models.T
 
 	protocol := DetermineProtocol(router, entryPoint)
 	port := strings.TrimPrefix(entryPoint.Address, ":")
+	port, _, _ = strings.Cut(port, "/")
 
 	if (protocol == "http" && port == "80") || (protocol == "https" && port == "443") {
 		return fmt.Sprintf("%s://%s%s", protocol, hostname, path)
