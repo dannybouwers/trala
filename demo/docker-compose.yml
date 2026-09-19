@@ -249,7 +249,7 @@ services:
       - "--entrypoints.http.address=:8000" # HTTP entrypoint
       - "--entrypoints.http.http.redirections.entrypoint.to=https" # Redirect HTTP to HTTPS
       - "--entrypoints.http.http.redirections.entrypoint.scheme=https" # Redirect scheme to HTTPS
-      - "--entrypoints.https.address=:8443" # HTTPS entrypoint
+      - "--entrypoints.https.address=:8443/tcp" # HTTPS entrypoint (test /tcp suffix)
       - "--entrypoints.https.http.tls=true" # Enable TLS for https
     ports:
       - "8000:8000" # HTTP
