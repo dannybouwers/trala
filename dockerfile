@@ -33,8 +33,16 @@ COPY internal internal/
 # Build the application as a statically linked binary with version info
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildTime=${BUILD_TIME}" -o /server ./cmd/server/
 
+### STAGE 3: Download bundled data
+FROM alpine:3.24 AS downloader
 
-### STAGE 3: Production ###
+WORKDIR /app
+
+# Download bundled icon and app data from Selfh.st repositories
+ADD https://raw.githubusercontent.com/selfhst/icons/refs/heads/main/index.json data/selfhst-icons.json
+ADD https://raw.githubusercontent.com/selfhst/cdn/refs/heads/main/directory/integrations/trala.json data/selfhst-apps.json
+
+### STAGE 4: Production ###
 # Start with a minimal Alpine image
 FROM alpine:3.24
 
@@ -49,6 +57,9 @@ COPY --exclude=*.src.css --exclude=html/index.html web /app/static/
 
 # Copy the translations code
 COPY translations/* /app/translations/
+
+# Copy the bundled icon/tag data files for offline fallback
+COPY --from=downloader /app/data/ /app/data/
 
 # Copy the compiled Tailwind CSS from the tailwind-builder stage
 COPY --from=tailwind-builder /app/src/tailwind.css /app/static/css/tailwind.css
