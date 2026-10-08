@@ -26,7 +26,8 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy Go source code
+# Copy Go source code AND .git for VCS stamping
+COPY .git .git
 COPY cmd cmd/
 COPY internal internal/
 
