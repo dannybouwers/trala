@@ -153,6 +153,13 @@ func LoadConfiguration(path string) (*TralaConfiguration, error) {
 				log.Printf("Warning: Invalid TRAEFIK_INSECURE_SKIP_VERIFY '%s', using %t", v, inst.InsecureSkipVerify)
 			}
 		}
+		if v := os.Getenv("TRAEFIK_ENABLE_BASIC_AUTH"); v != "" {
+			if enableBasicAuth, err := strconv.ParseBool(v); err == nil {
+				inst.EnableBasicAuth = enableBasicAuth
+			} else {
+				log.Printf("Warning: Invalid TRAEFIK_ENABLE_BASIC_AUTH '%s', using %t", v, inst.EnableBasicAuth)
+			}
+		}
 	} else {
 		// In multi-instance mode, the legacy single-instance env vars do not apply.
 		traefikEnvKeys := []string{
@@ -161,6 +168,7 @@ func LoadConfiguration(path string) (*TralaConfiguration, error) {
 			"TRAEFIK_BASIC_AUTH_PASSWORD",
 			"TRAEFIK_BASIC_AUTH_PASSWORD_FILE",
 			"TRAEFIK_INSECURE_SKIP_VERIFY",
+			"TRAEFIK_ENABLE_BASIC_AUTH",
 		}
 		for _, key := range traefikEnvKeys {
 			if os.Getenv(key) != "" {
