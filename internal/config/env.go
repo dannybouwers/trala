@@ -192,7 +192,14 @@ func parseEnvValue(field reflect.Value, validateTag, envName, path string) (refl
 func applyParsed(field reflect.Value, parsed reflect.Value, envName, path, raw string, debug bool) {
 	field.Set(parsed)
 	if debug {
-		log.Printf("DEBUG: env override applied: %s -> %s = %s", envName, path, raw)
+		logRaw := raw
+		if strings.Contains(path, "password") || strings.Contains(path, "password_file") {
+			logRaw = "***REDACTED***"
+		}
+		log.Printf("DEBUG: env override applied: %s -> %s = %s", envName, path, logRaw)
+	}
+}
+		log.Printf("DEBUG: env override applied: %s -> %s = %s", envName, path, logRaw)
 	}
 }
 
