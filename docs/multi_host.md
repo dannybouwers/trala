@@ -71,8 +71,45 @@ traefik:
 
 The legacy format is still fully supported. It is automatically converted into a single-instance list, so existing configuration files keep working without changes.
 
-> [!NOTE]
-> Environment variables (`TRAEFIK_API_HOST`, `TRAEFIK_BASIC_AUTH_*`, `TRAEFIK_INSECURE_SKIP_VERIFY`) apply **only to single-instance mode**. When TraLa detects a multi-instance configuration it logs a warning and ignores those variables — configure each instance in the configuration file instead.
+## Configuring instances with environment variables
+
+Each instance can also be configured with indexed environment variables of the form `TRAEFIK_INSTANCES_<n>_<OPTION>`, where `<n>` is the **1-based** instance number. The options mirror the instance options table above:
+
+| Environment Variable | Description |
+|---------------------|-------------|
+| `TRAEFIK_INSTANCES_<n>_API_HOST` | Full base URL of the Traefik API for instance `<n>` (e.g. `http://traefik:8080`). |
+| `TRAEFIK_INSTANCES_<n>_NAME` | Display name for instance `<n>`. |
+| `TRAEFIK_INSTANCES_<n>_ENABLE_BASIC_AUTH` | Enable basic auth for instance `<n>`. |
+| `TRAEFIK_INSTANCES_<n>_INSECURE_SKIP_VERIFY` | Skip TLS certificate verification for instance `<n>`. |
+| `TRAEFIK_INSTANCES_<n>_BASIC_AUTH_USERNAME` | Basic auth username for instance `<n>`. |
+| `TRAEFIK_INSTANCES_<n>_BASIC_AUTH_PASSWORD` | Basic auth password for instance `<n>`. |
+| `TRAEFIK_INSTANCES_<n>_BASIC_AUTH_PASSWORD_FILE` | Path to a password file for instance `<n>`. |
+
+### How YAML and environment variables are merged
+
+1. The `instances` list from the configuration file (in any of the supported formats) forms the base.
+2. Each indexed variable is applied to the instance at its position: `TRAEFIK_INSTANCES_2_NAME` sets the name of the second instance, `TRAEFIK_INSTANCES_3_API_HOST` sets the API host of the third, and so on.
+3. Fields are merged individually: setting `TRAEFIK_INSTANCES_2_NAME` on a file-configured second instance changes only its name and keeps its `api_host` and all other file values.
+4. When `n` is larger than the number of configured instances, new instances are appended. Options that are not provided default to empty — `api_host` is required, so an appended instance without it fails the load.
+5. The presence of any indexed variable switches TraLa to multi-instance mode, even when only one instance ends up configured.
+6. Invalid values (wrong type or out of range) log a warning and keep the previous value. Unknown option suffixes and unusable indexes (such as `TRAEFIK_INSTANCES_0_...`) are ignored with a warning; the load continues.
+7. After merging, display names that are still unset are derived from each instance's API hostname, and duplicate names get a numeric suffix.
+
+The legacy `TRAEFIK_*` variables from [Configuration](/docs/configuration#traefik-api-variables) apply **only to the first instance in single-instance mode**. When TraLa detects a multi-instance configuration — from the file or from indexed variables — it logs a warning and ignores those variables.
+
+Example: two instances configured purely with environment variables:
+
+```yaml
+# docker-compose.yml
+services:
+  trala:
+    image: trala
+    environment:
+      - TRAEFIK_INSTANCES_1_NAME=public
+      - TRAEFIK_INSTANCES_1_API_HOST=http://traefik:8080
+      - TRAEFIK_INSTANCES_2_NAME=arr
+      - TRAEFIK_INSTANCES_2_API_HOST=http://traefik-arr:8080
+```
 
 ## The dashboard in multi-host mode
 
