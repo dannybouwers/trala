@@ -72,7 +72,7 @@ services:
 
 ## Environment Variables
 
-Environment variables override settings from the configuration file. Variable names are derived by converting the YAML key path to uppercase and replacing dots with underscores.
+Environment variables override settings from the configuration file. Variable names are derived by converting the YAML key path under `environment.` to uppercase and replacing dots with underscores (e.g. `environment.grouping.columns` → `GROUPING_COLUMNS`). Every `environment.*` option follows this rule, so new options gain environment variable support automatically.
 
 ### Docker Compose Example
 
@@ -89,7 +89,7 @@ services:
       - LOG_LEVEL=info
       - LANGUAGE=en
       - GROUPING_ENABLED=true
-      - GROUPED_COLUMNS=3
+      - GROUPING_COLUMNS=3
 ```
 
 ### Common Variables
@@ -108,19 +108,31 @@ services:
 | Environment Variable | Description | Default |
 |---------------------|-------------|---------|
 | `GROUPING_ENABLED` | Enable smart grouping | `true` |
-| `GROUPED_COLUMNS` | Number of columns (1-6) | `3` |
+| `GROUPING_COLUMNS` | Number of columns (1-6) | `3` |
 | `GROUPING_TAG_FREQUENCY_THRESHOLD` | Tag frequency threshold (0.0-1.0) | `0.9` |
 | `GROUPING_MIN_SERVICES_PER_GROUP` | Min services per group | `2` |
+
+> [!NOTE]
+> `GROUPED_COLUMNS` is a deprecated alias of `GROUPING_COLUMNS` and will be removed in a future release. Prefer `GROUPING_COLUMNS`.
 
 ### Traefik API Variables
 
 | Environment Variable | Description | Default |
 |---------------------|-------------|---------|
+| `TRAEFIK_API_HOST` | The full base URL of your Traefik API | (required) |
 | `TRAEFIK_ENABLE_BASIC_AUTH` | Enable basic auth | `false` |
 | `TRAEFIK_INSECURE_SKIP_VERIFY` | Skip SSL verification | `false` |
 | `TRAEFIK_BASIC_AUTH_USERNAME` | Basic auth username | - |
 | `TRAEFIK_BASIC_AUTH_PASSWORD` | Basic auth password | - |
 | `TRAEFIK_BASIC_AUTH_PASSWORD_FILE` | Path to password file | - |
+
+These variables apply to the **first** instance in single-instance mode. In multi-instance mode they are ignored with a warning — use the indexed `TRAEFIK_INSTANCES_<n>_*` form instead (see [Multiple Instances via Environment Variables](#multiple-instances-via-environment-variables) below).
+
+### Multiple Instances via Environment Variables
+
+Traefik instances can also be configured with indexed environment variables of the form `TRAEFIK_INSTANCES_<n>_<OPTION>`, where `<n>` is the 1-based instance number (e.g. `TRAEFIK_INSTANCES_1_API_HOST=http://traefik:8080`). These variables merge with the `instances` list from the configuration file by index.
+
+See [Multi-Host Support](/docs/multi_host#configuring-instances-with-environment-variables) for the full variable table and the merge rules.
 
 
 ## Traefik Configuration
@@ -160,7 +172,7 @@ environment:
 When an `instances` list is present (with more than one entry), TraLa runs in **multi-host mode**, which adds a per-host view and a "Mix Hosts" toggle in the dashboard. See [Multi-Host Support](/docs/multi_host) for details.
 
 > [!NOTE]
-> Environment variables override file values for the **single-instance** format only. In multi-host mode the `TRAEFIK_*` variables are ignored - configure each instance in the file instead.
+> The legacy `TRAEFIK_*` environment variables override file values for the **single-instance** format only. In multi-host mode they are ignored with a warning — use the indexed `TRAEFIK_INSTANCES_<n>_*` variables instead (see [Multi-Host Support](/docs/multi_host#configuring-instances-with-environment-variables)).
 
 ## Language Settings
 
