@@ -199,9 +199,6 @@ func applyParsed(field reflect.Value, parsed reflect.Value, envName, path, raw s
 		log.Printf("DEBUG: env override applied: %s -> %s = %s", envName, path, logRaw)
 	}
 }
-		log.Printf("DEBUG: env override applied: %s -> %s = %s", envName, path, logRaw)
-	}
-}
 
 // enforceableVarTags are the validate tags enforced when applying environment
 // values. required/url/dive are excluded on purpose: they still surface as
