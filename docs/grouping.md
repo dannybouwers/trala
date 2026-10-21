@@ -35,7 +35,7 @@ The grouped view always shows:
 - 2 columns on tablets
 - Configured number on xl screens
 
-Set via environment variable: `GROUPED_COLUMNS=3`
+Set via environment variable: `GROUPING_COLUMNS=3` (the legacy `GROUPED_COLUMNS` name still works but is deprecated)
 
 ### Tag Frequency Threshold
 
@@ -74,6 +74,8 @@ Override automatic grouping by manually assigning services to groups. See [Servi
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `GROUPING_ENABLED` | Enable/disable grouping | `true` |
-| `GROUPED_COLUMNS` | Columns on xl screens (1-6) | `3` |
+| `GROUPING_COLUMNS` | Columns on xl screens (1-6) | `3` |
 | `GROUPING_TAG_FREQUENCY_THRESHOLD` | Tag frequency threshold (0.0-1.0) | `0.9` |
 | `GROUPING_MIN_SERVICES_PER_GROUP` | Minimum services per group | `2` |
+
+> `GROUPED_COLUMNS` is a deprecated alias of `GROUPING_COLUMNS`.
