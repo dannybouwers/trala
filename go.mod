@@ -6,7 +6,7 @@ require (
 	github.com/PuerkitoBio/goquery v1.13.0
 	github.com/go-playground/validator/v10 v10.30.5
 	github.com/lithammer/fuzzysearch v1.1.8
-	github.com/nicksnyder/go-i18n/v2 v2.6.1
+	github.com/nicksnyder/go-i18n/v2 v2.7.0
 	github.com/stretchr/testify v1.12.1
 	go.yaml.in/yaml/v4 v4.0.0-rc.6
 	golang.org/x/text v0.43.0
