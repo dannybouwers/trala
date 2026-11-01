@@ -24,9 +24,9 @@ environment:
         #   username: username
         #   password: password # mutually exclusive with password_file
         #   password_file: /run/secrets/basic_auth_password # mutually exclusive with password
-      - api_host: http://traefik-arr:8080
-        enable_basic_auth: false
-        insecure_skip_verify: false # Skip SSL certificate verification for Traefik API (default: false)  
+      # - api_host: http://traefik-arr:8080
+      #   enable_basic_auth: false
+      #   insecure_skip_verify: false # Skip SSL certificate verification for Traefik API (default: false)  
 
 # Service configuration
 services:

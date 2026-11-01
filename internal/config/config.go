@@ -114,104 +114,7 @@ func LoadConfiguration(path string) (*TralaConfiguration, error) {
 	}
 
 	// Step 5: environment overrides
-	if v := os.Getenv("SELFHST_ICON_URL"); v != "" {
-		config.Environment.SelfhstIconURL = v
-	}
-	if v := os.Getenv("SEARCH_ENGINE_URL"); v != "" {
-		config.Environment.SearchEngineURL = v
-	}
-	if v := os.Getenv("REFRESH_INTERVAL_SECONDS"); v != "" {
-		if num, err := strconv.Atoi(v); err == nil && num > 0 {
-			config.Environment.RefreshIntervalSeconds = num
-		} else {
-			log.Printf("Warning: Invalid REFRESH_INTERVAL_SECONDS '%s', using %d", v, config.Environment.RefreshIntervalSeconds)
-		}
-	}
-
-	// Environment variables only apply to single-instance mode
-	if !config.Environment.Traefik.IsMulti {
-		if len(config.Environment.Traefik.Instances) == 0 {
-			config.Environment.Traefik.Instances = []TraefikInstanceConfig{{}}
-		}
-		inst := &config.Environment.Traefik.Instances[0]
-		if v := os.Getenv("TRAEFIK_API_HOST"); v != "" {
-			inst.APIHost = v
-		}
-		if v := os.Getenv("TRAEFIK_BASIC_AUTH_USERNAME"); v != "" {
-			inst.BasicAuth.Username = v
-		}
-		if v := os.Getenv("TRAEFIK_BASIC_AUTH_PASSWORD"); v != "" {
-			inst.BasicAuth.Password = v
-		}
-		if v := os.Getenv("TRAEFIK_BASIC_AUTH_PASSWORD_FILE"); v != "" {
-			inst.BasicAuth.PasswordFile = v
-		}
-		if v := os.Getenv("TRAEFIK_INSECURE_SKIP_VERIFY"); v != "" {
-			if skipVerify, err := strconv.ParseBool(v); err == nil {
-				inst.InsecureSkipVerify = skipVerify
-			} else {
-				log.Printf("Warning: Invalid TRAEFIK_INSECURE_SKIP_VERIFY '%s', using %t", v, inst.InsecureSkipVerify)
-			}
-		}
-		if v := os.Getenv("TRAEFIK_ENABLE_BASIC_AUTH"); v != "" {
-			if enableBasicAuth, err := strconv.ParseBool(v); err == nil {
-				inst.EnableBasicAuth = enableBasicAuth
-			} else {
-				log.Printf("Warning: Invalid TRAEFIK_ENABLE_BASIC_AUTH '%s', using %t", v, inst.EnableBasicAuth)
-			}
-		}
-	} else {
-		// In multi-instance mode, the legacy single-instance env vars do not apply.
-		traefikEnvKeys := []string{
-			"TRAEFIK_API_HOST",
-			"TRAEFIK_BASIC_AUTH_USERNAME",
-			"TRAEFIK_BASIC_AUTH_PASSWORD",
-			"TRAEFIK_BASIC_AUTH_PASSWORD_FILE",
-			"TRAEFIK_INSECURE_SKIP_VERIFY",
-			"TRAEFIK_ENABLE_BASIC_AUTH",
-		}
-		for _, key := range traefikEnvKeys {
-			if os.Getenv(key) != "" {
-				log.Printf("WARNING: Multi-instance mode detected: %s and related env vars are ignored. Use configuration file instead.", key)
-				break
-			}
-		}
-	}
-
-	if v := os.Getenv("LOG_LEVEL"); v != "" {
-		config.Environment.LogLevel = v
-	}
-	if v := os.Getenv("LANGUAGE"); v != "" {
-		config.Environment.Language = v
-	}
-	if v := os.Getenv("GROUPING_ENABLED"); v != "" {
-		if enabled, err := strconv.ParseBool(v); err == nil {
-			config.Environment.Grouping.Enabled = enabled
-		} else {
-			log.Printf("Warning: Invalid GROUPING_ENABLED '%s', using %t", v, config.Environment.Grouping.Enabled)
-		}
-	}
-	if v := os.Getenv("GROUPING_TAG_FREQUENCY_THRESHOLD"); v != "" {
-		if num, err := strconv.ParseFloat(v, 64); err == nil && num > 0 && num <= 1 {
-			config.Environment.Grouping.TagFrequencyThreshold = num
-		} else {
-			log.Printf("Warning: Invalid GROUPING_TAG_FREQUENCY_THRESHOLD '%s', using %f", v, config.Environment.Grouping.TagFrequencyThreshold)
-		}
-	}
-	if v := os.Getenv("GROUPING_MIN_SERVICES_PER_GROUP"); v != "" {
-		if num, err := strconv.Atoi(v); err == nil && num >= 1 {
-			config.Environment.Grouping.MinServicesPerGroup = num
-		} else {
-			log.Printf("Warning: Invalid GROUPING_MIN_SERVICES_PER_GROUP '%s', must be >= 1, using %d", v, config.Environment.Grouping.MinServicesPerGroup)
-		}
-	}
-	if v := os.Getenv("GROUPED_COLUMNS"); v != "" {
-		if num, err := strconv.Atoi(v); err == nil && num >= 1 && num <= 6 {
-			config.Environment.Grouping.Columns = num
-		} else {
-			log.Printf("Warning: Invalid GROUPED_COLUMNS '%s', must be between 1 and 6, using %d", v, config.Environment.Grouping.Columns)
-		}
-	}
+	applyEnvironmentOverrides(&config)
 
 	// After environment overrides, log effective configuration
 	debugLogEffectiveConfig := func(format string, v ...interface{}) {
@@ -351,11 +254,14 @@ func LoadConfiguration(path string) (*TralaConfiguration, error) {
 			return nil, fmt.Errorf("failed to marshal effective configuration: %w", err)
 		}
 		output := string(out)
-		if len(config.Environment.Traefik.Instances) > 0 && config.Environment.Traefik.Instances[0].BasicAuth.Password != "" {
-			output = strings.ReplaceAll(output, config.Environment.Traefik.Instances[0].BasicAuth.Password, "***REDACTED***")
-		}
-		if len(config.Environment.Traefik.Instances) > 0 && config.Environment.Traefik.Instances[0].BasicAuth.PasswordFile != "" {
-			output = strings.ReplaceAll(output, config.Environment.Traefik.Instances[0].BasicAuth.PasswordFile, "***REDACTED***")
+		for i := range config.Environment.Traefik.Instances {
+			inst := config.Environment.Traefik.Instances[i]
+			if inst.BasicAuth.Password != "" {
+				output = strings.ReplaceAll(output, inst.BasicAuth.Password, "***REDACTED***")
+			}
+			if inst.BasicAuth.PasswordFile != "" {
+				output = strings.ReplaceAll(output, inst.BasicAuth.PasswordFile, "***REDACTED***")
+			}
 		}
 		fmt.Println(output)
 	}

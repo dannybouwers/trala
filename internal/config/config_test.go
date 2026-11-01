@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -29,9 +30,18 @@ func nonExistentPath(t *testing.T) string {
 
 // clearConfigEnv unsets every env var the loader reads, so a test starts from a
 // clean slate regardless of the invoking shell. Uses t.Setenv so cleanup is
-// automatic; also disables t.Parallel.
+// automatic; also disables t.Parallel. Indexed TRAEFIK_INSTANCES_* variables
+// are swept by prefix so newly used indexes cannot leak between tests.
 func clearConfigEnv(t *testing.T) {
 	t.Helper()
+	for _, kv := range os.Environ() {
+		name, _, _ := strings.Cut(kv, "=")
+		if strings.HasPrefix(name, "TRAEFIK_") ||
+			strings.HasPrefix(name, "GROUPING_") ||
+			strings.HasPrefix(name, "GROUPED_") {
+			t.Setenv(name, "")
+		}
+	}
 	vars := []string{
 		"SELFHST_ICON_URL",
 		"SEARCH_ENGINE_URL",
@@ -41,9 +51,11 @@ func clearConfigEnv(t *testing.T) {
 		"TRAEFIK_BASIC_AUTH_PASSWORD",
 		"TRAEFIK_BASIC_AUTH_PASSWORD_FILE",
 		"TRAEFIK_INSECURE_SKIP_VERIFY",
+		"TRAEFIK_ENABLE_BASIC_AUTH",
 		"LOG_LEVEL",
 		"LANGUAGE",
 		"GROUPING_ENABLED",
+		"GROUPING_COLUMNS",
 		"GROUPING_TAG_FREQUENCY_THRESHOLD",
 		"GROUPING_MIN_SERVICES_PER_GROUP",
 		"GROUPED_COLUMNS",

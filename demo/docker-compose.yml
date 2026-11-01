@@ -56,6 +56,11 @@ services:
       - SEARCH_ENGINE_URL=https://duckduckgo.com/?q=
       # Optional: Set to "debug" for verbose icon-finding logs
       - LOG_LEVEL=debug
+      # api_host: http://traefik-arr:8080
+        # enable_basic_auth: false
+        # insecure_skip_verify: false 
+      - TRAEFIK_INSTANCES_2_API_HOST=http://traefik-arr:8080
+      - TRAEFIK_INSTANCES_2_NAME=Arr
     labels:
       - "proxy=main"
       # --- Traefik Labels to expose TraLa itself ---
