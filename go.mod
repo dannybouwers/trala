@@ -9,7 +9,7 @@ require (
 	github.com/nicksnyder/go-i18n/v2 v2.7.0
 	github.com/stretchr/testify v1.12.1
 	go.yaml.in/yaml/v4 v4.0.0
-	golang.org/x/text v0.43.0
+	golang.org/x/text v0.44.0
 )
 
 require (
