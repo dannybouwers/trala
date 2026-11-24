@@ -88,6 +88,27 @@ cd demo && docker compose down
 
 For custom test configurations, create a `./local/` directory and add your own `docker-compose.yml` and `configuration.yml` files there.
 
+### Test Builds (Dev Images)
+
+Pull requests that change application code automatically build a dev container image, so anyone can test unreleased work without checking out the branch.
+
+- **Same-repository PRs** (branches in this repository) publish automatically. The PR is labeled `dev-build` and a bot comment shows the current pull command.
+- **Fork PRs** publish only after a maintainer adds the `dev-build` label. Publishing is driven by a separate workflow run, so the maintainer must add the label and then re-run the latest **Dev Image Build** run for that PR (Actions → the run → *Re-run jobs*). Later pushes then publish automatically while the label stays applied.
+- **Bot PRs** (Renovate, Weblate, …) never publish images.
+
+Images are tagged with the pull request number:
+
+```bash
+docker pull ghcr.io/dannybouwers/trala:dev-pr-215
+```
+
+To test one with the demo stack, replace the `trala` service's `build: ../.` line in `demo/docker-compose.yml` with `image: ghcr.io/dannybouwers/trala:dev-pr-215`.
+
+> [!WARNING]
+> Dev images are unreviewed and may be broken or incomplete. They move on every push to the PR and are deleted automatically when the PR is closed or merged.
+
+See the [Development Guide](docs/development.md#testing-a-pull-request-build) for the full walkthrough.
+
 ### Website Testing
 
 The documentation website (in `website/`) is an Astro project:
