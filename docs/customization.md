@@ -47,18 +47,18 @@ TraLa sends a Content-Security-Policy that allows stylesheets from the same orig
 
 ## Hiding interface elements
 
-Every visible block has a stable `id` or an easy selector, so you can hide exactly the elements you do not need. This is useful for kiosk displays, small screens, or a minimalist dashboard.
+Every hideable block has a stable `id`, so you can hide exactly the elements you do not need. This is useful for kiosk displays, small screens, or a minimalist dashboard.
 
 ### Element reference
 
 | Element | Selector | Notes |
 |---------|----------|-------|
-| Greeting and clock | `header` | The heading with the time-based greeting |
-| Logo (top-left) | `body > div.absolute.top-0.left-0` | The TraLa logo and wordmark |
-| Search bar | `div:has(> #search-form)` | Hides both the input and its spacing |
+| Greeting and clock | `#greeting-header` | The heading with the time-based greeting |
+| Logo (top-left) | `#logo` | The TraLa logo and wordmark |
+| Search bar | `#search-container` | Hides both the input and its spacing |
 | Sort controls | `#sort-controls` | Name / URL / Priority buttons |
 | Group controls | `#group-controls` | Grouping / expand-collapse buttons (needs `!important`) |
-| Footer | `footer` | Version number and GitHub link |
+| Footer | `#footer` | Version number and GitHub link |
 
 > [!NOTE]
 > Some elements — notably `#group-controls` — get their `display` set inline by JavaScript, which beats a plain ID selector. Use `!important` for those.
@@ -71,7 +71,7 @@ Hide the search bar, sort controls, greeting, and footer:
 /* /config/custom.css */
 
 /* Search bar (and the spacing around it) */
-div:has(> #search-form) {
+#search-container {
   display: none;
 }
 
@@ -86,12 +86,12 @@ div:has(> #search-form) {
 }
 
 /* Greeting and clock */
-header {
+#greeting-header {
   display: none;
 }
 
 /* Version number and GitHub link */
-footer {
+#footer {
   display: none;
 }
 ```
@@ -99,7 +99,7 @@ footer {
 ### Example: hide only the greeting
 
 ```css
-header {
+#greeting-header {
   display: none;
 }
 ```
@@ -107,7 +107,7 @@ header {
 ### Example: hide the logo
 
 ```css
-body > div.absolute.top-0.left-0 {
+#logo {
   display: none;
 }
 ```
