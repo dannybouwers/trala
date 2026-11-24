@@ -105,7 +105,7 @@ jobs:
 
       - name: Delete superseded version(s)
         if: steps.check.outputs.eligible == 'true' && steps.prev.outputs.ids != ''
-        uses: actions/delete-package-versions@25ad4af5be03aef10e0b3376b248688b7a44c40b # v5
+        uses: actions/delete-package-versions@e5bc658cc4c965c472efe991f8beea3981499c55 # v5
         with:
           package-name: trala
           package-type: container
@@ -114,7 +114,7 @@ jobs:
 
       - name: Post sticky PR comment
         if: steps.check.outputs.eligible == 'true'
-        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
         with:
           header: dev-image
           number_force: ${{ steps.check.outputs.pr }}

@@ -62,7 +62,7 @@ jobs:
 
       - name: Delete versions
         if: steps.collect.outputs.ids != ''
-        uses: actions/delete-package-versions@25ad4af5be03aef10e0b3376b248688b7a44c40b # v5
+        uses: actions/delete-package-versions@e5bc658cc4c965c472efe991f8beea3981499c55 # v5
         with:
           package-name: trala
           package-type: container
