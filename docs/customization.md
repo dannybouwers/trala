@@ -112,6 +112,9 @@ Hide the search bar, sort controls, greeting, and footer:
 }
 ```
 
+> [!NOTE]
+> The logo block also provides the top spacing above the content. Hiding `#logo` removes that spacing too, while hiding `#greeting-header` does not affect it.
+
 ## Styling service tiles and containers
 
 The service grid is generated dynamically, and every generated element carries a stable class. These class names are a stable interface for custom CSS and will not change between releases.
