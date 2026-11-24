@@ -132,7 +132,7 @@ const createServiceCard = (service) => {
     card.href = service.url;
     card.target = '_blank';
     card.rel = 'noopener noreferrer';
-    card.className = 'block p-4 rounded-lg bg-white dark:bg-gray-800 shadow-md hover:shadow-lg hover:-translate-y-1 transition-all duration-300';
+    card.className = 'service-tile block p-4 rounded-lg bg-white dark:bg-gray-800 shadow-md hover:shadow-lg hover:-translate-y-1 transition-all duration-300';
 
     const firstLetter = service.Name.charAt(0).toUpperCase();
     const bgColor = getColorFromString(service.Name);
@@ -187,7 +187,7 @@ const renderHostView = (servicesToRender) => {
     const sortedHosts = Object.keys(grouped).sort();
     sortedHosts.forEach(host => {
         const hostDiv = document.createElement('div');
-        hostDiv.className = 'host-section mb-8';
+        hostDiv.className = 'host-container mb-8';
         const header = document.createElement('h2');
         header.className = 'text-2xl font-bold mb-4 cursor-pointer border-b border-gray-300 dark:border-gray-700 pb-2';
         header.textContent = host;
@@ -227,7 +227,7 @@ const renderGroupedView = (servicesToRender, container = serviceGrid) => {
     const sortedGroups = Object.keys(grouped).sort();
     sortedGroups.forEach(group => {
         const groupDiv = document.createElement('div');
-        groupDiv.className = 'group-section mb-8';
+        groupDiv.className = 'group-container mb-8';
         const header = document.createElement('h2');
         header.className = 'text-xl font-bold mb-4 cursor-pointer border-b border-gray-300 dark:border-gray-700 pb-2';
         header.textContent = group;

@@ -112,6 +112,40 @@ Hide the search bar, sort controls, greeting, and footer:
 }
 ```
 
+## Styling service tiles and containers
+
+The service grid is generated dynamically, and every generated element carries a stable class. These class names are a stable interface for custom CSS and will not change between releases.
+
+| Element | Class | Notes |
+|---------|-------|-------|
+| Service grid | `#service-grid` | Outermost container for all views |
+| Service tile | `service-tile` | Each clickable service card (all views) |
+| Tile icon image | `icon-img` | The icon `<img>` when an icon is found |
+| Tile icon fallback | `fallback-icon` | Coloured letter shown when no icon loads |
+| Group container | `group-container` | Wrapper for one group (header + grid) in grouped view |
+| Group content grid | `group-content` | The collapsible grid of tiles inside a group |
+| Host container | `host-container` | Wrapper for one host in multi-host view |
+| Host content | `host-content` | The collapsible area inside a host |
+
+Host and group containers only exist in multi-host and grouped views respectively; `service-tile` applies to every view.
+
+### Example: restyle service tiles
+
+```css
+/* Round the tiles more and give them a subtle accent */
+.service-tile {
+  border-radius: 1rem;
+  border: 1px solid rgb(0 0 0 / 0.05);
+}
+
+/* Uppercase group and host headings */
+.group-container > h2,
+.host-container > h2 {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+```
+
 ## Theming
 
 Because your stylesheet loads last, you can override the built-in Tailwind utilities with your own selectors. For example, to change the accent colour of the logo:
