@@ -1,0 +1,138 @@
+name: Dev Image Publish
+
+# Privileged half of the dev-image pipeline. Triggered when Dev Image Build
+# completes; runs in the base repo with a write token, downloads the artifact
+# and pushes it to GHCR. The downloaded image is treated strictly as data and is
+# never executed here.
+#
+# Actions are pinned to commit SHAs because this workflow holds `packages: write`
+# and consumes untrusted fork artifacts.
+#
+# NOTE: workflow_run only fires once "Dev Image Build" exists on the default
+# branch, so land dev-image-build.yml on main first.
+
+on:
+  workflow_run:
+    workflows: ["Dev Image Build"]
+    types: [completed]
+
+permissions:
+  actions: read
+  packages: write
+  pull-requests: write
+
+concurrency:
+  group: dev-image-publish-${{ github.event.workflow_run.pull_requests[0].number }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      # Single source of truth: publish iff the author is not a bot AND
+      # (head repo == base repo OR the PR carries the `dev-build` label).
+      - name: Determine eligibility
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          PR="${{ github.event.workflow_run.pull_requests[0].number }}"
+          if [ -z "$PR" ]; then
+            echo "No pull request associated with this run; nothing to publish."
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          read -r AUTHOR_TYPE HEAD_REPO HAS_LABEL < <(gh api \
+            "repos/${{ github.repository }}/pulls/$PR" \
+            --jq '"\(.user.type) \(.head.repo.full_name // "-") \(any(.labels[]?; .name == "dev-build"))"')
+
+          ELIGIBLE=false
+          if [ "$AUTHOR_TYPE" != "Bot" ] \
+            && { [ "$HEAD_REPO" = "${{ github.repository }}" ] || [ "$HAS_LABEL" = "true" ]; }; then
+            ELIGIBLE=true
+          fi
+
+          {
+            echo "pr=$PR"
+            echo "tag=dev-pr-$PR"
+            echo "short_sha=$(cut -c1-7 <<<"${{ github.event.workflow_run.head_sha }}")"
+            echo "eligible=$ELIGIBLE"
+          } >> "$GITHUB_OUTPUT"
+          echo "PR #$PR eligible=$ELIGIBLE (author=$AUTHOR_TYPE head_repo=$HEAD_REPO dev-build=$HAS_LABEL)"
+
+      - name: Log in to GitHub Container Registry
+        if: steps.check.outputs.eligible == 'true'
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download dev image artifact
+        if: steps.check.outputs.eligible == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: dev-image
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: /tmp/dev-image
+
+      # The version currently carrying this PR's tag will lose it when the tag
+      # moves to the new build; capture its ID so it can be pruned afterwards.
+      - name: Capture superseded version IDs
+        if: steps.check.outputs.eligible == 'true'
+        id: prev
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          IDS=$(gh api --paginate \
+            "/users/${{ github.repository_owner }}/packages/container/trala/versions?per_page=100" \
+            --jq ".[] | select(any(.metadata.container.tags[]?; . == \"${{ steps.check.outputs.tag }}\")) | .id" \
+            | paste -sd, -)
+          echo "ids=$IDS" >> "$GITHUB_OUTPUT"
+
+      - name: Push dev image
+        if: steps.check.outputs.eligible == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+          skopeo copy --all \
+            "oci-archive:/tmp/dev-image/dev-image.tar" \
+            "docker://ghcr.io/${{ github.repository }}:${{ steps.check.outputs.tag }}"
+
+      - name: Delete superseded version(s)
+        if: steps.check.outputs.eligible == 'true' && steps.prev.outputs.ids != ''
+        uses: actions/delete-package-versions@25ad4af5be03aef10e0b3376b248688b7a44c40b # v5
+        with:
+          package-name: trala
+          package-type: container
+          package-version-ids: ${{ steps.prev.outputs.ids }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Post sticky PR comment
+        if: steps.check.outputs.eligible == 'true'
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3
+        with:
+          header: dev-image
+          number_force: ${{ steps.check.outputs.pr }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          message: |
+            ## 🐳 Dev image available for testing
+
+            A preview build for this pull request is published (commit `${{ steps.check.outputs.short_sha }}`).
+
+            ```bash
+            docker pull ghcr.io/${{ github.repository }}:${{ steps.check.outputs.tag }}
+            ```
+
+            To run it with the demo stack, replace the `trala` service's `build: ../.` line in `demo/docker-compose.yml` with:
+
+            ```yaml
+            image: ghcr.io/${{ github.repository }}:${{ steps.check.outputs.tag }}
+            ```
+
+            > [!WARNING]
+            > This image is **unreviewed** and may be broken or incomplete. It moves on every push to this PR and is deleted automatically when the PR is closed or merged.

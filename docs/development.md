@@ -167,6 +167,39 @@ The application will start on `http://localhost:8080`.
 
 ---
 
+## Testing a Pull Request Build
+
+Every pull request that changes application code automatically builds a dev container image, so you can test unreleased work from a PR without checking out its branch.
+
+- **Same-repository PRs** publish automatically and are labeled `dev-build`.
+- **Fork PRs** publish after a maintainer adds the `dev-build` label and then re-runs the latest **Dev Image Build** workflow run (Actions → the run → *Re-run jobs*).
+- **Bot PRs** never publish images.
+
+A bot comment on the PR always shows the current pull command. Images are tagged with the pull request number:
+
+```bash
+docker pull ghcr.io/dannybouwers/trala:dev-pr-215
+```
+
+To run a PR image with the demo stack, replace the `trala` service's `build: ../.` line in `demo/docker-compose.yml` with the dev image:
+
+```yaml
+services:
+  trala:
+    image: ghcr.io/dannybouwers/trala:dev-pr-215
+```
+
+Then start the stack as usual:
+
+```bash
+cd demo && docker compose up -d
+```
+
+> [!WARNING]
+> Dev images are unreviewed and may be broken or incomplete. They move on every push to the PR and are deleted automatically when the PR is closed or merged.
+
+---
+
 ## Project Structure
 
 ```

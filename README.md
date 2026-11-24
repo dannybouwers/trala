@@ -46,7 +46,7 @@ For the full documentation, visit **[trala.fyi](https://www.trala.fyi)**.
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please read the [development guide](docs/development.md) for setup instructions.
+Contributions are welcome! Please read the [development guide](docs/development.md) for setup instructions. Pull requests that change application code automatically publish a `dev-pr-<N>` dev image you can pull to test unreleased work — see [Testing a Pull Request Build](docs/development.md#testing-a-pull-request-build).
 
 ## 🌐 Translations
 
