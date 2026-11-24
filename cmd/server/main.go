@@ -72,6 +72,7 @@ func main() {
 	mux.HandleFunc("/api/health", handlers.HealthHandler(conf))
 	mux.Handle("/static/", http.StripPrefix("/static/", noDirListingFileServer("/app/static")))
 	mux.Handle("/icons/", http.StripPrefix("/icons/", noDirListingFileServer("/icons")))
+	mux.HandleFunc("/custom.css", handlers.CustomCSSHandler())
 	mux.HandleFunc("/", handlers.ServeHTMLTemplate(conf))
 
 	// Start server

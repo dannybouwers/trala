@@ -3,6 +3,7 @@ export const docs = [
   { path: '/docs', title: 'Quick Start' },
   { path: '/docs/setup', title: 'Setup' },
   { path: '/docs/configuration', title: 'Configuration' },
+  { path: '/docs/customization', title: 'Customization' },
   { path: '/docs/icons', title: 'Icons' },
   { path: '/docs/services', title: 'Services' },
   { path: '/docs/multi_host', title: 'Multi-Host' },

@@ -47,6 +47,10 @@ services:
       - ./configuration.yml:/config/configuration.yml:ro
       # Optional: Mount a directory with custom icons. See "Configuration" section below.
       # - ./icons:/icons:ro
+      # Optional: Mount a custom stylesheet, served at /custom.css. See docs/customization.md
+      # - ./custom.css:/config/custom.css:ro
+      # Optional: Mount the whole config directory (configuration.yml + custom.css) instead.
+      # - ./config:/config:ro
     environment:
       # Required: The internal Docker network address for the Traefik API
       # - TRAEFIK_API_HOST=http://traefik:8080
