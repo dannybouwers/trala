@@ -45,3 +45,15 @@ expand_collapse_all: "Alle aus-/einklappen"
 
 # Fallback group name for uncategorized services
 uncategorized: "Nicht kategorisiert"
+
+# Tooltip for the button that minimizes a dashboard block
+minimize: "Minimieren"
+
+# Tooltip for restoring a minimized dashboard block
+restore: "Wiederherstellen"
+
+# Label for the minimized sort controls pill
+sort: "Sortieren"
+
+# Label for the minimized group controls pill
+groups: "Gruppen"

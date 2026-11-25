@@ -149,6 +149,45 @@ Host and group containers only exist in multi-host and grouped views respectivel
 }
 ```
 
+## Minimizable blocks
+
+Greeting + clock, search bar, sort controls, and group controls can each be minimized at runtime from the interface: hovering (or focusing) a block reveals a small close button, and clicking it collapses the block into a pill in the fixed top-right cluster. Clicking a pill restores the block. This is a per-browser, client-side preference stored in `localStorage` under the `uiMinimized` key — it is not a configuration option.
+
+> [!NOTE]
+> Because minimizing is stored per browser, clearing `localStorage` (or the `uiMinimized` key) restores every block.
+
+These class names are a stable interface for custom CSS and will not change between releases.
+
+| Element | Class / selector | Notes |
+|---------|------------------|-------|
+| Minimizable block | `ui-minimizable` | Added to `#greeting-header`, `#search-container`, `#sort-controls`, `#group-controls` |
+| Minimized block | `ui-minimized` | Hides the block (`display: none !important`); add/remove only, never forced by config |
+| Close button | `ui-minimize-btn` | Injected into each block; shown on hover/focus |
+| Pill cluster | `#minimized-controls` | Fixed top-right container; hidden while empty via the `hidden` class |
+| Restore pill | `ui-restore-pill` | One per minimized block; the greeting pill renders `ui-restore-pill-clock` |
+
+### Example: always show the close buttons
+
+The close button is hidden until the block is hovered or focused. To keep it visible:
+
+```css
+.ui-minimize-btn {
+  opacity: 1;
+  scale: 1;
+  pointer-events: auto;
+}
+```
+
+### Example: reposition the pill cluster
+
+```css
+#minimized-controls {
+  top: 0.5rem;
+  right: 0.5rem;
+  gap: 0.25rem;
+}
+```
+
 ## Theming
 
 Because your stylesheet loads last, you can override the built-in Tailwind utilities with your own selectors. For example, to change the accent colour of the logo:

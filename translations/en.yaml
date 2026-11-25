@@ -51,3 +51,15 @@ uncategorized: "Uncategorized"
 
 # Fallback group name for unknown host names
 unknown: "Unknown"
+
+# Tooltip for the button that minimizes a dashboard block
+minimize: "Minimize"
+
+# Tooltip for restoring a minimized dashboard block
+restore: "Restore"
+
+# Label for the minimized sort controls pill
+sort: "Sort"
+
+# Label for the minimized group controls pill
+groups: "Groups"
