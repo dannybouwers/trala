@@ -80,19 +80,21 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: /tmp/dev-image
 
-      # The version currently carrying this PR's tag will lose it when the tag
-      # moves to the new build; capture its ID so it can be pruned afterwards.
-      - name: Capture superseded version IDs
+      # delete-old-packages matches on image tags, and pushing the new build
+      # moves this PR's tag off the previous version (leaving it untagged and
+      # invisible to the action). So the superseded version must be pruned while
+      # it still carries the tag — i.e. before the push below. (It also inspects
+      # only the package's first 100 versions; fine while the package is small.)
+      - name: Delete superseded dev image
         if: steps.check.outputs.eligible == 'true'
-        id: prev
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          IDS=$(gh api --paginate \
-            "/users/${{ github.repository_owner }}/packages/container/trala/versions?per_page=100" \
-            --jq ".[] | select(any(.metadata.container.tags[]?; . == \"${{ steps.check.outputs.tag }}\")) | .id" \
-            | paste -sd, -)
-          echo "ids=$IDS" >> "$GITHUB_OUTPUT"
+        uses: SmartsquareGmbH/delete-old-packages@78421c4341be2a20cc4766902b4dc2925efa5117 # v1.0.0
+        with:
+          user: ${{ github.repository_owner }}
+          type: container
+          names: trala
+          version-pattern: ^dev-pr-${{ steps.check.outputs.pr }}(-|$)
+          keep: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push dev image
         if: steps.check.outputs.eligible == 'true'
@@ -102,15 +104,6 @@ jobs:
           skopeo copy --all \
             "oci-archive:/tmp/dev-image/dev-image.tar" \
             "docker://ghcr.io/${{ github.repository }}:${{ steps.check.outputs.tag }}"
-
-      - name: Delete superseded version(s)
-        if: steps.check.outputs.eligible == 'true' && steps.prev.outputs.ids != ''
-        uses: actions/delete-package-versions@e5bc658cc4c965c472efe991f8beea3981499c55 # v5
-        with:
-          package-name: trala
-          package-type: container
-          package-version-ids: ${{ steps.prev.outputs.ids }}
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Post sticky PR comment
         if: steps.check.outputs.eligible == 'true'
