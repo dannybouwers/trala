@@ -2,8 +2,16 @@ name: Dev Image Cleanup
 
 # Deletes ghcr.io/<owner>/trala:dev-pr-<N> package versions:
 #  - immediately when a same-repo PR closes, and
-#  - nightly, for every dev tag whose PR is no longer open (covers fork PRs and
-#    missed close events).
+#  - nightly, for every PR closed in the last 24h (covers fork PRs and missed
+#    close events).
+#
+# A regex over the dev tags is handed to SmartsquareGmbH/delete-old-packages,
+# which matches on image tags directly, so this workflow no longer enumerates
+# package versions or parses their tags itself.
+#
+# Caveat: delete-old-packages only inspects the package's first 100 versions
+# (no pagination), so if `trala` ever grows well past 100 versions, older dev
+# tags may fall outside that window and be skipped.
 #
 # If deletion fails with `403 resource not accessible by integration`, the
 # package is not linked to the repo with admin rights for GITHUB_TOKEN; pass a
@@ -17,54 +25,52 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
   packages: write
 
 jobs:
   cleanup:
     runs-on: ubuntu-latest
     steps:
-      - name: Collect dev image version IDs to delete
+      - name: Determine dev tag pattern
         id: collect
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          OWNER="${{ github.repository_owner }}"
-          API="/users/$OWNER/packages/container/trala/versions?per_page=100"
-
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            # Fork PR tags are handled by the scheduled sweep below.
+            # Fork PR close events run with a read-only token; the nightly sweep covers them.
             if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
-              echo "ids=" >> "$GITHUB_OUTPUT"
+              echo "pattern=" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            TAG="dev-pr-${{ github.event.pull_request.number }}"
-            IDS=$(gh api --paginate "$API" \
-              --jq ".[] | select(any(.metadata.container.tags[]?; . == \"$TAG\")) | .id" \
-              | paste -sd, -)
+            PATTERN="^dev-pr-${{ github.event.pull_request.number }}(-|$)"
           else
-            OPEN=$(gh api --paginate \
-              "/repos/${{ github.repository }}/pulls?state=open&per_page=100" --jq '.[].number')
-            IDS=$(gh api --paginate "$API" \
-              --jq '.[] | "\(.id) \((.metadata.container.tags // []) | join(","))"' \
-              | while read -r id tags; do
-                  for t in ${tags//,/ }; do
-                    case "$t" in
-                      dev-pr-*) n="${t#dev-pr-}"; n="${n%%-*}"
-                        if ! grep -qx "$n" <<<"$OPEN"; then echo "$id"; break; fi ;;
-                    esac
-                  done
-                done | paste -sd, -)
+            # PRs closed since the previous nightly run. Re-running the delete for
+            # an already-pruned tag is a no-op, so ambiguity at the edges is fine.
+            SINCE=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+            NUMS=$(gh api --paginate \
+              "/repos/${{ github.repository }}/pulls?state=closed&sort=updated&direction=desc&per_page=100" \
+              --jq ".[] | select(.closed_at != null and .closed_at >= \"$SINCE\") | .number" \
+              | paste -sd'|' -)
+            if [ -z "$NUMS" ]; then
+              echo "No PRs closed in the last 24h."
+              echo "pattern=" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            PATTERN="^dev-pr-($NUMS)(-|$)"
           fi
 
-          echo "ids=$IDS" >> "$GITHUB_OUTPUT"
-          echo "Version IDs to delete: ${IDS:-<none>}"
+          echo "pattern=$PATTERN" >> "$GITHUB_OUTPUT"
+          echo "Dev tag pattern to delete: $PATTERN"
 
-      - name: Delete versions
-        if: steps.collect.outputs.ids != ''
-        uses: actions/delete-package-versions@e5bc658cc4c965c472efe991f8beea3981499c55 # v5
+      - name: Delete dev image versions
+        if: steps.collect.outputs.pattern != ''
+        uses: SmartsquareGmbH/delete-old-packages@78421c4341be2a20cc4766902b4dc2925efa5117 # v1.0.0
         with:
-          package-name: trala
-          package-type: container
-          package-version-ids: ${{ steps.collect.outputs.ids }}
+          user: ${{ github.repository_owner }}
+          type: container
+          names: trala
+          version-pattern: ${{ steps.collect.outputs.pattern }}
+          keep: 0
           token: ${{ secrets.GITHUB_TOKEN }}
