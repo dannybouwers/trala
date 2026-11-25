@@ -454,12 +454,12 @@ const initialize = () => {
     });
     
     sortControls.addEventListener('click', (e) => {
-        if (e.target.tagName === 'BUTTON') {
-            currentSort = e.target.dataset.sort;
-            document.querySelectorAll('.sort-btn').forEach(btn => btn.classList.remove('active'));
-            e.target.classList.add('active');
-            applyFiltersAndSort();
-        }
+        const sortButton = e.target.closest('button.sort-btn');
+        if (!sortButton) return;
+        currentSort = sortButton.dataset.sort;
+        document.querySelectorAll('.sort-btn').forEach(btn => btn.classList.remove('active'));
+        sortButton.classList.add('active');
+        applyFiltersAndSort();
     });
 
     groupToggle.addEventListener('click', () => {
