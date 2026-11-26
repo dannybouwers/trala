@@ -70,3 +70,27 @@ body {
 .search-icon-greyscale {
     filter: grayscale(100%);
 }
+
+/* --- Minimizable dashboard blocks --- */
+
+/*
+ * Presentation for `ui-minimizable`, `ui-minimize-btn`, `ui-restore-pill`,
+ * `ui-restore-pill-clock` and `#minimized-controls` lives in Tailwind utilities
+ * (see web/html/index.html and web/js/trala.js). Only the two rules below cannot
+ * be expressed as a single static utility class.
+ */
+
+/* Keep minimized blocks hidden even though JS sets an inline display on #group-controls */
+.ui-minimized {
+    display: none !important;
+}
+
+/* Reveal the close button on devices without hover, where group-hover never triggers */
+@media (hover: none) {
+    .ui-minimize-btn {
+        opacity: 1;
+        scale: 1;
+        transform: none;
+        pointer-events: auto;
+    }
+}

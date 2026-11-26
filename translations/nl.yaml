@@ -47,3 +47,15 @@ expand_collapse_all: "Alles uit-/samenvouwen"
 uncategorized: "Niet gecategoriseerd"
 mix_services: Combineer hosts
 unknown: Onbekend
+
+# Tooltip for the button that minimizes a dashboard block
+minimize: "Minimaliseren"
+
+# Tooltip for restoring a minimized dashboard block
+restore: "Herstellen"
+
+# Label for the minimized sort controls pill
+sort: "Sorteren"
+
+# Label for the minimized group controls pill
+groups: "Groepen"

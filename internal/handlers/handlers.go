@@ -56,6 +56,33 @@ func GetVersionInfo() models.VersionInfo {
 
 // --- Template Handling ---
 
+// CustomCSSPath is the fixed location of an optional user-provided stylesheet.
+// Users mount a file here (for example ./custom.css:/config/custom.css:ro) and
+// it is served at /custom.css. Only this exact file is served: the /config
+// directory may contain secrets (configuration.yml, basic auth password files)
+// and must never be exposed as a directory.
+const CustomCSSPath = "/config/custom.css"
+
+// CustomCSSExists reports whether a user-provided stylesheet is present.
+func CustomCSSExists() bool {
+	info, err := os.Stat(CustomCSSPath)
+	return err == nil && !info.IsDir()
+}
+
+// CustomCSSHandler serves the optional user-provided stylesheet.
+func CustomCSSHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !CustomCSSExists() {
+			http.NotFound(w, r)
+			return
+		}
+		// Force revalidation so edits to the mounted file are picked up without
+		// restarting the container. http.ServeFile handles Last-Modified/304.
+		w.Header().Set("Cache-Control", "no-cache")
+		http.ServeFile(w, r, CustomCSSPath)
+	}
+}
+
 var (
 	htmlTemplate   []byte
 	htmlOnce       sync.Once
@@ -126,6 +153,7 @@ func ServeHTMLTemplate(c *config.TralaConfiguration) http.HandlerFunc {
 		// Templates must call the function like: {{ T .Localizer "message.id" }}
 		data := map[string]interface{}{
 			"Localizer": localizer,
+			"CustomCSS": CustomCSSExists(),
 		}
 		if err := parsedTemplate.Execute(w, data); err != nil {
 			http.Error(w, "Template execution error", http.StatusInternalServerError)
@@ -146,17 +174,17 @@ func ServicesHandler(c *config.TralaConfiguration) func(w http.ResponseWriter, r
 				log.Printf("WARNING: Failed to fetch services from instance %s: %v", instance.Name, err)
 				continue
 			}
-		for _, svc := range services {
-			allServices = append(allServices, models.Service{
-				Name:     svc.Name,
-				URL:      svc.URL,
-				Priority: svc.Priority,
-				Icon:     svc.Icon,
-				Tags:     svc.Tags,
-				Group:    svc.Group,
-				Host:     instance.Name,
-			})
-		}
+			for _, svc := range services {
+				allServices = append(allServices, models.Service{
+					Name:     svc.Name,
+					URL:      svc.URL,
+					Priority: svc.Priority,
+					Icon:     svc.Icon,
+					Tags:     svc.Tags,
+					Group:    svc.Group,
+					Host:     instance.Name,
+				})
+			}
 		}
 
 		manualServices := services.GetManualServices()

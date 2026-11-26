@@ -88,6 +88,8 @@ services:
       - ./configuration.yml:/config/configuration.yml:ro
       # Custom icons directory (optional)
       - ./icons:/icons:ro
+      # Custom stylesheet (optional), served at /custom.css. See docs/customization.md
+      # - ./custom.css:/config/custom.css:ro
     environment:
       # Required: Traefik API endpoint
       - TRAEFIK_API_HOST=http://traefik:8080
@@ -188,6 +190,7 @@ Now that you have TraLa running, explore these features to customize your dashbo
 | **Multi-Host** | Aggregate services from multiple Traefik instances | [Multi-Host](/docs/multi_host) |
 
 | **Custom Icons** | Use selfh.st icons or your own | [Icons](/docs/icons) |
+| **Customization** | Custom CSS and hiding interface elements | [Customization](/docs/customization) |
 | **External Search** | Configure search engine | [Search](/docs/search) |
 | **Security** | Secure Traefik API access | [Secure Traefik](/docs/secure_traefik) |
 

@@ -6,6 +6,7 @@
     <title>{{ T .Localizer "title" }}</title>
     <link rel="stylesheet" href="static/css/tailwind.css">
     <link rel="stylesheet" href="static/css/trala.css">
+    {{ if .CustomCSS }}<link rel="stylesheet" href="custom.css">{{ end }}
      <!-- <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script> -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,23 +21,30 @@
       data-greeting-night="{{ T .Localizer "greeting_night" }}"
       data-greeting-morning="{{ T .Localizer "greeting_morning" }}"
       data-greeting-afternoon="{{ T .Localizer "greeting_afternoon" }}"
-      data-greeting-evening="{{ T .Localizer "greeting_evening" }}">
+      data-greeting-evening="{{ T .Localizer "greeting_evening" }}"
+      data-minimize="{{ T .Localizer "minimize" }}"
+      data-restore="{{ T .Localizer "restore" }}"
+      data-search="{{ T .Localizer "search" }}"
+      data-sort="{{ T .Localizer "sort" }}"
+      data-groups="{{ T .Localizer "groups" }}">
     <div id="api-loading-bar"></div>
     <div id="refresh-progress-bar-container"><div id="refresh-progress-bar"></div></div>
     
-    <div class="absolute top-0 left-0 p-4 md:p-8 flex items-center">
+    <div id="minimized-controls" class="hidden fixed top-4 right-4 md:top-8 md:right-8 gap-2 z-50"></div>
+
+    <div id="logo" class="px-4 pt-4 md:px-8 md:pt-8 flex items-center">
         <img src="static/img/gopher.svg" alt="Logo" class="h-10 w-10 mr-3">
         <span class="text-2xl font-bold logo-font text-blue-500">TraLa</span>
     </div>
 
     <div class="container mx-auto p-4 md:p-8">
-        <header class="mb-8 text-center pt-16">
+        <header id="greeting-header" class="ui-minimizable group relative rounded-lg transition duration-300 hover:bg-gray-50 hover:shadow-md focus-within:bg-gray-50 focus-within:shadow-md dark:hover:bg-gray-800 dark:focus-within:bg-gray-800 py-2 mb-4 text-center">
             <h1 id="greeting" class="text-4xl font-bold mb-2">
                 <span id="greeting-text"></span>
                 <span id="clock" class="font-normal text-gray-400 dark:text-gray-500"></span>
             </h1>
         </header>
-        <div class="mb-4">
+        <div id="search-container" class="ui-minimizable group relative rounded-lg transition duration-300 hover:bg-gray-50 hover:shadow-md focus-within:bg-gray-50 focus-within:shadow-md dark:hover:bg-gray-800 dark:focus-within:bg-gray-800 py-2 mb-0">
             <form id="search-form" class="grow">
                 <div class="relative">
                     <input type="search" id="search-input" placeholder="{{ T .Localizer "search_placeholder" }}" class="w-full p-3 pr-12 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition">
@@ -54,12 +62,12 @@
                 </div>
             </form>
         </div>
-        <div id="sort-controls" class="flex justify-center gap-2 mb-4">
+        <div id="sort-controls" class="ui-minimizable group relative flex justify-center gap-2 rounded-lg transition duration-300 hover:bg-gray-50 hover:shadow-md focus-within:bg-gray-50 focus-within:shadow-md dark:hover:bg-gray-800 dark:focus-within:bg-gray-800 py-2 mb-0">
             <button data-sort="name" class="sort-btn active px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">{{ T .Localizer "name" }}</button>
             <button data-sort="url" class="sort-btn px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">{{ T .Localizer "url" }}</button>
             <button data-sort="priority" class="sort-btn px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">{{ T .Localizer "priority" }}</button>
         </div>
-        <div id="group-controls" class="flex justify-center gap-2 mb-8" style="display: none;">
+        <div id="group-controls" class="ui-minimizable group relative flex justify-center gap-2 rounded-lg transition duration-300 hover:bg-gray-50 hover:shadow-md focus-within:bg-gray-50 focus-within:shadow-md dark:hover:bg-gray-800 dark:focus-within:bg-gray-800 py-2 mb-6" style="display: none;">
             <span id="multi-host-buttons">
                 <button id="mix-toggle" class="sort-btn px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">{{ T .Localizer "mix_services" }}</button>
             </span>
@@ -76,7 +84,7 @@
         </div>
     </div>
     
-    <footer class="fixed bottom-0 right-0 p-4 flex items-center">
+    <footer id="footer" class="fixed bottom-0 right-0 p-4 flex items-center">
         <div class="flex items-center mr-4">
             <a id="version-link" href="#" target="_blank" rel="noopener noreferrer" class="text-gray-400 text-sm hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><span id="version-number">loading...</span></a>
             <span id="config-warning" class="ml-2 text-yellow-500 cursor-pointer" style="display: none;" title="">

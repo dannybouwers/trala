@@ -47,3 +47,15 @@ expand_collapse_all: "Développer/Réduire tout"
 uncategorized: "Non classé"
 mix_services: Mélanger les hôtes
 unknown: Inconnue
+
+# Tooltip for the button that minimizes a dashboard block
+minimize: "Réduire"
+
+# Tooltip for restoring a minimized dashboard block
+restore: "Restaurer"
+
+# Label for the minimized sort controls pill
+sort: "Trier"
+
+# Label for the minimized group controls pill
+groups: "Groupes"
