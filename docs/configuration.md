@@ -70,6 +70,20 @@ services:
       - ./configuration.yml:/config/configuration.yml:ro
 ```
 
+## Custom CSS
+
+TraLa can load an optional user-provided stylesheet from `/config/custom.css`, served at `/custom.css`. This is a fixed path — no configuration key is required — and it can be used to restyle the dashboard or hide individual interface elements such as the search bar, sort controls, greeting, or footer.
+
+```yaml
+# docker-compose.yml
+services:
+  trala:
+    volumes:
+      - ./custom.css:/config/custom.css:ro
+```
+
+See [Customization](/docs/customization) for details, mounting options, and ready-to-use snippets (including hiding interface elements).
+
 ## Environment Variables
 
 Environment variables override settings from the configuration file. Variable names are derived by converting the YAML key path under `environment.` to uppercase and replacing dots with underscores (e.g. `environment.grouping.columns` → `GROUPING_COLUMNS`). Every `environment.*` option follows this rule, so new options gain environment variable support automatically.
